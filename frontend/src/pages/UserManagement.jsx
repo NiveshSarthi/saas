@@ -368,21 +368,15 @@ export default function UserManagement() {
 
   const addMemberMutation = useMutation({
     mutationFn: async (data) => {
-      const token = Math.random().toString(36).substring(2, 15);
-      const invitation = await base44.entities.UserInvitation.create({
+      // Directly create a User (not an invitation) via the users API
+      const user = await base44.entities.User.create({
         email: data.email,
         full_name: data.full_name,
-        role_id: data.role_id,
+        password: data.password, // Password will be hashed by backend
+        role_id: data.role_id || 'team_member',
         department_id: data.department_id || null,
         project_ids: data.project_ids || [],
-        reports_to: data.reports_to || null,
-        job_title: data.job_title || null,
-        user_category: data.user_category || 'internal',
-        territory: data.territory || null,
-        invited_by: currentUser?.email,
-        token,
-        status: 'accepted', // Mark as accepted (approved/active)
-        expires_at: addDays(new Date(), 365).toISOString() // 1 year expiry for direct adds
+        job_title: data.job_title || null
       });
 
       // Send welcome email (optional)
@@ -393,19 +387,19 @@ export default function UserManagement() {
           <h2>Welcome aboard!</h2>
           <p>You have been added to our project management platform.</p>
           <p>Your account has been created as: <strong>${data.full_name}</strong></p>
-          <p>You can now login using your email address.</p>
+          <p>You can now login using your email address and the password provided to you.</p>
         `
       });
 
       await base44.entities.AuditLog.create({
         user_email: currentUser?.email,
-        action: 'user_invited',
+        action: 'user_created',
         target_type: 'user',
         target_name: data.email,
-        new_value: data
+        new_value: { email: data.email, full_name: data.full_name, role_id: data.role_id }
       });
 
-      return invitation;
+      return user;
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['users'] });
