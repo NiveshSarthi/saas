@@ -14,11 +14,17 @@ const roleSchema = new mongoose.Schema({
 const userSchema = new mongoose.Schema({
     email: { type: String, required: true, unique: true },
     full_name: String,
+    password_hash: String,
     role: { type: String, default: 'user' }, // admin, user
     role_id: String, // Reference to Role ID (string based)
     department_id: String,
     project_ids: [String],
     job_title: String,
+    is_active: { type: Boolean, default: true },
+    password_reset_token: String,
+    password_reset_expires: Date,
+    last_login: Date,
+    created_by: String, // Email of user who created this account
     created_at: { type: Date, default: Date.now }
 });
 

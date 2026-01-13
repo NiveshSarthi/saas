@@ -12,7 +12,7 @@ export const MODULES = [
   'financial_reports', 'marketing_expenses', 'salary_management'
 ];
 
-export const ACTIONS = ['create', 'read', 'update', 'delete', 'assign'];
+export const ACTIONS = ['create', 'read', 'update', 'delete', 'assign', 'manage_password'];
 
 export const DEFAULT_ROLES = {
   super_admin: {

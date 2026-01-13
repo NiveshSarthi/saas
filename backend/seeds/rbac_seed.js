@@ -1,5 +1,6 @@
 
 import mongoose from 'mongoose';
+import bcrypt from 'bcryptjs';
 import { User, Role, Department, Project, Group, TaskGroup, Sprint, Tag } from '../models/index.js';
 import dotenv from 'dotenv';
 dotenv.config();
@@ -13,7 +14,7 @@ export const MODULES = [
     'financial_reports', 'marketing_expenses', 'salary_management'
 ];
 
-export const ACTIONS = ['create', 'read', 'update', 'delete', 'assign'];
+export const ACTIONS = ['create', 'read', 'update', 'delete', 'assign', 'manage_password'];
 
 export const ROLES_DATA = {
     super_admin: {
@@ -140,28 +141,32 @@ const DUMMY_USERS = [
         full_name: 'Admin User',
         role: 'admin',
         role_id: 'admin',
-        job_title: 'Administrator'
+        job_title: 'Administrator',
+        is_active: true
     },
     {
         email: 'pm@sarthi.com',
         full_name: 'Project Manager',
         role: 'user', // System role
         role_id: 'project_manager',
-        job_title: 'PM'
+        job_title: 'PM',
+        is_active: true
     },
     {
         email: 'user@sarthi.com',
         full_name: 'Regular User',
         role: 'user',
         role_id: 'team_member',
-        job_title: 'Developer'
+        job_title: 'Developer',
+        is_active: true
     },
     {
         email: 'client@sarthi.com',
         full_name: 'Client User',
         role: 'user',
         role_id: 'client',
-        job_title: 'Client Stakeholder'
+        job_title: 'Client Stakeholder',
+        is_active: true
     },
     {
         email: 'sales.manager@sarthi.com',
@@ -169,7 +174,8 @@ const DUMMY_USERS = [
         role: 'user',
         role_id: 'team_member', // Assuming custom role eventually, but uses team permissions + specific code checks
         job_title: 'Sales Manager', // Code checks this specific string
-        department_id: 'dept_sales'
+        department_id: 'dept_sales',
+        is_active: true
     }
 ];
 

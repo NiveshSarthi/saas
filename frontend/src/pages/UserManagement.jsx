@@ -23,7 +23,8 @@ import {
   Download,
   Users,
   FolderOpen,
-  Loader2
+  Loader2,
+  Key
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -67,6 +68,7 @@ import { Switch } from '@/components/ui/switch';
 import { Checkbox } from '@/components/ui/checkbox';
 import { toast } from 'sonner';
 import ProtectedRoute from '@/components/rbac/ProtectedRoute';
+import { usePermissions } from '@/components/rbac/PermissionsContext';
 import { getUserDisplayName } from '@/components/utils/userDisplay';
 import { SALES_JOB_TITLES, isSalesUser } from '@/components/utils/salesPermissions';
 
@@ -82,9 +84,17 @@ export default function UserManagement() {
   const [userToDelete, setUserToDelete] = useState(null);
   const [bulkDeleteDialogOpen, setBulkDeleteDialogOpen] = useState(false);
   const [showAddMemberDialog, setShowAddMemberDialog] = useState(false);
-  const [memberData, setMemberData] = useState({ email: '', full_name: '', role_id: '', department_id: '', project_ids: [], reports_to: '', user_category: 'internal', territory: '', job_title: '' });
+  const [memberData, setMemberData] = useState({ email: '', full_name: '', password: '', role_id: '', department_id: '', project_ids: [], reports_to: '', user_category: 'internal', territory: '', job_title: '' });
+  const [showPasswordDialog, setShowPasswordDialog] = useState(false);
+  const [passwordTarget, setPasswordTarget] = useState(null);
+  const [newPassword, setNewPassword] = useState('');
 
   const queryClient = useQueryClient();
+  const { can, isAdmin } = usePermissions();
+
+  // Permission checks
+  const canCreateUsers = can('users', 'create') || isAdmin();
+  const canManagePassword = can('users', 'manage_password') || isAdmin();
 
   const { data: users = [], isLoading } = useQuery({
     queryKey: ['users'],
@@ -402,7 +412,7 @@ export default function UserManagement() {
       queryClient.invalidateQueries({ queryKey: ['invitations'] });
       queryClient.invalidateQueries({ queryKey: ['team-data'] });
       setShowAddMemberDialog(false);
-      setMemberData({ email: '', full_name: '', role_id: '', department_id: '', project_ids: [], reports_to: '', user_category: 'internal', territory: '', job_title: '' });
+      setMemberData({ email: '', full_name: '', password: '', role_id: '', department_id: '', project_ids: [], reports_to: '', user_category: 'internal', territory: '', job_title: '' });
       toast.success('Member added successfully');
     },
     onError: (error) => {
@@ -551,21 +561,25 @@ export default function UserManagement() {
               <Power className="w-4 h-4 mr-2" />
               Activate All Inactive
             </Button>
-            <Button
-              variant="outline"
-              onClick={() => setShowAddMemberDialog(true)}
-              className="border-emerald-600 text-emerald-600 hover:bg-emerald-50"
-            >
-              <Plus className="w-4 h-4 mr-2" />
-              Add Member
-            </Button>
-            <Button
-              onClick={() => setShowInviteDialog(true)}
-              className="bg-indigo-600 hover:bg-indigo-700"
-            >
-              <UserPlus className="w-4 h-4 mr-2" />
-              Invite User
-            </Button>
+            {canCreateUsers && (
+              <>
+                <Button
+                  variant="outline"
+                  onClick={() => setShowAddMemberDialog(true)}
+                  className="border-emerald-600 text-emerald-600 hover:bg-emerald-50"
+                >
+                  <Plus className="w-4 h-4 mr-2" />
+                  Add Member
+                </Button>
+                <Button
+                  onClick={() => setShowInviteDialog(true)}
+                  className="bg-indigo-600 hover:bg-indigo-700"
+                >
+                  <UserPlus className="w-4 h-4 mr-2" />
+                  Invite User
+                </Button>
+              </>
+            )}
           </div>
         </div>
 
@@ -1445,6 +1459,17 @@ export default function UserManagement() {
               </div>
 
               <div className="space-y-2">
+                <Label>Password *</Label>
+                <Input
+                  type="password"
+                  value={memberData.password}
+                  onChange={(e) => setMemberData(p => ({ ...p, password: e.target.value }))}
+                  placeholder="Minimum 6 characters"
+                />
+                <p className="text-xs text-slate-500">Password must be at least 6 characters</p>
+              </div>
+
+              <div className="space-y-2">
                 <Label>Department (Optional)</Label>
                 <Select
                   value={memberData.department_id}
@@ -1598,6 +1623,8 @@ export default function UserManagement() {
                 disabled={
                   !memberData.email ||
                   !memberData.full_name ||
+                  !memberData.password ||
+                  memberData.password.length < 6 ||
                   !memberData.role_id ||
                   addMemberMutation.isPending
                 }

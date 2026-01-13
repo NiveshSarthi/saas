@@ -58,7 +58,8 @@ const ACTION_CONFIG = {
   read: { label: 'Read', color: 'bg-blue-100 text-blue-700' },
   update: { label: 'Update', color: 'bg-amber-100 text-amber-700' },
   delete: { label: 'Delete', color: 'bg-red-100 text-red-700' },
-  assign: { label: 'Assign', color: 'bg-purple-100 text-purple-700' }
+  assign: { label: 'Assign', color: 'bg-purple-100 text-purple-700' },
+  manage_password: { label: 'Manage Password', color: 'bg-rose-100 text-rose-700' }
 };
 
 export default function RolePermissionsEditor({ permissions, onChange, readonly = false }) {
@@ -104,7 +105,7 @@ export default function RolePermissionsEditor({ permissions, onChange, readonly 
   return (
     <div className="bg-white rounded-xl border border-slate-200 overflow-hidden">
       {/* Header */}
-      <div className="grid grid-cols-[240px_repeat(5,1fr)] gap-0 bg-slate-50 border-b border-slate-200">
+      <div className="grid grid-cols-[240px_repeat(6,1fr)] gap-0 bg-slate-50 border-b border-slate-200">
         <div className="px-4 py-3 font-semibold text-slate-700 text-sm">Module</div>
         {ACTIONS.map(action => (
           <div key={action} className="px-3 py-3 text-center">
@@ -124,10 +125,10 @@ export default function RolePermissionsEditor({ permissions, onChange, readonly 
           const isPartiallyEnabled = isModulePartiallyEnabled(module);
 
           return (
-            <div 
-              key={module} 
+            <div
+              key={module}
               className={cn(
-                "grid grid-cols-[240px_repeat(5,1fr)] gap-0 hover:bg-slate-50 transition-colors",
+                "grid grid-cols-[240px_repeat(6,1fr)] gap-0 hover:bg-slate-50 transition-colors",
                 isFullyEnabled && "bg-emerald-50/30"
               )}
             >
