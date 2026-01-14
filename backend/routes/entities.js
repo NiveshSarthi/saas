@@ -22,6 +22,12 @@ router.post('/:entity/filter', async (req, res) => {
         delete filters._sort;
         delete filters._limit;
 
+        // Map 'id' to '_id' for Mongoose find
+        if (filters.id) {
+            filters._id = filters.id;
+            delete filters.id;
+        }
+
         // Convert sort string "-name" to object { name: -1 }
         let sortObj = sort;
         if (typeof sort === 'string') {

@@ -79,11 +79,15 @@ export default function SprintBoard() {
     fetchUser();
   }, []);
 
-  const { data: sprint, isLoading: sprintLoading } = useQuery({
+  const { data: sprint, isLoading: sprintLoading, error: sprintError } = useQuery({
     queryKey: ['sprint', sprintId],
     queryFn: async () => {
-      const sprints = await base44.entities.Sprint.filter({ id: sprintId });
-      return sprints[0];
+      console.log(`SprintBoard: Fetching sprint details for ID: ${sprintId}`);
+      // Use filter+first for compatibility with backends that may not
+      // expose a direct `get` endpoint or to avoid throwing on 404.
+      const results = await base44.entities.Sprint.filter({ id: sprintId });
+      console.log(`SprintBoard: API Results for ${sprintId}:`, results);
+      return Array.isArray(results) ? results[0] || null : results;
     },
     enabled: !!sprintId,
   });
@@ -91,8 +95,8 @@ export default function SprintBoard() {
   const { data: project } = useQuery({
     queryKey: ['sprint-project', sprint?.project_id],
     queryFn: async () => {
-      const projects = await base44.entities.Project.filter({ id: sprint.project_id });
-      return projects[0];
+      const project = await base44.entities.Project.get(sprint.project_id);
+      return project;
     },
     enabled: !!sprint?.project_id,
   });
@@ -134,14 +138,24 @@ export default function SprintBoard() {
     enabled: !!sprint?.project_id,
   });
 
-  const { data: users = [] } = useQuery({
+  const { data: rawUsers = [] } = useQuery({
     queryKey: ['users'],
     queryFn: () => base44.entities.User.list(),
   });
 
+  // Normalize user data for consistency
+  const users = React.useMemo(() => {
+    return (rawUsers || []).map(u => ({
+      ...u,
+      id: u.id || u._id || (u.email && String(u.email).toLowerCase()),
+      email: u.email || u.email_address || u.username || null,
+      department_id: u.department_id || (u.department && (u.department.id || u.department._id)) || null,
+    }));
+  }, [rawUsers]);
+
   const { data: departments = [] } = useQuery({
     queryKey: ['departments'],
-    queryFn: () => base44.entities.Department.list('name'),
+    queryFn: () => base44.entities.Department.list(),
   });
 
   const { data: allTags = [] } = useQuery({
@@ -285,10 +299,15 @@ export default function SprintBoard() {
     );
   }
 
-  if (!sprint) {
+  if (sprintError || !sprint) {
     return (
       <div className="p-6 lg:p-8 text-center">
         <h2 className="text-xl font-semibold text-slate-900">Sprint not found</h2>
+        {sprintError && (
+          <p className="text-slate-600 mt-2">
+            Error: {sprintError.message || 'Unable to load sprint data'}
+          </p>
+        )}
         <Link to={createPageUrl('Projects')}>
           <Button className="mt-4">
             <ArrowLeft className="w-4 h-4 mr-2" />

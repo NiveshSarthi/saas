@@ -1,5 +1,5 @@
 # Build stage - Install deps and build frontend
-FROM node:20-alpine AS build
+FROM node:20-slim AS build
 
 WORKDIR /app
 
@@ -19,7 +19,7 @@ WORKDIR /app/frontend
 RUN npm run build
 
 # Production stage - Lean image with only what's needed
-FROM node:20-alpine AS production
+FROM node:20-slim AS production
 
 WORKDIR /app
 

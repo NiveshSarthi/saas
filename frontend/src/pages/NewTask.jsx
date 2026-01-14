@@ -760,7 +760,7 @@ export default function NewTask() {
                   Assignees
                 </Label>
                 <UserMultiSelect
-                  users={users.filter(u => u.status !== 'inactive' && u.is_active !== false)}
+                  users={users}
                   departments={departments}
                   selectedEmails={formData.assignees}
                   onChange={(newAssignees) => setFormData(prev => ({ ...prev, assignees: newAssignees }))}

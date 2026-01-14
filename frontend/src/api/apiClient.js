@@ -196,8 +196,11 @@ class ApiClient {
                     get: async (id) => {
                         const res = await fetch(`${API_BASE}/rest/v1/${entityName}/${id}`);
                         if (!res.ok) {
-                            if (res.status === 404) this._missingEntities.add(entityName);
-                            return null;
+                            if (res.status === 404) {
+                                this._missingEntities.add(entityName);
+                                throw new Error(`${entityName} not found`);
+                            }
+                            throw new Error(`Entity Error: ${res.statusText}`);
                         }
                         const obj = await res.json();
                         return { ...(obj || {}), id: obj?.id || obj?._id };

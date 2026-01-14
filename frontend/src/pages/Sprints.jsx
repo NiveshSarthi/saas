@@ -234,22 +234,22 @@ export default function Sprints() {
     onSuccess: (created, variables) => {
       try {
         // Normalize created sprint id and project_id to strings for consistent comparisons
-        const normalized = { ...(created || {}) };
-        normalized.id = String(created?.id || created?._id || '');
+        const normalizedSprint = { ...(created || {}) };
+        normalizedSprint.id = String(created?.id || created?._id || '');
 
         // If backend did not return project_id, fall back to the variables passed to mutate
         if (created?.project_id !== undefined && created?.project_id !== null) {
-          normalized.project_id = String(created.project_id);
+          normalizedSprint.project_id = String(created.project_id);
         } else if (variables?.project_id) {
-          normalized.project_id = String(variables.project_id);
+          normalizedSprint.project_id = String(variables.project_id);
         }
 
-        console.debug('Sprints.create onSuccess - created:', created, 'variables:', variables, 'normalized:', normalized);
+        console.debug('Sprints.create onSuccess - created:', created, 'variables:', variables, 'normalized:', normalizedSprint);
 
         queryClient.setQueryData(['sprints'], (old = []) => {
-          if (!normalized) return old || [];
-          const exists = (old || []).some(s => String(s.id || s._id) === normalized.id && normalized.id !== '');
-          return exists ? old : [normalized, ...(old || [])];
+          if (!normalizedSprint) return old || [];
+          const exists = (old || []).some(s => String(s.id || s._id) === normalizedSprint.id && normalizedSprint.id !== '');
+          return exists ? old : [normalizedSprint, ...(old || [])];
         });
         // Debugging: log cache and notify user
         try {
@@ -269,9 +269,9 @@ export default function Sprints() {
       setTimeout(() => {
         try {
           queryClient.setQueryData(['sprints'], (old = []) => {
-            if (!normalized) return old || [];
-            const exists = (old || []).some(s => String(s.id || s._id) === normalized.id && normalized.id !== '');
-            return exists ? old : [normalized, ...(old || [])];
+            if (!normalizedSprint) return old || [];
+            const exists = (old || []).some(s => String(s.id || s._id) === normalizedSprint.id && normalizedSprint.id !== '');
+            return exists ? old : [normalizedSprint, ...(old || [])];
           });
         } catch (e) {
           console.debug('Failed to re-append normalized sprint after refetch', e);
