@@ -1,0 +1,46 @@
+# Dependencies
+node_modules/
+server/node_modules/
+
+# Build output (will be built in Docker)
+dist/
+
+# Git
+.git/
+.gitignore
+.gitattributes
+
+# Environment files (secrets)
+.env
+.env.local
+.env.*.local
+
+# IDE/Editor
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Compressed files
+*.rar
+*.zip
+*.tar.gz
+
+# Logs
+*.log
+npm-debug.log*
+
+# Development files
+README.md
+.eslintrc*
+eslint.config.js
+*.md
+
+# Test files
+*.test.js
+*.spec.js
+__tests__/
