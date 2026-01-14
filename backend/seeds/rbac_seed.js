@@ -11,7 +11,8 @@ export const MODULES = [
     'dashboard', 'comments', 'gantt', 'time_tracking',
     'worklog', 'backlog', 'reports', 'files', 'users', 'groups',
     'finance_dashboard', 'receivables', 'payables', 'cash_flow',
-    'financial_reports', 'marketing_expenses', 'salary_management'
+    'financial_reports', 'marketing_expenses', 'salary_management',
+    'timesheet_approval', 'freelancer_reports'
 ];
 
 export const ACTIONS = ['create', 'read', 'update', 'delete', 'assign', 'manage_password'];
@@ -101,6 +102,70 @@ export const ROLES_DATA = {
             salary_management: { create: false, read: false, update: false, delete: false, assign: false }
         }
     },
+    freelancer: {
+        id: 'freelancer',
+        name: 'Freelancer',
+        description: 'External freelancer with time tracking access',
+        is_system: true,
+        priority: 20,
+        permissions: {
+            project: { create: false, read: true, update: false, delete: false, assign: false },
+            tasks: { create: false, read: true, update: true, delete: false, assign: false },
+            subtasks: { create: false, read: true, update: false, delete: false, assign: false },
+            sprints: { create: false, read: true, update: false, delete: false, assign: false },
+            calendar: { create: false, read: true, update: false, delete: false, assign: false },
+            dashboard: { create: false, read: true, update: false, delete: false, assign: false },
+            comments: { create: true, read: true, update: true, delete: false, assign: false },
+            gantt: { create: false, read: true, update: false, delete: false, assign: false },
+            time_tracking: { create: true, read: true, update: true, delete: true, assign: false },
+            worklog: { create: true, read: true, update: true, delete: true, assign: false },
+            backlog: { create: false, read: true, update: false, delete: false, assign: false },
+            reports: { create: false, read: true, update: false, delete: false, assign: false },
+            files: { create: false, read: true, update: false, delete: false, assign: false },
+            users: { create: false, read: false, update: false, delete: false, assign: false },
+            groups: { create: false, read: false, update: false, delete: false, assign: false },
+            finance_dashboard: { create: false, read: false, update: false, delete: false, assign: false },
+            receivables: { create: false, read: false, update: false, delete: false, assign: false },
+            payables: { create: false, read: false, update: false, delete: false, assign: false },
+            cash_flow: { create: false, read: false, update: false, delete: false, assign: false },
+            financial_reports: { create: false, read: false, update: false, delete: false, assign: false },
+            marketing_expenses: { create: false, read: false, update: false, delete: false, assign: false },
+            salary_management: { create: false, read: false, update: false, delete: false, assign: false }
+        }
+    },
+    hr: {
+        id: 'hr',
+        name: 'HR Manager',
+        description: 'Human Resources management access',
+        is_system: true,
+        priority: 60,
+        permissions: {
+            project: { create: false, read: true, update: false, delete: false, assign: false },
+            tasks: { create: false, read: true, update: false, delete: false, assign: false },
+            subtasks: { create: false, read: true, update: false, delete: false, assign: false },
+            sprints: { create: false, read: true, update: false, delete: false, assign: false },
+            calendar: { create: false, read: true, update: false, delete: false, assign: false },
+            dashboard: { create: false, read: true, update: false, delete: false, assign: false },
+            comments: { create: false, read: true, update: false, delete: false, assign: false },
+            gantt: { create: false, read: true, update: false, delete: false, assign: false },
+            time_tracking: { create: false, read: true, update: false, delete: false, assign: false },
+            worklog: { create: false, read: true, update: false, delete: false, assign: false },
+            backlog: { create: false, read: true, update: false, delete: false, assign: false },
+            reports: { create: true, read: true, update: false, delete: false, assign: false },
+            files: { create: true, read: true, update: true, delete: true, assign: false },
+            users: { create: true, read: true, update: true, delete: false, assign: true },
+            groups: { create: true, read: true, update: true, delete: true, assign: true },
+            finance_dashboard: { create: false, read: false, update: false, delete: false, assign: false },
+            receivables: { create: false, read: false, update: false, delete: false, assign: false },
+            payables: { create: false, read: false, update: false, delete: false, assign: false },
+            cash_flow: { create: false, read: false, update: false, delete: false, assign: false },
+            financial_reports: { create: false, read: false, update: false, delete: false, assign: false },
+            marketing_expenses: { create: false, read: false, update: false, delete: false, assign: false },
+            salary_management: { create: true, read: true, update: true, delete: true, assign: true },
+            timesheet_approval: { create: true, read: true, update: true, delete: true, assign: true },
+            freelancer_reports: { create: true, read: true, update: false, delete: false, assign: false }
+        }
+    },
     client: {
         id: 'client',
         name: 'Client',
@@ -174,8 +239,27 @@ const DUMMY_USERS = [
         role: 'user',
         role_id: 'team_member', // Assuming custom role eventually, but uses team permissions + specific code checks
         job_title: 'Sales Manager', // Code checks this specific string
+<<<<<<< HEAD
         department_id: 'dept_sales',
         is_active: true
+=======
+        department_id: 'dept_sales'
+    },
+    {
+        email: 'freelancer@sarthi.com',
+        full_name: 'Test Freelancer',
+        role: 'user',
+        role_id: 'freelancer',
+        job_title: 'Freelancer'
+    },
+    {
+        email: 'hr@niveshsarthi.com',
+        full_name: 'HR Manager',
+        role: 'user',
+        role_id: 'hr',
+        job_title: 'HR Manager',
+        department_id: 'dept_hr'
+>>>>>>> origin/main
     }
 ];
 
@@ -251,6 +335,9 @@ export const seedData = async () => {
             // Update users with department IDs
             if (dept.name === 'Sales') {
                 await User.updateOne({ email: 'sales.manager@sarthi.com' }, { department_id: d._id.toString() });
+            }
+            if (dept.name === 'HR') {
+                await User.updateOne({ email: 'hr@niveshsarthi.com' }, { department_id: d._id.toString() });
             }
         }
 

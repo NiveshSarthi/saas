@@ -21,7 +21,7 @@ dotenv.config({ path: path.resolve(__dirname, '../.env') });
 dotenv.config();
 
 const app = express();
-const PORT = process.env.PORT || 3000;
+const PORT = process.env.PORT || 3001;
 
 // CORS Configuration
 const allowedOrigins = process.env.CORS_ORIGINS
