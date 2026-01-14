@@ -27,7 +27,7 @@ const taskSchema = new mongoose.Schema({
     description: String,
     task_type: String,
     priority: String,
-    status: String, // todo, in_progress, blocked, done
+    status: String, // todo, in_progress, blocked, done (auto-calculated from subtasks)
     estimated_hours: Number,
     actual_hours: Number,
     assignees: [String], // emails
@@ -36,8 +36,10 @@ const taskSchema = new mongoose.Schema({
     due_date: Date,
     project_name: String,
     tags: [String],
-    created_by: String, // added to track creator
+    created_by: String, // added to track creator (owner)
     reporter_email: String, // added to track reporter
+    department: String, // auto from user
+    sprint_id: String,
     assignedFreelancerId: String, // email of assigned freelancer
     assignmentType: { type: String, enum: ['FULLTIME', 'FREELANCER'], default: 'FULLTIME' },
     hourlyTrackingEnabled: { type: Boolean, default: false },
@@ -514,3 +516,16 @@ const timeEntrySchema = new mongoose.Schema({
 });
 
 export const TimeEntry = mongoose.model('TimeEntry', timeEntrySchema);
+
+const subTaskSchema = new mongoose.Schema({
+    title: String,
+    assigned_user: String, // email
+    due_date: Date,
+    status: String, // todo, in_progress, blocked, done
+    parent_task_id: String, // reference to Task _id
+    created_by: String,
+    created_at: { type: Date, default: Date.now },
+    updated_at: { type: Date, default: Date.now }
+});
+
+export const SubTask = mongoose.model('SubTask', subTaskSchema);

@@ -191,4 +191,67 @@ router.get('/timeEntry/task/:taskId/hours', async (req, res) => {
     }
 });
 
+// Calculate parent task status from subtasks
+async function calculateParentStatus(parentTaskId) {
+    const subtasks = await models.SubTask.find({ parent_task_id: parentTaskId });
+    if (subtasks.length === 0) return 'todo';
+
+    const statuses = subtasks.map(st => st.status);
+    if (statuses.includes('blocked')) return 'blocked';
+    if (statuses.includes('in_progress')) return 'in_progress';
+    if (statuses.every(s => s === 'done')) return 'done';
+    return 'todo';
+}
+
+// Create subtask
+router.post('/subtasks', async (req, res) => {
+    try {
+        const subtask = new models.SubTask(req.body);
+        await subtask.save();
+
+        // Calculate parent status
+        const newStatus = await calculateParentStatus(req.body.parent_task_id);
+        await models.Task.findByIdAndUpdate(req.body.parent_task_id, { status: newStatus });
+
+        res.json(subtask);
+    } catch (error) {
+        res.status(500).json({ error: error.message });
+    }
+});
+
+// Update subtask
+router.patch('/subtasks/:id', async (req, res) => {
+    try {
+        const updated = await models.SubTask.findByIdAndUpdate(req.params.id, req.body, { new: true });
+
+        // Calculate parent status
+        const newStatus = await calculateParentStatus(updated.parent_task_id);
+        await models.Task.findByIdAndUpdate(updated.parent_task_id, { status: newStatus });
+
+        res.json(updated);
+    } catch (error) {
+        res.status(500).json({ error: error.message });
+    }
+});
+
+// Get subtasks for parent task
+router.get('/subtasks/parent/:parentTaskId', async (req, res) => {
+    try {
+        const subtasks = await models.SubTask.find({ parent_task_id: req.params.parentTaskId }).sort({ created_at: 1 });
+        res.json(subtasks);
+    } catch (error) {
+        res.status(500).json({ error: error.message });
+    }
+});
+
+// Get subtasks assigned to user
+router.get('/subtasks/assigned/:userEmail', async (req, res) => {
+    try {
+        const subtasks = await models.SubTask.find({ assigned_user: req.params.userEmail });
+        res.json(subtasks);
+    } catch (error) {
+        res.status(500).json({ error: error.message });
+    }
+});
+
 export default router;

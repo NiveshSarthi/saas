@@ -109,6 +109,8 @@ export default function NewTask() {
     assignedFreelancerId: '',
     freelancerEstimatedHours: '',
     hourlyTrackingEnabled: false,
+    department: '',
+    sprint_id: '',
   });
   const [tagInput, setTagInput] = useState('');
   const [user, setUser] = useState(null);
@@ -160,7 +162,12 @@ export default function NewTask() {
       try {
         const userData = await base44.auth.me();
         setUser(userData);
-        setFormData(prev => ({ ...prev, reporter_email: userData.email }));
+        setFormData(prev => ({
+          ...prev,
+          reporter_email: userData.email,
+          department: userData.department_id || '', // auto-fill department
+          created_by: userData.email // owner
+        }));
 
         // Fetch Marketing department
         const depts = await base44.entities.Department.filter({ name: 'Marketing' });
@@ -260,6 +267,11 @@ export default function NewTask() {
   const { data: freelancers = [] } = useQuery({
     queryKey: ['freelancers'],
     queryFn: () => base44.entities.User.filter({ role_id: 'freelancer' }),
+  });
+
+  const { data: sprints = [] } = useQuery({
+    queryKey: ['sprints'],
+    queryFn: () => base44.entities.Sprint.list('-created_at'),
   });
 
   const { data: taskGroups = [] } = useQuery({
