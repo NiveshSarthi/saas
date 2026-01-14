@@ -70,13 +70,36 @@ router.post('/invoke/connectFacebookPage', async (req, res) => {
                     })
                 });
                 const subscribeData = await subscribeRes.json();
-                console.log('Webhook subscription:', subscribeData);
+                console.log('Webhook subscription result:', subscribeData);
             } catch (e) {
                 console.error('Webhook subscription failed:', e);
             }
         }
 
-        res.json({ success: true, data: { message: `Connected to ${page.page_name}`, page } });
+        // AUTO-SYNC FORMS: Immediately fetch forms so they are available without manual sync
+        try {
+            const formsRes = await fetch(`https://graph.facebook.com/${FB_API_VERSION}/${page_id}/leadgen_forms?access_token=${page_token}`);
+            const formsData = await formsRes.json();
+            if (formsData.data) {
+                const currentFormIds = new Set(page.lead_forms.map(f => f.form_id));
+                for (const fbForm of formsData.data) {
+                    if (!currentFormIds.has(fbForm.id)) {
+                        page.lead_forms.push({
+                            form_id: fbForm.id,
+                            form_name: fbForm.name,
+                            status: fbForm.status,
+                            subscribed: true
+                        });
+                    }
+                }
+                await page.save();
+                console.log(`Auto-synced ${formsData.data.length} forms for page ${page_id}`);
+            }
+        } catch (syncError) {
+            console.error('Auto-form sync failed during connection:', syncError);
+        }
+
+        res.json({ success: true, data: { message: `Connected to ${page.page_name} and synced forms.`, page } });
     } catch (e) {
         res.status(500).json({ error: e.message });
     }
@@ -261,6 +284,44 @@ router.post('/invoke/getDashboardUsers', async (req, res) => {
     }
 });
 
+// Debug Facebook Token
+router.post('/invoke/debugFacebookToken', async (req, res) => {
+    try {
+        const { page_id, page_token } = req.body;
+        const FacebookPageConnection = models.FacebookPageConnection;
+        const page = await FacebookPageConnection.findOne({ page_id });
+
+        if (!page) {
+            return res.json({ error: 'Page not found in DB' });
+        }
+
+        // Test page info
+        const pageRes = await fetch(`https://graph.facebook.com/${FB_API_VERSION}/${page_id}?fields=name&access_token=${page_token}`);
+        const pageData = await pageRes.json();
+
+        // Test forms
+        const formsRes = await fetch(`https://graph.facebook.com/${FB_API_VERSION}/${page_id}/leadgen_forms?access_token=${page_token}`);
+        const formsData = await formsRes.json();
+
+        // Test leads if forms exist
+        let leadsData = null;
+        if (formsData.data && formsData.data.length > 0) {
+            const formId = formsData.data[0].id;
+            const leadsRes = await fetch(`https://graph.facebook.com/${FB_API_VERSION}/${formId}/leads?access_token=${page_token}`);
+            leadsData = await leadsRes.json();
+        }
+
+        res.json({
+            pageData,
+            formsData,
+            leadsData,
+            dbPage: { page_id: page.page_id, access_token: page.access_token.substring(0, 10) + '...' }
+        });
+    } catch (e) {
+        res.status(500).json({ error: e.message });
+    }
+});
+
 // Facebook Webhooks
 router.get('/webhooks/facebook', (req, res) => {
     const mode = req.query['hub.mode'];
@@ -293,10 +354,18 @@ router.post('/webhooks/facebook', async (req, res) => {
                     if (change.field === 'leadgen') {
                         const leadId = change.value.leadgen_id;
                         const pageId = change.value.page_id;
+                        const formId = change.value.form_id;
 
                         // Fetch lead details
                         const page = await models.FacebookPageConnection.findOne({ page_id: pageId });
                         if (page) {
+                            // DEDUPLICATION: Check if lead already exists before fetching/creating
+                            const existingLead = await models.Lead.findOne({ fb_lead_id: leadId });
+                            if (existingLead) {
+                                console.log('Duplicate lead received via webhook, skipping:', leadId);
+                                return;
+                            }
+
                             const leadRes = await fetch(`https://graph.facebook.com/${FB_API_VERSION}/${leadId}?access_token=${page.access_token}`);
                             const leadData = await leadRes.json();
 
@@ -307,6 +376,10 @@ router.post('/webhooks/facebook', async (req, res) => {
                                     fieldData[field.name] = field.values[0];
                                 });
 
+                                // Find form name if available in our records
+                                const formRecord = page.lead_forms.find(f => f.form_id === formId);
+                                const formName = formRecord ? formRecord.form_name : (leadData.form_id || formId);
+
                                 await models.Lead.create({
                                     lead_name: fieldData.full_name || fieldData.first_name + ' ' + (fieldData.last_name || ''),
                                     email: fieldData.email,
@@ -314,12 +387,12 @@ router.post('/webhooks/facebook', async (req, res) => {
                                     lead_source: 'facebook',
                                     status: 'new',
                                     fb_lead_id: leadId,
-                                    fb_form_id: leadData.form_id,
-                                    fb_created_time: leadData.created_time,
-                                    notes: `Webhook: Form ID ${leadData.form_id}`,
+                                    fb_form_id: leadData.form_id || formId,
+                                    fb_created_time: leadData.created_time || new Date(),
+                                    notes: `Webhook Sync\nForm: ${formName}\nFacebook ID: ${leadId}`,
                                     created_date: new Date()
                                 });
-                                console.log('Lead created via webhook:', leadId);
+                                console.log('Lead created via webhook:', leadId, 'Form:', formName);
                             }
                         }
                     }
