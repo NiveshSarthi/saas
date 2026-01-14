@@ -105,6 +105,10 @@ export default function NewTask() {
     recurrence_day_of_week: null,
     recurrence_day_of_month: null,
     marketing_task_id: null,
+    assignmentType: 'FULLTIME',
+    assignedFreelancerId: '',
+    freelancerEstimatedHours: '',
+    hourlyTrackingEnabled: false,
   });
   const [tagInput, setTagInput] = useState('');
   const [user, setUser] = useState(null);
@@ -182,6 +186,14 @@ export default function NewTask() {
     fetchUser();
   }, []);
 
+  // Set hourly tracking when assignment type is freelancer
+  React.useEffect(() => {
+    setFormData(prev => ({
+      ...prev,
+      hourlyTrackingEnabled: prev.assignmentType === 'FREELANCER'
+    }));
+  }, [formData.assignmentType]);
+
   // Set marketing project, group, and assignees when marketing category is selected
   React.useEffect(() => {
     if (taskCategory === 'marketing' && marketingProject && marketingGroup && marketingDepartment && users.length > 0) {
@@ -243,6 +255,11 @@ export default function NewTask() {
   const { data: userGroups = [] } = useQuery({
     queryKey: ['groups'],
     queryFn: () => base44.entities.Group.list(),
+  });
+
+  const { data: freelancers = [] } = useQuery({
+    queryKey: ['freelancers'],
+    queryFn: () => base44.entities.User.filter({ role_id: 'freelancer' }),
   });
 
   const { data: taskGroups = [] } = useQuery({

@@ -100,6 +100,37 @@ export const ROLES_DATA = {
             salary_management: { create: false, read: false, update: false, delete: false, assign: false }
         }
     },
+    freelancer: {
+        id: 'freelancer',
+        name: 'Freelancer',
+        description: 'External freelancer with time tracking access',
+        is_system: true,
+        priority: 20,
+        permissions: {
+            project: { create: false, read: true, update: false, delete: false, assign: false },
+            tasks: { create: false, read: true, update: true, delete: false, assign: false },
+            subtasks: { create: false, read: true, update: false, delete: false, assign: false },
+            sprints: { create: false, read: true, update: false, delete: false, assign: false },
+            calendar: { create: false, read: true, update: false, delete: false, assign: false },
+            dashboard: { create: false, read: true, update: false, delete: false, assign: false },
+            comments: { create: true, read: true, update: true, delete: false, assign: false },
+            gantt: { create: false, read: true, update: false, delete: false, assign: false },
+            time_tracking: { create: true, read: true, update: true, delete: true, assign: false },
+            worklog: { create: true, read: true, update: true, delete: true, assign: false },
+            backlog: { create: false, read: true, update: false, delete: false, assign: false },
+            reports: { create: false, read: true, update: false, delete: false, assign: false },
+            files: { create: false, read: true, update: false, delete: false, assign: false },
+            users: { create: false, read: false, update: false, delete: false, assign: false },
+            groups: { create: false, read: false, update: false, delete: false, assign: false },
+            finance_dashboard: { create: false, read: false, update: false, delete: false, assign: false },
+            receivables: { create: false, read: false, update: false, delete: false, assign: false },
+            payables: { create: false, read: false, update: false, delete: false, assign: false },
+            cash_flow: { create: false, read: false, update: false, delete: false, assign: false },
+            financial_reports: { create: false, read: false, update: false, delete: false, assign: false },
+            marketing_expenses: { create: false, read: false, update: false, delete: false, assign: false },
+            salary_management: { create: false, read: false, update: false, delete: false, assign: false }
+        }
+    },
     client: {
         id: 'client',
         name: 'Client',
@@ -170,6 +201,13 @@ const DUMMY_USERS = [
         role_id: 'team_member', // Assuming custom role eventually, but uses team permissions + specific code checks
         job_title: 'Sales Manager', // Code checks this specific string
         department_id: 'dept_sales'
+    },
+    {
+        email: 'freelancer@sarthi.com',
+        full_name: 'Test Freelancer',
+        role: 'user',
+        role_id: 'freelancer',
+        job_title: 'Freelancer'
     }
 ];
 

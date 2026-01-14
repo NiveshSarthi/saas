@@ -38,6 +38,10 @@ const taskSchema = new mongoose.Schema({
     tags: [String],
     created_by: String, // added to track creator
     reporter_email: String, // added to track reporter
+    assignedFreelancerId: String, // email of assigned freelancer
+    assignmentType: { type: String, enum: ['FULLTIME', 'FREELANCER'], default: 'FULLTIME' },
+    hourlyTrackingEnabled: { type: Boolean, default: false },
+    freelancerEstimatedHours: Number,
     created_at: { type: Date, default: Date.now },
     updated_at: { type: Date, default: Date.now }
 });
@@ -498,3 +502,15 @@ const facebookPageConnectionSchema = new mongoose.Schema({
 });
 
 export const FacebookPageConnection = mongoose.model('FacebookPageConnection', facebookPageConnectionSchema);
+
+const timeEntrySchema = new mongoose.Schema({
+    user_email: String,
+    task_id: String,
+    start_time: Date,
+    end_time: Date,
+    duration_minutes: Number,
+    description: String,
+    created_at: { type: Date, default: Date.now }
+});
+
+export const TimeEntry = mongoose.model('TimeEntry', timeEntrySchema);

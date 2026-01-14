@@ -61,6 +61,19 @@ router.patch('/:entity/:id', async (req, res) => {
         const Model = getModel(req.params.entity);
         if (!Model) return res.status(404).json({ error: 'Entity not found' });
 
+        // Special validation for Task
+        if (req.params.entity.toLowerCase() === 'task') {
+            if (req.body.assignedFreelancerId) {
+                const freelancer = await models.User.findOne({ email: req.body.assignedFreelancerId, role_id: 'freelancer' });
+                if (!freelancer) {
+                    return res.status(400).json({ error: 'Assigned user must have freelancer role' });
+                }
+            }
+            if (req.body.assignmentType === 'FREELANCER') {
+                req.body.hourlyTrackingEnabled = true;
+            }
+        }
+
         const updated = await Model.findByIdAndUpdate(req.params.id, req.body, { new: true });
         res.json(updated);
     } catch (error) {
@@ -90,6 +103,89 @@ router.delete('/:entity/:id', async (req, res) => {
 
         await Model.findByIdAndDelete(req.params.id);
         res.json({ success: true });
+    } catch (error) {
+        res.status(500).json({ error: error.message });
+    }
+});
+
+// Get freelancers
+router.get('/users/freelancers', async (req, res) => {
+    try {
+        const freelancers = await models.User.find({ role_id: 'freelancer' });
+        res.json(freelancers);
+    } catch (error) {
+        res.status(500).json({ error: error.message });
+    }
+});
+
+// Start time tracking
+router.post('/timeEntry/start', async (req, res) => {
+    try {
+        const { task_id, user_email } = req.body;
+
+        // Check if task has freelancer assigned
+        const task = await models.Task.findById(task_id);
+        if (!task || task.assignedFreelancerId !== user_email) {
+            return res.status(400).json({ error: 'Only assigned freelancer can log time' });
+        }
+
+        // Check if there's already an active timer for this user
+        const activeEntry = await models.TimeEntry.findOne({ user_email, end_time: null });
+        if (activeEntry) {
+            return res.status(400).json({ error: 'Another timer is already running' });
+        }
+
+        const entry = new models.TimeEntry({
+            user_email,
+            task_id,
+            start_time: new Date()
+        });
+        await entry.save();
+        res.json(entry);
+    } catch (error) {
+        res.status(500).json({ error: error.message });
+    }
+});
+
+// Stop time tracking
+router.post('/timeEntry/stop', async (req, res) => {
+    try {
+        const { user_email } = req.body;
+
+        const activeEntry = await models.TimeEntry.findOne({ user_email, end_time: null });
+        if (!activeEntry) {
+            return res.status(400).json({ error: 'No active timer found' });
+        }
+
+        const endTime = new Date();
+        const duration = Math.round((endTime - activeEntry.start_time) / (1000 * 60)); // minutes
+
+        activeEntry.end_time = endTime;
+        activeEntry.duration_minutes = duration;
+        await activeEntry.save();
+
+        res.json(activeEntry);
+    } catch (error) {
+        res.status(500).json({ error: error.message });
+    }
+});
+
+// Get time entries for task
+router.get('/timeEntry/task/:taskId', async (req, res) => {
+    try {
+        const entries = await models.TimeEntry.find({ task_id: req.params.taskId }).sort({ created_at: -1 });
+        res.json(entries);
+    } catch (error) {
+        res.status(500).json({ error: error.message });
+    }
+});
+
+// Get logged hours for task
+router.get('/timeEntry/task/:taskId/hours', async (req, res) => {
+    try {
+        const entries = await models.TimeEntry.find({ task_id: req.params.taskId, end_time: { $ne: null } });
+        const totalHours = entries.reduce((sum, entry) => sum + (entry.duration_minutes || 0), 0) / 60;
+        res.json({ totalHours });
     } catch (error) {
         res.status(500).json({ error: error.message });
     }
