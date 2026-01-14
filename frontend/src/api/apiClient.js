@@ -15,6 +15,8 @@ const API_BASE = import.meta.env.VITE_BACKEND_URL || 'http://localhost:3000';
 class ApiClient {
     constructor(config) {
         this.config = config;
+        // Track entities that returned 404 so we avoid repeated network calls
+        this._missingEntities = new Set();
     }
 
     // Auth Namespace
@@ -104,6 +106,19 @@ class ApiClient {
 
                 const entityName = String(prop);
 
+                // If we already detected this entity is missing (404), return
+                // a lightweight stub that throws quickly to avoid further network calls.
+                if (this._missingEntities.has(entityName)) {
+                    return {
+                        filter: async () => { return []; },
+                        list: async () => { return []; },
+                        create: async () => { throw new Error(`Entity Error: ${entityName} not available`); },
+                        update: async () => { throw new Error(`Entity Error: ${entityName} not available`); },
+                        get: async () => { return null; },
+                        delete: async () => { throw new Error(`Entity Error: ${entityName} not available`); }
+                    };
+                }
+
                 return {
                     filter: async (query, sort, limit) => {
                         const body = { ...query };
@@ -115,8 +130,15 @@ class ApiClient {
                             headers: { 'Content-Type': 'application/json' },
                             body: JSON.stringify(body)
                         });
-                        if (!res.ok) throw new Error(`Entity Error: ${res.statusText}`);
-                        return res.json();
+                        if (!res.ok) {
+                            if (res.status === 404) this._missingEntities.add(entityName);
+                            throw new Error(`Entity Error: ${res.statusText}`);
+                        }
+                        const data = await res.json();
+                        if (Array.isArray(data)) {
+                            return data.map(item => ({ ...(item || {}), id: item?.id || item?._id }));
+                        }
+                        return data;
                     },
 
                     list: async (sort, limit) => {
@@ -129,8 +151,15 @@ class ApiClient {
                             headers: { 'Content-Type': 'application/json' },
                             body: JSON.stringify(body)
                         });
-                        if (!res.ok) throw new Error(`Entity Error: ${res.statusText}`);
-                        return res.json();
+                        if (!res.ok) {
+                            if (res.status === 404) this._missingEntities.add(entityName);
+                            throw new Error(`Entity Error: ${res.statusText}`);
+                        }
+                        const data = await res.json();
+                        if (Array.isArray(data)) {
+                            return data.map(item => ({ ...(item || {}), id: item?.id || item?._id }));
+                        }
+                        return data;
                     },
 
                     create: async (data) => {
@@ -139,32 +168,54 @@ class ApiClient {
                             headers: { 'Content-Type': 'application/json' },
                             body: JSON.stringify(data)
                         });
-                        if (!res.ok) throw new Error(`Entity Error: ${res.statusText}`);
-                        return res.json();
+                        if (!res.ok) {
+                            if (res.status === 404) this._missingEntities.add(entityName);
+                            throw new Error(`Entity Error: ${res.statusText}`);
+                        }
+                        const created = await res.json();
+                        return { ...(created || {}), id: created?.id || created?._id };
                     },
 
                     update: async (id, data) => {
+                        if (id === undefined || id === null) {
+                            throw new Error(`Entity Error: update called with invalid id for ${entityName}`);
+                        }
                         const res = await fetch(`${API_BASE}/rest/v1/${entityName}/${id}`, {
                             method: 'PATCH',
                             headers: { 'Content-Type': 'application/json' },
                             body: JSON.stringify(data)
                         });
-                        if (!res.ok) throw new Error(`Entity Error: ${res.statusText}`);
-                        return res.json();
+                        if (!res.ok) {
+                            if (res.status === 404) this._missingEntities.add(entityName);
+                            throw new Error(`Entity Error: ${res.statusText}`);
+                        }
+                        const updated = await res.json();
+                        return { ...(updated || {}), id: updated?.id || updated?._id };
                     },
 
                     get: async (id) => {
                         const res = await fetch(`${API_BASE}/rest/v1/${entityName}/${id}`);
-                        if (!res.ok) return null;
-                        return res.json();
+                        if (!res.ok) {
+                            if (res.status === 404) this._missingEntities.add(entityName);
+                            return null;
+                        }
+                        const obj = await res.json();
+                        return { ...(obj || {}), id: obj?.id || obj?._id };
                     },
 
                     delete: async (id) => {
+                        if (id === undefined || id === null) {
+                            throw new Error(`Entity Error: delete called with invalid id for ${entityName}`);
+                        }
                         const res = await fetch(`${API_BASE}/rest/v1/${entityName}/${id}`, {
                             method: 'DELETE'
                         });
-                        if (!res.ok) throw new Error(`Entity Error: ${res.statusText}`);
-                        return res.json();
+                        if (!res.ok) {
+                            if (res.status === 404) this._missingEntities.add(entityName);
+                            throw new Error(`Entity Error: ${res.statusText}`);
+                        }
+                        const obj = await res.json().catch(() => null);
+                        return obj;
                     }
                 };
             }

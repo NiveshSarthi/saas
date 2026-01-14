@@ -76,13 +76,13 @@ export default function CreateSprintDialog({ open, onClose, sprint, projectId, p
           {showProjectSelect && (
             <div className="space-y-2">
               <Label>Project *</Label>
-              <Select value={projectId || ''} onValueChange={onProjectChange}>
+              <Select value={projectId ? String(projectId) : ''} onValueChange={(v) => onProjectChange(String(v))}>
                 <SelectTrigger>
                   <SelectValue placeholder="Select a project" />
                 </SelectTrigger>
                 <SelectContent>
                   {projects.map(p => (
-                    <SelectItem key={p.id} value={p.id}>{p.name}</SelectItem>
+                    <SelectItem key={String(p.id || p._id)} value={String(p.id || p._id)}>{p.name}</SelectItem>
                   ))}
                 </SelectContent>
               </Select>

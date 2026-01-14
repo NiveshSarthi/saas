@@ -373,9 +373,9 @@ export default function ScheduleMeetingDialog({
                   <CommandList>
                     <CommandEmpty>No users found.</CommandEmpty>
                     <CommandGroup>
-                      {filteredUsers.map(u => (
+                      {filteredUsers.map((u, idx) => (
                         <CommandItem 
-                          key={u.email} 
+                          key={u.email || u.id || `user-${idx}`} 
                           onSelect={() => addParticipant(u.email)}
                           className="cursor-pointer"
                         >

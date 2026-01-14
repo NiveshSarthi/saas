@@ -74,12 +74,12 @@ export default function SalaryManagement() {
     queryKey: ['dashboard-users'],
     queryFn: async () => {
       const response = await base44.functions.invoke('getDashboardUsers');
-      const usersData = response.data;
+      const usersData = response.data?.data || response.data;
       return [
-        ...usersData.users,
-        ...usersData.invitations
+        ...(usersData.users || []),
+        ...(usersData.invitations || [])
           .filter(inv => inv.status === 'accepted')
-          .filter(inv => !usersData.users.some(u => u.email?.toLowerCase() === inv.email?.toLowerCase()))
+          .filter(inv => !(usersData.users || []).some(u => u.email?.toLowerCase() === inv.email?.toLowerCase()))
           .map(inv => ({
             email: inv.email,
             full_name: inv.full_name || inv.email?.split('@')[0]

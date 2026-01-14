@@ -206,7 +206,7 @@ export default function SprintBoard() {
     if (!targetSprintId) return;
 
     const tasksToMove = sprintTasks.filter(t => t.status !== 'done');
-    const targetSprint = allSprints.find(s => s.id === targetSprintId);
+    const targetSprint = allSprints.find(s => String(s.id) === String(targetSprintId));
 
     // Get all subtasks for the tasks being moved
     const allTasks = await base44.entities.Task.list();
@@ -217,38 +217,50 @@ export default function SprintBoard() {
 
     // Move parent tasks
     for (const task of tasksToMove) {
-      const oldSprint = allSprints.find(s => s.id === task.sprint_id);
+      const oldSprint = allSprints.find(s => String(s.id) === String(task.sprint_id));
 
-      await base44.entities.SprintChangeLog.create({
-        task_id: task.id,
-        task_title: task.title,
-        old_sprint_id: task.sprint_id || null,
-        new_sprint_id: targetSprintId,
-        old_sprint_name: oldSprint?.name || sprint.name,
-        new_sprint_name: targetSprint?.name || 'Unknown Sprint',
-        changed_by: user?.email,
-        project_id: task.project_id,
-        is_subtask: false
-      });
+      if (base44?.entities?.SprintChangeLog && typeof base44.entities.SprintChangeLog.create === 'function') {
+        try {
+          await base44.entities.SprintChangeLog.create({
+            task_id: task.id,
+            task_title: task.title,
+            old_sprint_id: task.sprint_id || null,
+            new_sprint_id: targetSprintId,
+            old_sprint_name: oldSprint?.name || sprint.name,
+            new_sprint_name: targetSprint?.name || 'Unknown Sprint',
+            changed_by: user?.email,
+            project_id: task.project_id,
+            is_subtask: false
+          });
+        } catch (err) {
+          console.warn('SprintChangeLog.create failed', err);
+        }
+      }
 
       await base44.entities.Task.update(task.id, { sprint_id: targetSprintId });
     }
 
     // Move subtasks
     for (const subtask of subtasksToMove) {
-      const oldSprint = allSprints.find(s => s.id === subtask.sprint_id);
+      const oldSprint = allSprints.find(s => String(s.id) === String(subtask.sprint_id));
 
-      await base44.entities.SprintChangeLog.create({
-        task_id: subtask.id,
-        task_title: subtask.title,
-        old_sprint_id: subtask.sprint_id || null,
-        new_sprint_id: targetSprintId,
-        old_sprint_name: oldSprint?.name || 'No Sprint',
-        new_sprint_name: targetSprint?.name || 'Unknown Sprint',
-        changed_by: user?.email,
-        project_id: subtask.project_id,
-        is_subtask: true
-      });
+      if (base44?.entities?.SprintChangeLog && typeof base44.entities.SprintChangeLog.create === 'function') {
+        try {
+          await base44.entities.SprintChangeLog.create({
+            task_id: subtask.id,
+            task_title: subtask.title,
+            old_sprint_id: subtask.sprint_id || null,
+            new_sprint_id: targetSprintId,
+            old_sprint_name: oldSprint?.name || 'No Sprint',
+            new_sprint_name: targetSprint?.name || 'Unknown Sprint',
+            changed_by: user?.email,
+            project_id: subtask.project_id,
+            is_subtask: true
+          });
+        } catch (err) {
+          console.warn('SprintChangeLog.create failed', err);
+        }
+      }
 
       await base44.entities.Task.update(subtask.id, { sprint_id: targetSprintId });
     }

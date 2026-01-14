@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { base44 } from '@/api/base44Client';
-import { useQuery, useMutation } from '@tanstack/react-query';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Link, useNavigate } from 'react-router-dom';
 import { createPageUrl } from '@/utils';
 import { format } from 'date-fns';
@@ -120,6 +120,15 @@ export default function NewTask() {
     queryFn: () => base44.entities.Project.list('-updated_date'),
   });
 
+  const queryClient = useQueryClient();
+
+  // Expose queryClient for manual inspection in DevTools console
+  React.useEffect(() => {
+    try {
+      window.__REACT_QUERY_CLIENT__ = queryClient;
+    } catch (e) {}
+  }, [queryClient]);
+
   const { data: projectTasks = [] } = useQuery({
     queryKey: ['project-tasks-for-ai', formData.project_id],
     queryFn: () => base44.entities.Task.filter({ project_id: formData.project_id }, '-created_date', 20),
@@ -132,10 +141,42 @@ export default function NewTask() {
       const response = await base44.functions.invoke('getDashboardUsers');
       return response.data;
     },
+    onSuccess: (data) => {
+      try {
+        console.debug('dashboard-users onSuccess', data?.users?.length, data?.invitations?.length, data);
+      } catch (e) {}
+    },
   });
 
-  const usersFromEntity = dashboardData?.users || [];
-  const invitations = dashboardData?.invitations || [];
+  // `['dashboard-users']` cache may hold either an object { users, invitations }
+  // or a flattened array (other pages sometimes return a flattened array).
+  let usersFromEntity = [];
+  let invitations = [];
+  // Unwrap one layer if functions.invoke returned { data: { users, invitations } }
+  const rawDashboard = dashboardData?.data || dashboardData;
+  if (Array.isArray(rawDashboard)) {
+    usersFromEntity = rawDashboard;
+    invitations = [];
+  } else {
+    usersFromEntity = rawDashboard?.users || [];
+    invitations = rawDashboard?.invitations || [];
+  }
+
+  // Normalize user shape so downstream code can rely on `id`, `email`, `department_id`
+  usersFromEntity = (usersFromEntity || []).map(u => ({
+    ...u,
+    id: u.id || u._id || (u.email && String(u.email).toLowerCase()),
+    email: u.email || u.email_address || u.username || null,
+    department_id: u.department_id || (u.department && (u.department.id || u.department._id)) || null,
+  }));
+
+  invitations = (invitations || []).map(inv => ({
+    ...inv,
+    id: inv.id || inv._id || (inv.email && String(inv.email).toLowerCase()),
+    email: inv.email || inv.email_address || null,
+  }));
+
+  
 
   const users = React.useMemo(() => [
     ...usersFromEntity,
@@ -182,12 +223,25 @@ export default function NewTask() {
     fetchUser();
   }, []);
 
+  // Manual debug fetch in case the react-query hook isn't running in your environment
+  React.useEffect(() => {
+    const debugFetch = async () => {
+      try {
+        const res = await base44.functions.invoke('getDashboardUsers');
+        console.debug('debugFetch getDashboardUsers', res);
+      } catch (err) {
+        console.error('debugFetch failed', err);
+      }
+    };
+    debugFetch();
+  }, []);
+
   // Set marketing project, group, and assignees when marketing category is selected
   React.useEffect(() => {
     if (taskCategory === 'marketing' && marketingProject && marketingGroup && marketingDepartment && users.length > 0) {
       // Get all active marketing department members
       const marketingMemberEmails = users
-        .filter(u => u.department_id === marketingDepartment.id && u.status !== 'inactive' && u.is_active !== false)
+        .filter(u => String(u.department_id) === String(marketingDepartment.id) && u.status !== 'inactive' && u.is_active !== false)
         .map(u => u.email);
 
       setFormData(prev => ({
@@ -195,12 +249,6 @@ export default function NewTask() {
         project_id: marketingProject.id,
         assigned_group_id: marketingGroup.id,
         assignees: marketingMemberEmails
-      }));
-    } else if (taskCategory === 'normal') {
-      // Clear assignees when switching back to normal
-      setFormData(prev => ({
-        ...prev,
-        assignees: []
       }));
     }
   }, [taskCategory, marketingProject, marketingGroup, marketingDepartment, users]);
@@ -212,7 +260,7 @@ export default function NewTask() {
 
       // Get all active marketing department members
       const marketingMemberEmails = users
-        .filter(u => u.department_id === marketingDepartment.id && u.status !== 'inactive' && u.is_active !== false)
+        .filter(u => String(u.department_id) === String(marketingDepartment.id) && u.status !== 'inactive' && u.is_active !== false)
         .map(u => u.email);
 
       if (template) {
@@ -263,11 +311,24 @@ export default function NewTask() {
 
   const filteredUsers = users.filter(u => {
     const isActive = u.status !== 'inactive' && u.is_active !== false;
-    const matchesDepartment = selectedDepartment === 'all' || u.department_id === selectedDepartment;
+    const matchesDepartment = selectedDepartment === 'all' || String(u.department_id) === String(selectedDepartment);
     const selectedGroup = userGroups.find(g => g.id === formData.assigned_group_id);
     const matchesGroup = !formData.assigned_group_id || (selectedGroup?.members?.includes(u.email));
     return isActive && matchesDepartment && matchesGroup;
   });
+
+  // Debugging: log dashboard users shape and filtered users to diagnose missing members
+  React.useEffect(() => {
+    try {
+      console.debug('NewTask.dashboardData', { dashboardData });
+      console.debug('NewTask.usersFromEntity_sample', (usersFromEntity || []).slice(0,6));
+      console.debug('NewTask.invitations_sample', (invitations || []).slice(0,6));
+      console.debug('NewTask.users_combined_sample', (users || []).slice(0,6));
+      console.debug('NewTask.filteredUsers_count', filteredUsers.length, filteredUsers.slice(0,6));
+    } catch (e) {
+      console.debug('NewTask.debug failed', e);
+    }
+  }, [dashboardData, usersFromEntity, invitations, users, filteredUsers]);
 
   const createTaskMutation = useMutation({
     mutationFn: async (data) => {
@@ -705,6 +766,46 @@ export default function NewTask() {
                   onChange={(newAssignees) => setFormData(prev => ({ ...prev, assignees: newAssignees }))}
                   placeholder="Select team members..."
                 />
+
+                {/* Debug panel: shows counts and a manual fetch button */}
+                <div className="mt-2 text-sm text-slate-500">
+                  <div>debug: usersFromEntity={usersFromEntity?.length || 0}, combined users={users?.length || 0}, filtered={filteredUsers?.length || 0}</div>
+                  <button
+                    type="button"
+                    onClick={async () => {
+                      // Try base44.functions.invoke first
+                      try {
+                        const r = await base44.functions.invoke('getDashboardUsers');
+                        console.debug('manual debug fetch via base44.functions.invoke', r);
+                      } catch (e) {
+                        console.error('manual debug fetch via base44.functions.invoke failed', e);
+                      }
+
+                      // Try relative fetch to functions endpoint
+                      try {
+                        const res = await fetch('/functions/v1/invoke/getDashboardUsers', { method: 'POST', headers: { 'Content-Type': 'application/json' } });
+                        const text = await res.text();
+                        console.debug('manual debug fetch via /functions path', { ok: res.ok, status: res.status, body: text });
+                      } catch (e) {
+                        console.error('manual debug fetch via /functions path failed', e);
+                      }
+
+                      // Try direct backend host (fallback)
+                      try {
+                        const res2 = await fetch('http://localhost:3000/functions/v1/invoke/getDashboardUsers', { method: 'POST', headers: { 'Content-Type': 'application/json' } });
+                        const text2 = await res2.text();
+                        console.debug('manual debug fetch via http://localhost:3000', { ok: res2.ok, status: res2.status, body: text2 });
+                      } catch (e) {
+                        console.error('manual debug fetch via http://localhost:3000 failed', e);
+                      }
+
+                      alert('Manual debug fetch attempts logged to console');
+                    }}
+                    className="mt-2 text-xs text-indigo-600 underline"
+                  >
+                    Debug: fetch dashboard users
+                  </button>
+                </div>
               </div>
 
               {/* AI Assignee Suggestions */}

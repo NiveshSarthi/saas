@@ -61,6 +61,10 @@ router.patch('/:entity/:id', async (req, res) => {
         const Model = getModel(req.params.entity);
         if (!Model) return res.status(404).json({ error: 'Entity not found' });
 
+        if (!req.params.id || req.params.id === 'undefined') {
+            return res.status(400).json({ error: 'Invalid ID' });
+        }
+
         const updated = await Model.findByIdAndUpdate(req.params.id, req.body, { new: true });
         res.json(updated);
     } catch (error) {
@@ -73,6 +77,10 @@ router.get('/:entity/:id', async (req, res) => {
     try {
         const Model = getModel(req.params.entity);
         if (!Model) return res.status(404).json({ error: 'Entity not found' });
+
+        if (!req.params.id || req.params.id === 'undefined') {
+            return res.status(400).json({ error: 'Invalid ID' });
+        }
 
         const item = await Model.findById(req.params.id);
         if (!item) return res.status(404).json({ error: 'Item not found' });
@@ -87,6 +95,10 @@ router.delete('/:entity/:id', async (req, res) => {
     try {
         const Model = getModel(req.params.entity);
         if (!Model) return res.status(404).json({ error: 'Entity not found' });
+
+        if (!req.params.id || req.params.id === 'undefined') {
+            return res.status(400).json({ error: 'Invalid ID' });
+        }
 
         await Model.findByIdAndDelete(req.params.id);
         res.json({ success: true });

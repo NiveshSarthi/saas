@@ -177,14 +177,32 @@ export default function TeamTasksView() {
 
   // Build task hierarchy - recursive
   const taskHierarchy = useMemo(() => {
-    const taskMap = new Map(tasks.map(t => [t.id, { ...t, subtasks: [] }]));
+    // Normalize keys: tasks may come with `id` or `_id` depending on source.
+    // Index each task node by both `id` and `_id` (when present) to avoid
+    // collisions where many tasks have `undefined` id and overwrite each other.
+    const taskMap = new Map();
+
+    tasks.forEach(t => {
+      const node = JSON.parse(JSON.stringify({ ...t, subtasks: [] }));
+
+      // Ensure a canonical `id` exists on the node for UI operations
+      if (!node.id && node._id) node.id = node._id;
+
+      if (node.id) taskMap.set(node.id, node);
+      if (node._id && node._id !== node.id) taskMap.set(node._id, node);
+    });
+
     const rootTasks = [];
 
     tasks.forEach(task => {
-      const taskNode = taskMap.get(task.id);
-      if (task.parent_task_id && taskMap.has(task.parent_task_id)) {
-        taskMap.get(task.parent_task_id).subtasks.push(taskNode);
-      } else if (!task.parent_task_id) {
+      const key = task.id || task._id;
+      const taskNode = taskMap.get(key);
+      if (!taskNode) return;
+
+      const parentKey = task.parent_task_id;
+      if (parentKey && taskMap.has(parentKey)) {
+        taskMap.get(parentKey).subtasks.push(taskNode);
+      } else if (!parentKey) {
         rootTasks.push(taskNode);
       }
     });
@@ -198,7 +216,8 @@ export default function TeamTasksView() {
 
     const flatten = (task, level = 0) => {
       const hasSubtasks = task.subtasks && task.subtasks.length > 0;
-      result.push({ ...task, level, hasSubtasks, isSubtask: level > 0 });
+      const newTask = JSON.parse(JSON.stringify({ ...task, level, hasSubtasks, isSubtask: level > 0 }));
+      result.push(newTask);
 
       if (!collapsedParents.has(task.id) && hasSubtasks) {
         task.subtasks.forEach(subtask => flatten(subtask, level + 1));
@@ -483,17 +502,17 @@ export default function TeamTasksView() {
     const tasksToExport = filteredTasks;
 
     // Build hierarchy from filtered tasks
-    const taskMap = new Map(tasksToExport.map(t => [t.id, { ...t, subtasks: [] }]));
+    const taskMap = new Map(tasksToExport.map(t => [t.id, JSON.parse(JSON.stringify({ ...t, subtasks: [] }))]));
     const parentTasks = [];
 
     tasksToExport.forEach(task => {
       if (!task.parent_task_id) {
         const taskNode = taskMap.get(task.id);
         // Collect subtasks for this parent from filtered tasks
-        taskNode.subtasks = tasksToExport.filter(t => t.parent_task_id === task.id).map(st => ({
+        taskNode.subtasks = tasksToExport.filter(t => t.parent_task_id === task.id).map(st => JSON.parse(JSON.stringify({
           ...st,
-          subtasks: tasksToExport.filter(sst => sst.parent_task_id === st.id)
-        }));
+          subtasks: tasksToExport.filter(sst => sst.parent_task_id === st.id).map(sst => JSON.parse(JSON.stringify(sst)))
+        })));
         parentTasks.push(taskNode);
       }
     });
@@ -526,7 +545,7 @@ export default function TeamTasksView() {
       const member = users.find(u => u.email === filters.member);
       reportTitle = member?.full_name || filters.member;
     } else if (filters.sprint !== 'all') {
-      const sprint = sprints.find(s => s.id === filters.sprint);
+      const sprint = sprints.find(s => String(s.id) === String(filters.sprint));
       reportTitle = filters.sprint === 'no_sprint' ? 'Tasks without Sprint' : (sprint?.name || 'Selected Sprint');
     } else if (filters.department !== 'all') {
       const dept = departments.find(d => d.id === filters.department);
@@ -1048,7 +1067,7 @@ export default function TeamTasksView() {
             <SelectItem value="all">All Sprints</SelectItem>
             <SelectItem value="no_sprint">No Sprint</SelectItem>
             {sprints.map(s => (
-              <SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>
+              <SelectItem key={s.id} value={String(s.id)}>{s.name}</SelectItem>
             ))}
           </SelectContent>
         </Select>
@@ -1216,7 +1235,7 @@ export default function TeamTasksView() {
             ) : (
               filteredTasks.map(task => {
                 const assignee = users.find(u => u.email === task.assignee_email);
-                const sprint = sprints.find(s => s.id === task.sprint_id);
+                const sprint = sprints.find(s => String(s.id) === String(task.sprint_id));
                 const isOverdue = task.due_date && isPast(new Date(task.due_date)) && !isToday(new Date(task.due_date)) && task.status !== 'done';
 
                 return (

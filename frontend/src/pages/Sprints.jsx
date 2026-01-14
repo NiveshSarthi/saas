@@ -22,6 +22,7 @@ import {
   List as ListIcon
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { toast } from 'sonner';
 import { Badge } from '@/components/ui/badge';
 import { Progress } from '@/components/ui/progress';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -100,13 +101,16 @@ export default function Sprints() {
     );
   }, [projects, user]);
 
-  const visibleProjectIds = visibleProjects.map(p => p.id);
+  const visibleProjectIds = visibleProjects.map(p => String(p.id || p._id));
 
   const { data: allSprints = [], isLoading } = useQuery({
     queryKey: ['sprints'],
     queryFn: () => base44.entities.Sprint.list('-created_date', 2000),
     enabled: !!user,
   });
+
+  const debugShowAll = urlParams.get('debugShowAll') === '1';
+
 
   const { data: allTasks = [] } = useQuery({
     queryKey: ['all-tasks-for-sprints'],
@@ -128,11 +132,15 @@ export default function Sprints() {
 
   // Filter sprints to only show those from visible projects OR where ANY user has assigned tasks
   const sprints = React.useMemo(() => {
+    // If user or projects not loaded yet, show all sprints to avoid flicker
+    if (!user || (projects && projects.length === 0)) {
+      return allSprints;
+    }
     // Get sprint IDs that have ANY tasks assigned
     const sprintsWithTasks = new Set(
       allTasks
         .filter(t => t.sprint_id && (t.assignee_email || (t.assignees && t.assignees.length > 0)))
-        .map(t => t.sprint_id)
+        .map(t => String(t.sprint_id))
     );
 
     let filtered;
@@ -141,19 +149,19 @@ export default function Sprints() {
     } else {
       // Show sprints from visible projects OR that have tasks assigned to anyone
       filtered = allSprints.filter(s =>
-        visibleProjectIds.includes(s.project_id) || sprintsWithTasks.has(s.id)
+        visibleProjectIds.includes(String(s.project_id)) || sprintsWithTasks.has(String(s.id))
       );
     }
 
     // If projectId is specified in URL, filter to that project only
     if (projectId) {
-      filtered = filtered.filter(s => s.project_id === projectId);
+      filtered = filtered.filter(s => String(s.project_id) === String(projectId));
     }
 
     // Apply user filter
     if (filterUser !== 'all') {
       filtered = filtered.filter(sprint => {
-        const sprintTasks = allTasks.filter(t => t.sprint_id === sprint.id);
+        const sprintTasks = allTasks.filter(t => String(t.sprint_id) === String(sprint.id));
         return sprintTasks.some(t =>
           t.assignee_email === filterUser ||
           (t.assignees && t.assignees.includes(filterUser))
@@ -163,7 +171,7 @@ export default function Sprints() {
 
     // Apply project filter (when not already filtered by URL param)
     if (!projectId && filterProject !== 'all') {
-      filtered = filtered.filter(sprint => sprint.project_id === filterProject);
+      filtered = filtered.filter(sprint => String(sprint.project_id) === String(filterProject));
     }
 
     // Apply tags filter
@@ -185,13 +193,90 @@ export default function Sprints() {
       );
     }
 
+    console.log('Sprints: filtering sprints', {
+      allSprintsCount: allSprints.length,
+      visibleProjectIds,
+      userRole: user?.role,
+      isAdmin: user?.role === 'admin',
+      allTasksCount: allTasks.length,
+      filteredCount: filtered.length,
+      projectId,
+      filterUser,
+      filterProject,
+      filterTags,
+      searchQuery
+    });
+
     return filtered;
   }, [allSprints, visibleProjectIds, user, allTasks, projectId, filterUser, filterProject, filterTags, searchQuery]);
 
+  // Debugging: log key data for diagnosis after `sprints` is derived
+  React.useEffect(() => {
+    try {
+      const sampleAll = (allSprints || []).slice(0, 6).map(s => ({ id: s.id || s._id, project_id: s.project_id, name: s.name }));
+      const sampleFiltered = (sprints || []).slice(0, 6).map(s => ({ id: s.id || s._id, project_id: s.project_id, name: s.name }));
+      console.debug('Sprints.debug', {
+        user: user ? { email: user.email, role: user.role } : null,
+        projectsCount: projects.length,
+        visibleProjectIds,
+        allSprintsCount: (allSprints || []).length,
+        allSprintsSample: sampleAll,
+        filteredCount: (sprints || []).length,
+        filteredSample: sampleFiltered,
+      });
+    } catch (e) {
+      console.debug('Sprints.debug logging failed', e);
+    }
+  }, [allSprints, sprints, projects, user, visibleProjectIds]);
+
   const createSprintMutation = useMutation({
     mutationFn: (data) => base44.entities.Sprint.create(data),
-    onSuccess: () => {
+    onSuccess: (created, variables) => {
+      try {
+        // Normalize created sprint id and project_id to strings for consistent comparisons
+        const normalized = { ...(created || {}) };
+        normalized.id = String(created?.id || created?._id || '');
+
+        // If backend did not return project_id, fall back to the variables passed to mutate
+        if (created?.project_id !== undefined && created?.project_id !== null) {
+          normalized.project_id = String(created.project_id);
+        } else if (variables?.project_id) {
+          normalized.project_id = String(variables.project_id);
+        }
+
+        console.debug('Sprints.create onSuccess - created:', created, 'variables:', variables, 'normalized:', normalized);
+
+        queryClient.setQueryData(['sprints'], (old = []) => {
+          if (!normalized) return old || [];
+          const exists = (old || []).some(s => String(s.id || s._id) === normalized.id && normalized.id !== '');
+          return exists ? old : [normalized, ...(old || [])];
+        });
+        // Debugging: log cache and notify user
+        try {
+          const cache = queryClient.getQueryData(['sprints']) || [];
+          console.debug('Sprints.cache after append', cache.length, cache.slice(0,3));
+          toast.success(`Sprint created (${normalized.name || normalized.id || 'unknown'})`);
+        } catch (e) {
+          console.debug('Failed to read sprints cache', e);
+        }
+      } catch (e) {
+        console.warn('Failed to append created sprint to cache', e);
+      }
+
+      // Trigger a refetch but ensure the normalized sprint remains visible
       queryClient.invalidateQueries({ queryKey: ['sprints'] });
+      // Re-append normalized sprint after refetch completes (safeguard)
+      setTimeout(() => {
+        try {
+          queryClient.setQueryData(['sprints'], (old = []) => {
+            if (!normalized) return old || [];
+            const exists = (old || []).some(s => String(s.id || s._id) === normalized.id && normalized.id !== '');
+            return exists ? old : [normalized, ...(old || [])];
+          });
+        } catch (e) {
+          console.debug('Failed to re-append normalized sprint after refetch', e);
+        }
+      }, 800);
       setShowCreateDialog(false);
       setSelectedProjectId(null);
     },
@@ -210,10 +295,16 @@ export default function Sprints() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['sprints'] });
       setDeletingSprint(null);
+      toast.success('Sprint deleted');
     },
+    onError: (err) => {
+      console.error('Failed to delete sprint', err);
+      toast.error(err?.message || 'Failed to delete sprint');
+      setDeletingSprint(null);
+    }
   });
 
-  const getSprintTasks = (sprintId) => allTasks.filter(t => t.sprint_id === sprintId);
+  const getSprintTasks = (sprintId) => allTasks.filter(t => String(t.sprint_id) === String(sprintId));
 
   const getSprintProgress = (sprintId) => {
     const tasks = getSprintTasks(sprintId);
@@ -222,9 +313,11 @@ export default function Sprints() {
     return Math.round((done / tasks.length) * 100);
   };
 
-  const activeSprints = sprints.filter(s => s.status === 'active');
-  const plannedSprints = sprints.filter(s => s.status === 'planned');
-  const completedSprints = sprints.filter(s => s.status === 'completed');
+  const displayedSprints = debugShowAll ? allSprints : sprints;
+
+  const activeSprints = displayedSprints.filter(s => s.status === 'active');
+  const plannedSprints = displayedSprints.filter(s => s.status === 'planned');
+  const completedSprints = displayedSprints.filter(s => s.status === 'completed');
 
   const SprintListView = ({ sprints }) => {
     return (
@@ -659,7 +752,7 @@ export default function Sprints() {
                   <SelectContent>
                     <SelectItem value="all">All Projects</SelectItem>
                     {visibleProjects.map(p => (
-                      <SelectItem key={p.id || p._id} value={p.id || p._id}>
+                      <SelectItem key={String(p.id || p._id)} value={String(p.id || p._id)}>
                         {p.name}
                       </SelectItem>
                     ))}
@@ -873,7 +966,15 @@ export default function Sprints() {
             <AlertDialogFooter>
               <AlertDialogCancel>Cancel</AlertDialogCancel>
               <AlertDialogAction
-                onClick={() => deleteSprintMutation.mutate(deletingSprint.id)}
+                onClick={() => {
+                  const id = deletingSprint?.id || deletingSprint?._id;
+                  if (!id) {
+                    toast.error('No sprint selected to delete');
+                    setDeletingSprint(null);
+                    return;
+                  }
+                  deleteSprintMutation.mutate(id);
+                }}
                 className="bg-gradient-to-r from-red-600 to-rose-600 hover:from-red-700 hover:to-rose-700"
               >
                 Delete Sprint

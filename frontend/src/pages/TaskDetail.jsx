@@ -136,12 +136,24 @@ export default function TaskDetail() {
     enabled: !!task?.project_id,
   });
 
+  // Fetch all sprints so task sprint dropdown can show planned/active/completed as appropriate
   const { data: sprints = [] } = useQuery({
-    queryKey: ['active-sprints'],
-    queryFn: () => base44.entities.Sprint.filter({ status: 'active' }),
+    queryKey: ['sprints'],
+    queryFn: () => base44.entities.Sprint.list('-created_date', 2000),
   });
 
-  const taskSprint = task ? (sprints.find(s => s.id === task.sprint_id) || (task.sprint_id ? { id: task.sprint_id, name: 'Unknown Sprint' } : null)) : null;
+  // Helper: create sprint change logs only if the backend entity exists
+  const safeCreateSprintChangeLog = async (payload) => {
+    if (!base44?.entities?.SprintChangeLog || typeof base44.entities.SprintChangeLog.create !== 'function') return null;
+    try {
+      return await base44.entities.SprintChangeLog.create(payload);
+    } catch (err) {
+      console.warn('SprintChangeLog.create failed', err);
+      return null;
+    }
+  };
+
+  const taskSprint = task ? (sprints.find(s => String(s.id) === String(task.sprint_id)) || (task.sprint_id ? { id: task.sprint_id, name: 'Unknown Sprint' } : null)) : null;
 
   const { data: userGroups = [] } = useQuery({
     queryKey: ['groups'],
@@ -323,15 +335,24 @@ export default function TaskDetail() {
     queryKey: ['team-data'],
     queryFn: async () => {
       const response = await base44.functions.invoke('getDashboardUsers');
-      return response.data;
+      // functions.invoke may return a double-wrapped payload ({ data: { users } })
+      return response.data?.data || response.data;
     },
   });
 
   const usersFromEntity = teamData?.users || [];
   const invitations = teamData?.invitations || [];
 
+  // Normalize user shape so downstream code can rely on `id`, `email`, `department_id`
+  const normalizedUsersFromEntity = (usersFromEntity || []).map(u => ({
+    ...u,
+    id: u.id || u._id || (u.email && String(u.email).toLowerCase()),
+    email: u.email || u.email_address || u.username || null,
+    department_id: u.department_id || (u.department && (u.department.id || u.department._id)) || null,
+  }));
+
   const users = [
-    ...usersFromEntity,
+    ...normalizedUsersFromEntity,
     ...invitations
       .filter(inv => inv.status === 'accepted')
       .filter(inv => !usersFromEntity.some(u => u.email?.toLowerCase() === inv.email?.toLowerCase()))
@@ -670,15 +691,15 @@ export default function TaskDetail() {
             <div>
               <label className="text-sm font-medium text-slate-500 block mb-2">Sprint</label>
               <Select
-                value={task.sprint_id || "none"}
+                value={task.sprint_id ? String(task.sprint_id) : "none"}
                 onValueChange={async (val) => {
                   const newSprintId = val === "none" ? null : val;
                   const oldSprintId = task.sprint_id;
-                  const oldSprint = sprints.find(s => s.id === oldSprintId);
-                  const newSprint = sprints.find(s => s.id === newSprintId);
+                  const oldSprint = sprints.find(s => String(s.id) === String(oldSprintId));
+                  const newSprint = sprints.find(s => String(s.id) === String(newSprintId));
 
-                  // Log sprint change for parent task
-                  await base44.entities.SprintChangeLog.create({
+                  // Log sprint change for parent task (guarded)
+                  await safeCreateSprintChangeLog({
                     task_id: task.id,
                     task_title: task.title,
                     old_sprint_id: oldSprintId || null,
@@ -696,20 +717,25 @@ export default function TaskDetail() {
                   if (subtasks.length > 0) {
                     await Promise.all(
                       subtasks.map(async (subtask) => {
-                        // Log sprint change for each subtask
-                        await base44.entities.SprintChangeLog.create({
+                        // Log sprint change for each subtask (guarded)
+                        await safeCreateSprintChangeLog({
                           task_id: subtask.id,
                           task_title: subtask.title,
                           old_sprint_id: subtask.sprint_id || null,
                           new_sprint_id: newSprintId || null,
-                          old_sprint_name: sprints.find(s => s.id === subtask.sprint_id)?.name || 'No Sprint',
+                          old_sprint_name: sprints.find(s => String(s.id) === String(subtask.sprint_id))?.name || 'No Sprint',
                           new_sprint_name: newSprint?.name || 'No Sprint',
                           changed_by: user?.email,
                           project_id: task.project_id,
                           is_subtask: true
                         });
 
-                        return base44.entities.Task.update(subtask.id, { sprint_id: newSprintId });
+                        const sid = subtask.id || subtask._id;
+                        if (!sid) {
+                          console.warn('Skipping subtask update: missing id', subtask);
+                          return null;
+                        }
+                        return base44.entities.Task.update(sid, { sprint_id: newSprintId });
                       })
                     );
                     queryClient.invalidateQueries({ queryKey: ['subtasks', taskId] });
@@ -723,7 +749,7 @@ export default function TaskDetail() {
                 <SelectContent>
                   <SelectItem value="none">No Sprint</SelectItem>
                   {sprints.map(s => (
-                    <SelectItem key={s.id} value={s.id}>
+                    <SelectItem key={s.id} value={String(s.id)}>
                       {s.name}
                     </SelectItem>
                   ))}

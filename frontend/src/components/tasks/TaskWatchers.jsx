@@ -26,7 +26,7 @@ export default function TaskWatchers({ task, users = [], currentUserEmail }) {
   
   const { data: departments = [] } = useQuery({
     queryKey: ['departments'],
-    queryFn: () => base44.entities.Department.list('name'),
+    queryFn: () => base44.entities.Department.list(),
   });
 
   const watchers = task.watchers || [];
@@ -41,21 +41,40 @@ export default function TaskWatchers({ task, users = [], currentUserEmail }) {
   });
 
   const toggleWatch = () => {
+    const prev = queryClient.getQueryData(['task', task.id]);
     const newWatchers = isWatching
       ? watchers.filter(w => w !== currentUserEmail)
       : [...watchers, currentUserEmail];
-    updateMutation.mutate(newWatchers);
+
+    // Optimistically update cache
+    queryClient.setQueryData(['task', task.id], (old) => ({ ...(old || {}), watchers: newWatchers }));
+    updateMutation.mutate(newWatchers, {
+      onError: () => {
+        // rollback
+        queryClient.setQueryData(['task', task.id], prev);
+      }
+    });
   };
 
   const addWatcher = (email) => {
     if (!watchers.includes(email)) {
-      updateMutation.mutate([...watchers, email]);
+      const prev = queryClient.getQueryData(['task', task.id]);
+      const newWatchers = [...watchers, email];
+      queryClient.setQueryData(['task', task.id], (old) => ({ ...(old || {}), watchers: newWatchers }));
+      updateMutation.mutate(newWatchers, {
+        onError: () => queryClient.setQueryData(['task', task.id], prev)
+      });
     }
     setOpen(false);
   };
 
   const removeWatcher = (email) => {
-    updateMutation.mutate(watchers.filter(w => w !== email));
+    const prev = queryClient.getQueryData(['task', task.id]);
+    const newWatchers = watchers.filter(w => w !== email);
+    queryClient.setQueryData(['task', task.id], (old) => ({ ...(old || {}), watchers: newWatchers }));
+    updateMutation.mutate(newWatchers, {
+      onError: () => queryClient.setQueryData(['task', task.id], prev)
+    });
   };
 
   const getInitials = (email) => {
@@ -119,10 +138,21 @@ export default function TaskWatchers({ task, users = [], currentUserEmail }) {
         <UserMultiSelect
           users={users}
           departments={departments}
-          selectedEmails={watchers}
-          onChange={(newWatchers) => updateMutation.mutate(newWatchers)}
+          selectedEmails={[]}
+          onChange={(selected) => {
+            const email = selected[0];
+            if (!watchers.includes(email)) {
+              const prev = queryClient.getQueryData(['task', task.id]);
+              const newWatchers = [...watchers, email];
+              queryClient.setQueryData(['task', task.id], (old) => ({ ...(old || {}), watchers: newWatchers }));
+              updateMutation.mutate(newWatchers, {
+                onError: () => queryClient.setQueryData(['task', task.id], prev)
+              });
+            }
+          }}
           placeholder="Add watchers..."
           className="w-60"
+          singleSelect={true}
         />
       </div>
     </div>

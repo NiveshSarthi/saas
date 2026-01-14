@@ -38,6 +38,7 @@ import StandardTagSelect from '@/components/tasks/StandardTagSelect';
 import AITaskSuggestions from '@/components/tasks/AITaskSuggestions';
 import AIAssigneeSuggestions from '@/components/tasks/AIAssigneeSuggestions';
 import AICompletionPredictor from '@/components/tasks/AICompletionPredictor';
+import UserMultiSelect from '@/components/common/UserMultiSelect';
 
 export default function EditTask() {
   const navigate = useNavigate();
@@ -118,7 +119,7 @@ export default function EditTask() {
 
   const { data: departments = [] } = useQuery({
     queryKey: ['departments'],
-    queryFn: () => base44.entities.Department.list('name'),
+    queryFn: () => base44.entities.Department.list(),
   });
 
   const { data: sprints = [] } = useQuery({
@@ -148,11 +149,6 @@ export default function EditTask() {
   });
 
   const [user, setUser] = useState(null);
-  const [selectedDepartment, setSelectedDepartment] = useState('all');
-
-  const filteredUsers = users.filter(u => {
-    return selectedDepartment === 'all' || u.department_id === selectedDepartment;
-  });
 
   useEffect(() => {
     const fetchUser = async () => {
@@ -186,20 +182,26 @@ export default function EditTask() {
 
       // Log sprint change if sprint_id changed
       if (task.sprint_id !== data.sprint_id) {
-        const oldSprint = sprints.find(s => s.id === task.sprint_id);
-        const newSprint = sprints.find(s => s.id === data.sprint_id);
+        const oldSprint = sprints.find(s => String(s.id) === String(task.sprint_id));
+        const newSprint = sprints.find(s => String(s.id) === String(data.sprint_id));
 
-        await base44.entities.SprintChangeLog.create({
-          task_id: taskId,
-          task_title: task.title,
-          old_sprint_id: task.sprint_id || null,
-          new_sprint_id: data.sprint_id || null,
-          old_sprint_name: oldSprint?.name || 'No Sprint',
-          new_sprint_name: newSprint?.name || 'No Sprint',
-          changed_by: user?.email,
-          project_id: task.project_id,
-          is_subtask: task.parent_task_id ? true : false
-        });
+        if (base44?.entities?.SprintChangeLog && typeof base44.entities.SprintChangeLog.create === 'function') {
+          try {
+            await base44.entities.SprintChangeLog.create({
+              task_id: taskId,
+              task_title: task.title,
+              old_sprint_id: task.sprint_id || null,
+              new_sprint_id: data.sprint_id || null,
+              old_sprint_name: oldSprint?.name || 'No Sprint',
+              new_sprint_name: newSprint?.name || 'No Sprint',
+              changed_by: user?.email,
+              project_id: task.project_id,
+              is_subtask: task.parent_task_id ? true : false
+            });
+          } catch (err) {
+            console.warn('SprintChangeLog.create failed', err);
+          }
+        }
       }
 
       await base44.entities.Task.update(taskId, data);
@@ -516,44 +518,19 @@ export default function EditTask() {
               )}
 
               {/* Assignee */}
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                <div className="space-y-2">
-                  <Label className="text-sm font-medium">Department Filter</Label>
-                  <Select
-                    value={selectedDepartment}
-                    onValueChange={setSelectedDepartment}
-                  >
-                    <SelectTrigger>
-                      <SelectValue placeholder="Filter by department" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="all">All Departments</SelectItem>
-                      {departments.map(d => (
-                        <SelectItem key={d.id} value={d.id}>{d.name}</SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-
-                <div className="space-y-2">
-                  <Label className="text-sm font-medium">Assignee</Label>
-                  <Select
-                    value={formData.assignee_email}
-                    onValueChange={(value) => setFormData(prev => ({ ...prev, assignee_email: value }))}
-                  >
-                    <SelectTrigger>
-                      <SelectValue placeholder="Select assignee" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value={null}>Unassigned</SelectItem>
-                      {filteredUsers.map(u => (
-                        <SelectItem key={u.email} value={u.email}>
-                          {u.full_name || u.email}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
+              <div className="space-y-2">
+                <Label className="text-sm font-medium">Assignee</Label>
+                <UserMultiSelect
+                  users={users}
+                  departments={departments}
+                  selectedEmails={formData.assignee_email ? [formData.assignee_email] : []}
+                  onChange={(selected) => {
+                    const email = selected.length > 0 ? selected[0] : null;
+                    setFormData(prev => ({ ...prev, assignee_email: email }));
+                  }}
+                  placeholder="Select assignee"
+                  singleSelect={true}
+                />
               </div>
 
               {/* Dates */}
@@ -634,7 +611,7 @@ export default function EditTask() {
                   <SelectContent>
                     <SelectItem value="none">No Sprint</SelectItem>
                     {sprints.map(s => (
-                      <SelectItem key={s.id} value={s.id}>
+                      <SelectItem key={s.id} value={String(s.id)}>
                         {s.name}
                       </SelectItem>
                     ))}

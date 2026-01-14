@@ -139,9 +139,9 @@ export default function TaskListFilters({ filters, setFilters, projects, users, 
             <SelectContent>
               <SelectItem value="all">All Sprints</SelectItem>
               <SelectItem value="no_sprint">No Sprint</SelectItem>
-              {sprints.map(s => (
-                <SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>
-              ))}
+                {sprints.map(s => (
+                  <SelectItem key={s.id} value={String(s.id)}>{s.name}</SelectItem>
+                ))}
             </SelectContent>
           </Select>
         </div>

@@ -42,6 +42,19 @@ const taskSchema = new mongoose.Schema({
     due_date: Date,
     project_name: String,
     tags: [String],
+    parent_task_id: String,
+    order: Number,
+    sprint_id: String,
+    project_id: String,
+    start_date: Date,
+    blocked_by_task_ids: [String],
+    subtask_comments: [{
+        text: String,
+        author: String,
+        timestamp: Date
+    }],
+    subtask_time_tracked: Number,
+    subtask_effort_points: Number,
     created_by: String, // added to track creator
     reporter_email: String, // added to track reporter
     created_at: { type: Date, default: Date.now },
@@ -111,7 +124,22 @@ const salaryRecordSchema = new mongoose.Schema({
 
 export const Role = mongoose.model('Role', roleSchema);
 export const User = mongoose.model('User', userSchema);
+const subtaskTemplateSchema = new mongoose.Schema({
+    name: String,
+    subtasks: [{
+        title: String,
+        priority: String,
+        estimated_hours: Number,
+        dependencies: [Number]
+    }],
+    category: String,
+    is_public: Boolean,
+    created_by: String,
+    created_at: { type: Date, default: Date.now }
+});
+
 export const Task = mongoose.model('Task', taskSchema);
+export const SubtaskTemplate = mongoose.model('SubtaskTemplate', subtaskTemplateSchema);
 export const Attendance = mongoose.model('Attendance', attendanceSchema);
 export const SalaryPolicy = mongoose.model('SalaryPolicy', salaryPolicySchema);
 export const SalaryRecord = mongoose.model('SalaryRecord', salaryRecordSchema);
@@ -364,7 +392,7 @@ const sprintSchema = new mongoose.Schema({
     project_id: String,
     start_date: Date,
     end_date: Date,
-    status: String,
+    status: { type: String, default: 'planned' },
     goal: String,
     created_at: { type: Date, default: Date.now }
 });
