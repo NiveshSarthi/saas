@@ -238,13 +238,7 @@ export default function Projects() {
             filters={advancedFilters}
             onRemoveFilter={handleRemoveFilter}
             onClearAll={handleClearAllFilters}
-            moduleConfig={{
-              title: 'Project Filters',
-              filters: Object.entries(PROJECT_FILTERS).map(([field, config]) => ({
-                field,
-                ...config
-              }))
-            }}
+            moduleConfig={PROJECT_FILTERS}
           />
         )}
 
@@ -475,31 +469,7 @@ export default function Projects() {
           onClose={() => setShowAdvancedFilter(false)}
           filters={advancedFilters}
           onApplyFilters={setAdvancedFilters}
-          moduleConfig={{
-            status: {
-              label: 'Status',
-              type: 'multi-select',
-              options: [
-                { value: 'active', label: 'Active' },
-                { value: 'on_hold', label: 'On Hold' },
-                { value: 'completed', label: 'Completed' },
-                { value: 'archived', label: 'Archived' }
-              ]
-            },
-            domain: {
-              label: 'Domain',
-              type: 'multi-select',
-              options: [
-                { value: 'it', label: 'IT' },
-                { value: 'real_estate', label: 'Real Estate' },
-                { value: 'generic', label: 'Generic' }
-              ]
-            },
-            owner_email: {
-              label: 'Project Owner',
-              type: 'user-select'
-            }
-          }}
+          moduleConfig={PROJECT_FILTERS}
           savedFilters={savedFilters}
           onSaveFilter={handleSaveFilter}
           onLoadFilter={handleLoadFilter}

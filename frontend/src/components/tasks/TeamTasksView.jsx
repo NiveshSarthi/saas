@@ -971,13 +971,7 @@ export default function TeamTasksView() {
           filters={advancedFilters}
           onRemoveFilter={handleRemoveFilter}
           onClearAll={handleClearAllFilters}
-          moduleConfig={{
-            title: 'Team Tasks Filters',
-            filters: Object.entries(TEAM_TASKS_FILTERS).map(([field, config]) => ({
-              field,
-              ...config
-            }))
-          }}
+          moduleConfig={TEAM_TASKS_FILTERS}
         />
       )}
 

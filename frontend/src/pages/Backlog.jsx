@@ -1,3 +1,4 @@
+// @ts-nocheck
 import React, { useState, useEffect, useMemo } from 'react';
 import { base44 } from '@/api/base44Client';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
@@ -53,7 +54,13 @@ export default function Backlog() {
   const [selectedTasks, setSelectedTasks] = useState([]);
   const [filterTag, setFilterTag] = useState('all');
   const [selectedProject, setSelectedProject] = useState('all');
-  const [advancedFilters, setAdvancedFilters] = useState({});
+  const [advancedFilters, setAdvancedFilters] = useState({
+    priority: [],
+    task_type: [],
+    has_story_points: '',
+    created_by: [],
+    age_days: ''
+  });
   const [showAdvancedFilter, setShowAdvancedFilter] = useState(false);
   const queryClient = useQueryClient();
 
@@ -456,7 +463,7 @@ export default function Backlog() {
                             {task.title}
                           </Link>
                           <div className="flex items-center gap-2 mt-1">
-                            <Badge className={cn("text-xs", priorityConfig[task.priority]?.color)}>
+                            <Badge variant="secondary" className={cn("text-xs", priorityConfig[task.priority]?.color)}>
                               {task.priority}
                             </Badge>
                             {task.story_points && (

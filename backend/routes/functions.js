@@ -19,30 +19,64 @@ const mockDataReturn = (data) => (req, res) => res.json({ success: true, data })
 // Task & Recurring
 router.post('/invoke/generateRecurringTaskInstances', mockSuccess);
 
-// Leads & Marketing
+const FB_API_VERSION = 'v21.0';
+
 router.post('/invoke/connectFacebookPage', async (req, res) => {
     try {
-        // Simulate connection
+        const { page_token, page_id } = req.body;
         const FacebookPageConnection = models.FacebookPageConnection;
 
-        // Create dummy page if not exists
-        const pageId = '100000000000001';
-        let page = await FacebookPageConnection.findOne({ page_id: pageId });
+        if (!page_token || !page_id) {
+            return res.status(400).json({ error: 'Page token and Page ID are required' });
+        }
+
+        // Verify token and get page name from Facebook
+        const fbRes = await fetch(`https://graph.facebook.com/${FB_API_VERSION}/${page_id}?fields=name&access_token=${page_token}`);
+        const fbData = await fbRes.json();
+
+        if (fbData.error) {
+            return res.status(400).json({ error: fbData.error.message });
+        }
+
+        let page = await FacebookPageConnection.findOne({ page_id: page_id });
 
         if (!page) {
             page = await FacebookPageConnection.create({
-                page_id: pageId,
-                page_name: 'Sarthi Real Estate Demo',
-                access_token: 'mock_token_' + Date.now(),
+                page_id: page_id,
+                page_name: fbData.name,
+                access_token: page_token,
                 status: 'active',
-                lead_forms: [
-                    { form_id: 'SALE_001', form_name: 'Project Enquiries', status: 'active', subscribed: true },
-                    { form_id: 'SALE_002', form_name: 'Newsletter Signups', status: 'active', subscribed: true }
-                ],
+                lead_forms: [],
                 last_sync_date: new Date()
             });
+        } else {
+            page.access_token = page_token;
+            page.page_name = fbData.name;
+            page.last_sync_date = new Date();
+            await page.save();
         }
-        res.json({ success: true, data: { message: 'Connected to Sarthi Real Estate Demo' } });
+
+        // Subscribe to webhooks for leadgen events
+        const appId = process.env.FB_APP_ID;
+        const appSecret = process.env.FB_APP_SECRET;
+        if (appId && appSecret) {
+            try {
+                const subscribeRes = await fetch(`https://graph.facebook.com/${FB_API_VERSION}/${page_id}/subscribed_apps?access_token=${page_token}`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        subscribed_fields: 'leadgen',
+                        access_token: page_token
+                    })
+                });
+                const subscribeData = await subscribeRes.json();
+                console.log('Webhook subscription:', subscribeData);
+            } catch (e) {
+                console.error('Webhook subscription failed:', e);
+            }
+        }
+
+        res.json({ success: true, data: { message: `Connected to ${page.page_name}`, page } });
     } catch (e) {
         res.status(500).json({ error: e.message });
     }
@@ -51,22 +85,30 @@ router.post('/invoke/connectFacebookPage', async (req, res) => {
 router.post('/invoke/syncFacebookForms', async (req, res) => {
     try {
         const FacebookPageConnection = models.FacebookPageConnection;
-        const pages = await FacebookPageConnection.find();
+        const pages = await FacebookPageConnection.find({ status: 'active' });
         let newFormsCount = 0;
 
         for (const page of pages) {
-            // Simulate finding a new form occasionally
-            if (page.lead_forms.length < 5) {
-                const newId = `FORM_${Date.now()}`;
-                page.lead_forms.push({
-                    form_id: newId,
-                    form_name: `New Campaign ${new Date().toLocaleDateString()}`,
-                    status: 'active',
-                    subscribed: true
-                });
+            const fbRes = await fetch(`https://graph.facebook.com/${FB_API_VERSION}/${page.page_id}/leadgen_forms?access_token=${page.access_token}`);
+            const fbData = await fbRes.json();
+
+            if (fbData.data) {
+                const currentFormIds = new Set(page.lead_forms.map(f => f.form_id));
+
+                for (const fbForm of fbData.data) {
+                    if (!currentFormIds.has(fbForm.id)) {
+                        page.lead_forms.push({
+                            form_id: fbForm.id,
+                            form_name: fbForm.name,
+                            status: fbForm.status,
+                            subscribed: true
+                        });
+                        newFormsCount++;
+                    }
+                }
+
                 page.last_sync_date = new Date();
                 await page.save();
-                newFormsCount++;
             }
         }
         res.json({ success: true, data: { results: [{ new_forms: newFormsCount }] } });
@@ -78,30 +120,81 @@ router.post('/invoke/syncFacebookForms', async (req, res) => {
 router.post('/invoke/fetchFacebookLeads', async (req, res) => {
     try {
         const Lead = models.Lead;
-        const newLeads = [];
+        const FacebookPageConnection = models.FacebookPageConnection;
+        const activePages = await FacebookPageConnection.find({ status: 'active' });
 
-        // Create 2 dummy leads
-        for (let i = 0; i < 2; i++) {
-            const leadData = {
-                lead_name: `FB Lead ${Math.floor(Math.random() * 1000)}`,
-                email: `lead${Date.now()}_${i}@example.com`,
-                phone: `+9198765${Math.floor(10000 + Math.random() * 90000)}`,
-                lead_source: 'facebook',
-                status: 'new',
-                notes: 'Form: Project Enquiries\nPage ID: 100000000000001',
-                created_date: new Date(),
-                fb_created_time: new Date()
-            };
-            const created = await Lead.create(leadData);
-            newLeads.push(created);
+        let newLeadsCreated = 0;
+        let duplicatesSkipped = 0;
+        const errors = [];
+
+        console.log('Active pages:', activePages.length);
+
+        for (const page of activePages) {
+            console.log('Processing page:', page.page_name, 'Forms:', page.lead_forms.length);
+            for (const form of page.lead_forms) {
+                if (!form.subscribed) {
+                    console.log('Form not subscribed:', form.form_name);
+                    continue;
+                }
+
+                try {
+                    console.log('Fetching leads for form:', form.form_name, form.form_id);
+                    const fbRes = await fetch(`https://graph.facebook.com/${FB_API_VERSION}/${form.form_id}/leads?access_token=${page.access_token}`);
+                    const fbData = await fbRes.json();
+
+                    console.log('Facebook response:', fbData);
+
+                    if (fbData.error) {
+                        console.error('Facebook error for form:', form.form_name, fbData.error);
+                        errors.push({ form: form.form_name, error: fbData.error.message });
+                        continue;
+                    }
+
+                    if (fbData.data) {
+                        console.log('Leads found:', fbData.data.length);
+                        for (const fbLead of fbData.data) {
+                            // Check if lead already exists
+                            const existingLead = await Lead.findOne({ fb_lead_id: fbLead.id });
+                            if (existingLead) {
+                                duplicatesSkipped++;
+                                continue;
+                            }
+
+                            // Extract fields
+                            const fieldData = {};
+                            fbLead.field_data.forEach(field => {
+                                fieldData[field.name] = field.values[0];
+                            });
+
+                            const leadData = {
+                                lead_name: fieldData.full_name || fieldData.first_name + ' ' + (fieldData.last_name || ''),
+                                email: fieldData.email,
+                                phone: fieldData.phone_number || fieldData.phone,
+                                lead_source: 'facebook',
+                                status: 'new',
+                                fb_lead_id: fbLead.id,
+                                fb_form_id: form.form_id,
+                                fb_created_time: fbLead.created_time,
+                                notes: `Form: ${form.form_name}\nPage ID: ${page.page_id}\nFacebook ID: ${fbLead.id}`,
+                                created_date: new Date()
+                            };
+
+                            await Lead.create(leadData);
+                            newLeadsCreated++;
+                        }
+                    }
+                } catch (formError) {
+                    errors.push({ form: form.form_name, error: formError.message });
+                }
+            }
         }
 
         res.json({
             success: true,
             data: {
-                newLeadsCreated: newLeads.length,
-                duplicatesSkipped: 0,
-                errors: []
+                newLeadsCreated,
+                duplicatesSkipped,
+                errors
             }
         });
     } catch (e) {
@@ -165,6 +258,77 @@ router.post('/invoke/getDashboardUsers', async (req, res) => {
     } catch (error) {
         console.error("Error in getDashboardUsers:", error);
         res.status(500).json({ error: error.message });
+    }
+});
+
+// Facebook Webhooks
+router.get('/webhooks/facebook', (req, res) => {
+    const mode = req.query['hub.mode'];
+    const token = req.query['hub.verify_token'];
+    const challenge = req.query['hub.challenge'];
+
+    // Replace with your verify token
+    const VERIFY_TOKEN = process.env.FACEBOOK_VERIFY_TOKEN || 'your_verify_token';
+
+    if (mode && token) {
+        if (mode === 'subscribe' && token === VERIFY_TOKEN) {
+            console.log('Webhook verified');
+            res.status(200).send(challenge);
+        } else {
+            res.sendStatus(403);
+        }
+    }
+});
+
+router.post('/webhooks/facebook', async (req, res) => {
+    const body = req.body;
+
+    if (body.object === 'page') {
+        body.entry.forEach(async entry => {
+            if (entry.messaging) {
+                // Handle messaging if needed
+            }
+            if (entry.changes) {
+                entry.changes.forEach(async change => {
+                    if (change.field === 'leadgen') {
+                        const leadId = change.value.leadgen_id;
+                        const pageId = change.value.page_id;
+
+                        // Fetch lead details
+                        const page = await models.FacebookPageConnection.findOne({ page_id: pageId });
+                        if (page) {
+                            const leadRes = await fetch(`https://graph.facebook.com/${FB_API_VERSION}/${leadId}?access_token=${page.access_token}`);
+                            const leadData = await leadRes.json();
+
+                            if (leadData) {
+                                // Create lead in DB
+                                const fieldData = {};
+                                leadData.field_data.forEach(field => {
+                                    fieldData[field.name] = field.values[0];
+                                });
+
+                                await models.Lead.create({
+                                    lead_name: fieldData.full_name || fieldData.first_name + ' ' + (fieldData.last_name || ''),
+                                    email: fieldData.email,
+                                    phone: fieldData.phone_number || fieldData.phone,
+                                    lead_source: 'facebook',
+                                    status: 'new',
+                                    fb_lead_id: leadId,
+                                    fb_form_id: leadData.form_id,
+                                    fb_created_time: leadData.created_time,
+                                    notes: `Webhook: Form ID ${leadData.form_id}`,
+                                    created_date: new Date()
+                                });
+                                console.log('Lead created via webhook:', leadId);
+                            }
+                        }
+                    }
+                });
+            }
+        });
+        res.status(200).send('EVENT_RECEIVED');
+    } else {
+        res.sendStatus(404);
     }
 });
 
