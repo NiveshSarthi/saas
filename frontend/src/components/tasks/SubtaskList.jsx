@@ -109,7 +109,7 @@ export default function SubtaskList({ parentTaskId, projectId, subtasks = [], us
 
   const { data: departments = [] } = useQuery({
     queryKey: ['departments'],
-    queryFn: () => base44.entities.Department.list('name'),
+    queryFn: () => base44.entities.Department.list(),
   });
 
   const { data: templates = [] } = useQuery({

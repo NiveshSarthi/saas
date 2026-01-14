@@ -713,13 +713,7 @@ export default function MyTasks() {
         onClose={() => setShowAdvancedFilter(false)}
         filters={advancedFilters}
         onApplyFilters={setAdvancedFilters}
-        moduleConfig={{
-          title: 'My Tasks Filters',
-          filters: Object.entries(MY_TASKS_FILTERS).map(([field, config]) => ({
-            field,
-            ...config
-          }))
-        }}
+        moduleConfig={MY_TASKS_FILTERS}
         savedFilters={savedFilters}
         onSaveFilter={handleSaveFilter}
         onLoadFilter={handleLoadFilter}

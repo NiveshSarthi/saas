@@ -1,3 +1,4 @@
+// @ts-nocheck
 import React, { useState, useEffect } from 'react';
 import { base44 } from '@/api/base44Client';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
@@ -30,7 +31,7 @@ import {
   ArrowUp,
   ArrowDown
 } from 'lucide-react';
-import confetti from 'canvas-confetti';
+// import confetti from 'canvas-confetti'; // Temporarily disabled
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
@@ -116,14 +117,20 @@ export default function LeadManagement() {
   const [sortDirection, setSortDirection] = useState('desc');
   const [createDialogOpen, setCreateDialogOpen] = useState(false);
   const [importDialogOpen, setImportDialogOpen] = useState(false);
-  const [advancedFilters, setAdvancedFilters] = useState({});
+  const [advancedFilters, setAdvancedFilters] = useState({
+    stage: [],
+    source: [],
+    assigned_to: []
+  });
   const [showAdvancedFilter, setShowAdvancedFilter] = useState(false);
   const [showAssignDialog, setShowAssignDialog] = useState(false);
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [selectedPage, setSelectedPage] = useState('all');
   const [selectedForm, setSelectedForm] = useState('all');
   const [autoAssignPaused, setAutoAssignPaused] = useState(false);
-  
+  const [currentPage, setCurrentPage] = useState(1);
+  const [pageSize, setPageSize] = useState(50);
+
   const queryClient = useQueryClient();
 
   const { data: user } = useQuery({
@@ -136,7 +143,7 @@ export default function LeadManagement() {
     queryFn: () => base44.entities.Lead.list('-created_date', 5000),
     enabled: !!user,
     staleTime: 30 * 60 * 1000, // 30 minutes
-    cacheTime: 60 * 60 * 1000, // 1 hour
+    gcTime: 60 * 60 * 1000, // 1 hour
     retry: false,
     refetchOnWindowFocus: false,
     refetchOnMount: false,
@@ -151,7 +158,7 @@ export default function LeadManagement() {
     },
     enabled: !!user,
     staleTime: 30 * 60 * 1000, // 30 minutes
-    cacheTime: 60 * 60 * 1000, // 1 hour
+    gcTime: 60 * 60 * 1000, // 1 hour
     retry: false,
     refetchOnWindowFocus: false,
     refetchOnMount: false,
@@ -163,7 +170,7 @@ export default function LeadManagement() {
     queryFn: () => base44.entities.SavedFilter.filter({ module: 'leads' }),
     enabled: !!user,
     staleTime: 30 * 60 * 1000, // 30 minutes
-    cacheTime: 60 * 60 * 1000, // 1 hour
+    gcTime: 60 * 60 * 1000, // 1 hour
     retry: false,
     refetchOnWindowFocus: false,
     refetchOnMount: false,
@@ -175,7 +182,7 @@ export default function LeadManagement() {
     queryFn: () => base44.entities.FacebookPageConnection.list('-created_date'),
     enabled: !!user,
     staleTime: 30 * 60 * 1000, // 30 minutes
-    cacheTime: 60 * 60 * 1000, // 1 hour
+    gcTime: 60 * 60 * 1000, // 1 hour
     retry: false,
     refetchOnWindowFocus: false,
     refetchOnMount: false,
@@ -186,7 +193,7 @@ export default function LeadManagement() {
     queryKey: ['organization-settings'],
     queryFn: async () => {
       const orgs = await base44.entities.Organization.list();
-      return orgs[0];
+      return orgs[0] || null;
     },
     enabled: !!user?.role && user.role === 'admin',
   });
@@ -269,7 +276,7 @@ export default function LeadManagement() {
 
   const bulkUnassignMutation = useMutation({
     mutationFn: async (leadIds) => {
-      await Promise.all(leadIds.map(id => 
+      await Promise.all(leadIds.map(id =>
         base44.entities.Lead.update(id, { assigned_to: null })
       ));
     },
@@ -311,7 +318,7 @@ export default function LeadManagement() {
   const getDateFilterRange = () => {
     const now = new Date();
     const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-    
+
     switch (dateFilter) {
       case 'today':
         return { start: today, end: new Date(today.getTime() + 86400000) };
@@ -351,7 +358,7 @@ export default function LeadManagement() {
       }
     }
 
-    const matchesSearch = 
+    const matchesSearch =
       lead.lead_name?.toLowerCase().includes(searchQuery.toLowerCase()) ||
       lead.name?.toLowerCase().includes(searchQuery.toLowerCase()) ||
       lead.phone?.includes(searchQuery) ||
@@ -359,7 +366,7 @@ export default function LeadManagement() {
 
     const matchesSource = filterSource === 'all' || lead.lead_source === filterSource;
 
-    const matchesAssignment = 
+    const matchesAssignment =
       filterAssignment === 'all' ||
       (filterAssignment === 'my_leads' && lead.assigned_to === user?.email) ||
       (filterAssignment === 'assigned' && lead.assigned_to) ||
@@ -383,24 +390,24 @@ export default function LeadManagement() {
     }
 
     // Filter by Facebook page/form
-    const matchesPageFilter = selectedPage === 'all' || 
+    const matchesPageFilter = selectedPage === 'all' ||
       (lead.lead_source === 'facebook' && lead.notes?.includes(`Page ID: ${selectedPage}`));
-    
-    const matchesFormFilter = selectedForm === 'all' || 
+
+    const matchesFormFilter = selectedForm === 'all' ||
       (lead.lead_source === 'facebook' && lead.notes?.includes(`Form: ${selectedForm}`));
 
     const matchesFormNameFilter = filterFormName === 'all' || extractFormName(lead.notes) === filterFormName;
 
     const result = matchesSearch && matchesSource && matchesAssignment && matchesMember && matchesStatus && matchesContactStatus && matchesDate && matchesPageFilter && matchesFormFilter && matchesFormNameFilter;
-    
+
     if (!result) {
       console.log('Lead filtered out:', lead.id, {
-        matchesSearch, matchesSource, matchesAssignment, matchesMember, 
-        matchesStatus, matchesContactStatus, matchesDate, matchesPageFilter, 
+        matchesSearch, matchesSource, matchesAssignment, matchesMember,
+        matchesStatus, matchesContactStatus, matchesDate, matchesPageFilter,
         matchesFormFilter, matchesFormNameFilter
       });
     }
-    
+
     return result;
   });
 
@@ -433,6 +440,17 @@ export default function LeadManagement() {
     return 0;
   });
 
+  // Pagination logic
+  const totalPages = Math.ceil(sortedLeads.length / pageSize);
+  const paginatedLeads = sortedLeads.slice((currentPage - 1) * pageSize, currentPage * pageSize);
+
+  const handlePageChange = (page) => {
+    setCurrentPage(page);
+    // Scroll table to top on page change
+    const tableContainer = document.querySelector('.table-container');
+    if (tableContainer) tableContainer.scrollTop = 0;
+  };
+
   const handleSort = (field) => {
     if (sortField === field) {
       setSortDirection(sortDirection === 'asc' ? 'desc' : 'asc');
@@ -444,7 +462,7 @@ export default function LeadManagement() {
 
   const SortIcon = ({ field }) => {
     if (sortField !== field) return <ArrowUpDown className="w-3 h-3 ml-1 text-slate-400" />;
-    return sortDirection === 'asc' 
+    return sortDirection === 'asc'
       ? <ArrowUp className="w-3 h-3 ml-1 text-indigo-600" />
       : <ArrowDown className="w-3 h-3 ml-1 text-indigo-600" />;
   };
@@ -529,16 +547,16 @@ export default function LeadManagement() {
           // Check if user is assigned to this lead or is admin
           const isAssigned = lead.assigned_to === user?.email;
           const isAdmin = user?.role === 'admin';
-          
+
           if (!isAssigned && !isAdmin) {
             continue; // Skip leads not assigned to current user
           }
-          
+
           const willChangeStage = lead.status === 'new';
-          
+
           await updateLeadMutation.mutateAsync({
             id: lead.id,
-            data: { 
+            data: {
               last_contact_date: new Date().toISOString(),
               status: 'contacted'
             }
@@ -550,7 +568,7 @@ export default function LeadManagement() {
             notes: willChangeStage ? 'Contacted & Stage Updated: New → Contacted' : 'Status: Marked as contacted',
             created_by: user?.email,
           });
-          
+
           successCount++;
         }
       }
@@ -574,602 +592,670 @@ export default function LeadManagement() {
       </div>
 
       <div className="flex-1 flex flex-col overflow-hidden">
-      {/* Header */}
-      <div className="p-4 bg-white border-b flex flex-col gap-3">
-        <div className="flex items-center justify-between">
-          <h1 className="text-xl font-bold text-slate-900">Lead Pilot</h1>
-          <div className="flex items-center gap-2">
-            {user?.role === 'admin' && (
-              <>
-                <FacebookSetupGuide />
-                <FacebookConnectionManager />
-                <FacebookWebhookInfo />
-                <Button
-                  size="sm"
-                  variant={autoAssignPaused ? "destructive" : "default"}
-                  onClick={() => {
-                    const newPausedState = !autoAssignPaused;
-                    setAutoAssignPaused(newPausedState);
-                    toggleAutoAssignMutation.mutate(newPausedState);
-                  }}
-                  disabled={toggleAutoAssignMutation.isPending}
-                >
-                  {autoAssignPaused ? (
-                    <>
-                      <XCircle className="w-4 h-4 mr-1" />
-                      Auto-Assign Paused
-                    </>
-                  ) : (
-                    <>
-                      <CheckCircle2 className="w-4 h-4 mr-1" />
-                      Auto-Assign Active
-                    </>
-                  )}
-                </Button>
-              </>
-            )}
-            <Badge variant="outline" className="text-xs">
-              {sortedLeads.length} leads
-            </Badge>
-            {user?.role === 'admin' && (
-              <>
-                <Button 
-                  size="sm" 
-                  variant="outline" 
-                  onClick={() => syncLeadsMutation.mutate()}
-                  disabled={syncLeadsMutation.isPending}
-                >
-                  <Facebook className="w-4 h-4 mr-1" />
-                  {syncLeadsMutation.isPending ? 'Syncing...' : 'Sync Leads'}
-                </Button>
-                <Button size="sm" variant="outline" onClick={() => setShowAdvancedFilter(true)}>
-                  <Filter className="w-4 h-4 mr-1" />
-                  Advanced Filters
-                </Button>
-              </>
-            )}
-            <Button size="sm" variant="outline" onClick={handleExportCSV}>
-              <Download className="w-4 h-4 mr-1" />
-              Export CSV
-            </Button>
-            <Button size="sm" variant="outline" onClick={() => setImportDialogOpen(true)}>
-              <Upload className="w-4 h-4 mr-1" />
-              Import CSV
-            </Button>
-            <Button size="sm" onClick={() => setCreateDialogOpen(true)}>
-              <Plus className="w-4 h-4 mr-1" />
-              New Lead
-            </Button>
+        {/* Header */}
+        <div className="p-4 bg-white border-b flex flex-col gap-3">
+          <div className="flex items-center justify-between">
+            <h1 className="text-xl font-bold text-slate-900">Lead Pilot</h1>
+            <div className="flex items-center gap-2">
+              {user?.role === 'admin' && (
+                <>
+                  <FacebookSetupGuide />
+                  <FacebookConnectionManager />
+                  <FacebookWebhookInfo />
+                  <Button
+                    size="sm"
+                    variant={autoAssignPaused ? "destructive" : "default"}
+                    onClick={() => {
+                      const newPausedState = !autoAssignPaused;
+                      setAutoAssignPaused(newPausedState);
+                      toggleAutoAssignMutation.mutate(newPausedState);
+                    }}
+                    disabled={toggleAutoAssignMutation.isPending}
+                  >
+                    {autoAssignPaused ? (
+                      <>
+                        <XCircle className="w-4 h-4 mr-1" />
+                        Auto-Assign Paused
+                      </>
+                    ) : (
+                      <>
+                        <CheckCircle2 className="w-4 h-4 mr-1" />
+                        Auto-Assign Active
+                      </>
+                    )}
+                  </Button>
+                </>
+              )}
+              <Badge variant="outline" className="text-xs">
+                {sortedLeads.length} leads
+              </Badge>
+              {user?.role === 'admin' && (
+                <>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={() => syncLeadsMutation.mutate()}
+                    disabled={syncLeadsMutation.isPending}
+                  >
+                    <Facebook className="w-4 h-4 mr-1" />
+                    {syncLeadsMutation.isPending ? 'Syncing...' : 'Sync Leads'}
+                  </Button>
+                  <Button size="sm" variant="outline" onClick={() => setShowAdvancedFilter(true)}>
+                    <Filter className="w-4 h-4 mr-1" />
+                    Advanced Filters
+                  </Button>
+                </>
+              )}
+              <Button size="sm" variant="outline" onClick={handleExportCSV}>
+                <Download className="w-4 h-4 mr-1" />
+                Export CSV
+              </Button>
+              <Button size="sm" variant="outline" onClick={() => setImportDialogOpen(true)}>
+                <Upload className="w-4 h-4 mr-1" />
+                Import CSV
+              </Button>
+              <Button size="sm" onClick={() => setCreateDialogOpen(true)}>
+                <Plus className="w-4 h-4 mr-1" />
+                New Lead
+              </Button>
+            </div>
           </div>
-        </div>
 
-        {/* Filter Chips */}
-        {Object.keys(advancedFilters).length > 0 && (
-          <FilterChips
-            filters={advancedFilters}
-            onRemoveFilter={handleRemoveFilter}
-            onClearAll={handleClearAllFilters}
-            moduleConfig={LEAD_FILTERS}
-          />
-        )}
+          {/* Filter Chips */}
+          {Object.keys(advancedFilters).length > 0 && (
+            <FilterChips
+              filters={advancedFilters}
+              onRemoveFilter={handleRemoveFilter}
+              onClearAll={handleClearAllFilters}
+              moduleConfig={LEAD_FILTERS}
+            />
+          )}
 
-        <div className="space-y-3">
-          {/* Facebook Page/Form Filters */}
-          {fbPages.length > 0 && (
-            <div className="flex items-center gap-3 bg-blue-50 border border-blue-200 rounded-lg p-3">
-              <Facebook className="w-4 h-4 text-blue-600" />
-              <span className="text-sm font-medium text-blue-900">Facebook Leads:</span>
-              <Select value={selectedPage} onValueChange={(val) => {
-                setSelectedPage(val);
-                setSelectedForm('all');
-              }}>
-                <SelectTrigger className="w-48 bg-white">
-                  <SelectValue placeholder="All Pages" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">All Pages ({leads.filter(l => l.lead_source === 'facebook').length})</SelectItem>
-                  {fbPages.map(page => (
-                    <SelectItem key={page.id} value={page.page_id}>
-                      {page.page_name} ({leads.filter(l => l.notes?.includes(`Page ID: ${page.page_id}`)).length})
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-              
-              {selectedPage !== 'all' && (
-                <Select value={selectedForm} onValueChange={setSelectedForm}>
-                  <SelectTrigger className="w-64 bg-white">
-                    <SelectValue placeholder="All Forms" />
+          <div className="space-y-3">
+            {/* Facebook Page/Form Filters */}
+            {fbPages.length > 0 && (
+              <div className="flex items-center gap-3 bg-blue-50 border border-blue-200 rounded-lg p-3">
+                <Facebook className="w-4 h-4 text-blue-600" />
+                <span className="text-sm font-medium text-blue-900">Facebook Leads:</span>
+                <Select value={selectedPage} onValueChange={(val) => {
+                  setSelectedPage(val);
+                  setSelectedForm('all');
+                }}>
+                  <SelectTrigger className="w-48 bg-white">
+                    <SelectValue placeholder="All Pages" />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="all">All Forms</SelectItem>
-                    {fbPages
-                      .find(p => p.page_id === selectedPage)
-                      ?.lead_forms?.map((form, idx) => (
-                        <SelectItem key={idx} value={form.form_id}>
-                          {form.form_name} ({leads.filter(l => l.notes?.includes(`Form: ${form.form_id}`)).length})
+                    <SelectItem value="all">All Pages ({leads.filter(l => l.lead_source === 'facebook').length})</SelectItem>
+                    {fbPages.map(page => (
+                      <SelectItem key={page.id} value={page.page_id}>
+                        {page.page_name} ({leads.filter(l => l.notes?.includes(`Page ID: ${page.page_id}`)).length})
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+
+                {selectedPage !== 'all' && (
+                  <Select value={selectedForm} onValueChange={setSelectedForm}>
+                    <SelectTrigger className="w-64 bg-white">
+                      <SelectValue placeholder="All Forms" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">All Forms</SelectItem>
+                      {fbPages
+                        .find(p => p.page_id === selectedPage)
+                        ?.lead_forms?.map((form, idx) => (
+                          <SelectItem key={idx} value={form.form_id}>
+                            {form.form_name} ({leads.filter(l => l.notes?.includes(`Form: ${form.form_id}`)).length})
+                          </SelectItem>
+                        ))}
+                    </SelectContent>
+                  </Select>
+                )}
+              </div>
+            )}
+
+            <div className="flex items-center gap-3">
+              {/* Search */}
+              <div className="relative flex-1">
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+                <Input
+                  placeholder="Search leads..."
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  className="pl-9"
+                />
+              </div>
+
+              {/* Filters */}
+              <div className="flex gap-2">
+                <Select value={filterSource} onValueChange={setFilterSource}>
+                  <SelectTrigger className="w-40">
+                    <SelectValue placeholder="Source" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">All Sources</SelectItem>
+                    <SelectItem value="walkin">Walk-in</SelectItem>
+                    <SelectItem value="call">Call</SelectItem>
+                    <SelectItem value="referral">Referral</SelectItem>
+                    <SelectItem value="website">Website</SelectItem>
+                    <SelectItem value="facebook">Facebook</SelectItem>
+                    <SelectItem value="instagram">Instagram</SelectItem>
+                  </SelectContent>
+                </Select>
+
+                <Select value={filterAssignment} onValueChange={setFilterAssignment}>
+                  <SelectTrigger className="w-40">
+                    <SelectValue placeholder="Assignment" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">All Leads</SelectItem>
+                    <SelectItem value="my_leads">My Leads</SelectItem>
+                    <SelectItem value="assigned">Assigned</SelectItem>
+                    <SelectItem value="unassigned">Unassigned</SelectItem>
+                  </SelectContent>
+                </Select>
+
+                <Select value={filterStatus} onValueChange={setFilterStatus}>
+                  <SelectTrigger className="w-40">
+                    <SelectValue placeholder="Stage" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">All Stages</SelectItem>
+                    <SelectItem value="new">New</SelectItem>
+                    <SelectItem value="contacted">Contacted</SelectItem>
+                    <SelectItem value="screening">Screening</SelectItem>
+                    <SelectItem value="qualified">Qualified</SelectItem>
+                    <SelectItem value="proposal">Proposal</SelectItem>
+                    <SelectItem value="negotiation">Negotiation</SelectItem>
+                    <SelectItem value="site_visit">Site Visit</SelectItem>
+                    <SelectItem value="agreement">Agreement</SelectItem>
+                    <SelectItem value="payment">Payment</SelectItem>
+                    <SelectItem value="closed_won">Closed Won</SelectItem>
+                  </SelectContent>
+                </Select>
+
+                <Select value={filterContactStatus} onValueChange={setFilterContactStatus}>
+                  <SelectTrigger className="w-40">
+                    <SelectValue placeholder="Contact Status" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">All Status</SelectItem>
+                    <SelectItem value="not_contacted">Not Contacted</SelectItem>
+                    <SelectItem value="contacted">Contacted</SelectItem>
+                    <SelectItem value="not_interested">Not Interested</SelectItem>
+                    <SelectItem value="not_picked">Not Picked</SelectItem>
+                    <SelectItem value="switched_off">Switched Off</SelectItem>
+                    <SelectItem value="connected">Connected</SelectItem>
+                    <SelectItem value="follow_up">Follow Up</SelectItem>
+                    <SelectItem value="wrong_number">Wrong Number</SelectItem>
+                    <SelectItem value="out_of_network">Out of Network</SelectItem>
+                  </SelectContent>
+                </Select>
+
+                <Select value={filterMember} onValueChange={setFilterMember}>
+                  <SelectTrigger className="w-40">
+                    <SelectValue placeholder="Member" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">All Members</SelectItem>
+                    {users
+                      .filter(u => u.active !== false && u.status !== 'inactive')
+                      .map(u => (
+                        <SelectItem key={u.email} value={u.email}>
+                          {u.full_name || u.email}
                         </SelectItem>
                       ))}
                   </SelectContent>
                 </Select>
-              )}
-            </div>
-          )}
 
-          <div className="flex items-center gap-3">
-            {/* Search */}
-            <div className="relative flex-1">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
-              <Input
-                placeholder="Search leads..."
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                className="pl-9"
-              />
-            </div>
+                <Select value={dateFilter} onValueChange={setDateFilter}>
+                  <SelectTrigger className="w-40">
+                    <SelectValue placeholder="Date Range" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">All Time</SelectItem>
+                    <SelectItem value="today">Today</SelectItem>
+                    <SelectItem value="yesterday">Yesterday</SelectItem>
+                    <SelectItem value="last_7_days">Last 7 Days</SelectItem>
+                    <SelectItem value="last_30_days">Last 30 Days</SelectItem>
+                    <SelectItem value="this_month">This Month</SelectItem>
+                    <SelectItem value="custom">Custom Range</SelectItem>
+                  </SelectContent>
+                </Select>
 
-            {/* Filters */}
-            <div className="flex gap-2">
-              <Select value={filterSource} onValueChange={setFilterSource}>
-                <SelectTrigger className="w-40">
-                  <SelectValue placeholder="Source" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">All Sources</SelectItem>
-                  <SelectItem value="walkin">Walk-in</SelectItem>
-                  <SelectItem value="call">Call</SelectItem>
-                  <SelectItem value="referral">Referral</SelectItem>
-                  <SelectItem value="website">Website</SelectItem>
-                  <SelectItem value="facebook">Facebook</SelectItem>
-                  <SelectItem value="instagram">Instagram</SelectItem>
-                </SelectContent>
-              </Select>
-
-              <Select value={filterAssignment} onValueChange={setFilterAssignment}>
-                <SelectTrigger className="w-40">
-                  <SelectValue placeholder="Assignment" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">All Leads</SelectItem>
-                  <SelectItem value="my_leads">My Leads</SelectItem>
-                  <SelectItem value="assigned">Assigned</SelectItem>
-                  <SelectItem value="unassigned">Unassigned</SelectItem>
-                </SelectContent>
-              </Select>
-
-              <Select value={filterStatus} onValueChange={setFilterStatus}>
-                <SelectTrigger className="w-40">
-                  <SelectValue placeholder="Stage" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">All Stages</SelectItem>
-                  <SelectItem value="new">New</SelectItem>
-                  <SelectItem value="contacted">Contacted</SelectItem>
-                  <SelectItem value="screening">Screening</SelectItem>
-                  <SelectItem value="qualified">Qualified</SelectItem>
-                  <SelectItem value="proposal">Proposal</SelectItem>
-                  <SelectItem value="negotiation">Negotiation</SelectItem>
-                  <SelectItem value="site_visit">Site Visit</SelectItem>
-                  <SelectItem value="agreement">Agreement</SelectItem>
-                  <SelectItem value="payment">Payment</SelectItem>
-                  <SelectItem value="closed_won">Closed Won</SelectItem>
-                </SelectContent>
-              </Select>
-
-              <Select value={filterContactStatus} onValueChange={setFilterContactStatus}>
-                <SelectTrigger className="w-40">
-                  <SelectValue placeholder="Contact Status" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">All Status</SelectItem>
-                  <SelectItem value="not_contacted">Not Contacted</SelectItem>
-                  <SelectItem value="contacted">Contacted</SelectItem>
-                  <SelectItem value="not_interested">Not Interested</SelectItem>
-                  <SelectItem value="not_picked">Not Picked</SelectItem>
-                  <SelectItem value="switched_off">Switched Off</SelectItem>
-                  <SelectItem value="connected">Connected</SelectItem>
-                  <SelectItem value="follow_up">Follow Up</SelectItem>
-                  <SelectItem value="wrong_number">Wrong Number</SelectItem>
-                  <SelectItem value="out_of_network">Out of Network</SelectItem>
-                </SelectContent>
-              </Select>
-
-              <Select value={filterMember} onValueChange={setFilterMember}>
-                <SelectTrigger className="w-40">
-                  <SelectValue placeholder="Member" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">All Members</SelectItem>
-                  {users
-                    .filter(u => u.active !== false && u.status !== 'inactive')
-                    .map(u => (
-                      <SelectItem key={u.email} value={u.email}>
-                        {u.full_name || u.email}
+                <Select value={filterFormName} onValueChange={setFilterFormName}>
+                  <SelectTrigger className="w-40">
+                    <SelectValue placeholder="Form Name" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">All Forms</SelectItem>
+                    {uniqueFormNames.map(formName => (
+                      <SelectItem key={formName} value={formName}>
+                        {formName}
                       </SelectItem>
                     ))}
-                </SelectContent>
-              </Select>
-
-              <Select value={dateFilter} onValueChange={setDateFilter}>
-                <SelectTrigger className="w-40">
-                  <SelectValue placeholder="Date Range" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">All Time</SelectItem>
-                  <SelectItem value="today">Today</SelectItem>
-                  <SelectItem value="yesterday">Yesterday</SelectItem>
-                  <SelectItem value="last_7_days">Last 7 Days</SelectItem>
-                  <SelectItem value="last_30_days">Last 30 Days</SelectItem>
-                  <SelectItem value="this_month">This Month</SelectItem>
-                  <SelectItem value="custom">Custom Range</SelectItem>
-                </SelectContent>
-              </Select>
-
-              <Select value={filterFormName} onValueChange={setFilterFormName}>
-                <SelectTrigger className="w-40">
-                  <SelectValue placeholder="Form Name" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">All Forms</SelectItem>
-                  {uniqueFormNames.map(formName => (
-                    <SelectItem key={formName} value={formName}>
-                      {formName}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+                  </SelectContent>
+                </Select>
               </div>
-              </div>
-
-              {/* Custom Date Range Picker */}
-              {dateFilter === 'custom' && (
-              <div className="flex items-center gap-2 mt-2">
-              <Input
-                type="date"
-                value={customDateRange.start || ''}
-                onChange={(e) => setCustomDateRange(prev => ({ ...prev, start: e.target.value }))}
-                className="w-40"
-                placeholder="Start date"
-              />
-              <span className="text-slate-500">to</span>
-              <Input
-                type="date"
-                value={customDateRange.end || ''}
-                onChange={(e) => setCustomDateRange(prev => ({ ...prev, end: e.target.value }))}
-                className="w-40"
-                placeholder="End date"
-              />
-              </div>
-              )}
-              </div>
-
-        {/* Bulk Actions Bar - Admin Only */}
-        {selectedLeads.length > 0 && user?.role === 'admin' && (
-          <div className="flex items-center justify-between bg-indigo-50 px-4 py-2 rounded-lg">
-            <span className="text-sm font-medium text-indigo-900">
-              {selectedLeads.length} selected
-            </span>
-            <div className="flex gap-2">
-              <Button size="sm" variant="outline" onClick={() => handleBulkAction('mark_contacted')}>
-                Mark Contacted
-              </Button>
-              <Button 
-                size="sm" 
-                onClick={() => setShowAssignDialog(true)}
-                className="bg-indigo-600 hover:bg-indigo-700 text-white"
-              >
-                <Users className="w-4 h-4 mr-1" />
-                Assign
-              </Button>
-              <Button 
-                size="sm" 
-                variant="outline"
-                onClick={() => bulkUnassignMutation.mutate(selectedLeads)}
-                disabled={bulkUnassignMutation.isPending}
-              >
-                <XCircle className="w-4 h-4 mr-1" />
-                Unassign
-              </Button>
-              <Button 
-                size="sm" 
-                variant="destructive"
-                onClick={() => setDeleteDialogOpen(true)}
-              >
-                <Trash2 className="w-4 h-4 mr-1" />
-                Delete
-              </Button>
-              <Button size="sm" variant="outline" onClick={() => setSelectedLeads([])}>
-                Clear
-              </Button>
             </div>
-          </div>
-        )}
-      </div>
 
-      {/* Table */}
-      <div className="flex-1 bg-white border-t">
-        {filteredLeads.length === 0 ? (
-          <div className="flex flex-col items-center justify-center h-full text-center">
-            <Sparkles className="w-16 h-16 text-slate-300 mb-4" />
-            <h3 className="text-lg font-semibold text-slate-600 mb-2">No Leads Found</h3>
-            <p className="text-sm text-slate-500">
-              {searchQuery 
-                ? "Try adjusting your search" 
-                : "Start by importing or creating leads"}
-            </p>
+            {/* Custom Date Range Picker */}
+            {dateFilter === 'custom' && (
+              <div className="flex items-center gap-2 mt-2">
+                <Input
+                  type="date"
+                  value={customDateRange.start || ''}
+                  onChange={(e) => setCustomDateRange(prev => ({ ...prev, start: e.target.value }))}
+                  className="w-40"
+                  placeholder="Start date"
+                />
+                <span className="text-slate-500">to</span>
+                <Input
+                  type="date"
+                  value={customDateRange.end || ''}
+                  onChange={(e) => setCustomDateRange(prev => ({ ...prev, end: e.target.value }))}
+                  className="w-40"
+                  placeholder="End date"
+                />
+              </div>
+            )}
           </div>
-        ) : (
-          <div className="h-[calc(100vh-380px)] overflow-x-auto overflow-y-auto relative">
-            <Table className="min-w-max">
-              <TableHeader className="sticky top-0 bg-white z-20 shadow-sm">
-                <TableRow className="border-b-2">
-                  {user?.role === 'admin' && (
-                    <TableHead className="w-12 min-w-[3rem]">
-                      <Checkbox
-                        checked={selectedLeads.length === sortedLeads.length}
-                        onCheckedChange={(checked) => {
-                          if (checked) {
-                            setSelectedLeads(sortedLeads.map(l => l.id));
-                          } else {
-                            setSelectedLeads([]);
+
+          {/* Bulk Actions Bar - Admin Only */}
+          {selectedLeads.length > 0 && user?.role === 'admin' && (
+            <div className="flex items-center justify-between bg-indigo-50 px-4 py-2 rounded-lg">
+              <span className="text-sm font-medium text-indigo-900">
+                {selectedLeads.length} selected
+              </span>
+              <div className="flex gap-2">
+                <Button size="sm" variant="outline" onClick={() => handleBulkAction('mark_contacted')}>
+                  Mark Contacted
+                </Button>
+                <Button
+                  size="sm"
+                  onClick={() => setShowAssignDialog(true)}
+                  className="bg-indigo-600 hover:bg-indigo-700 text-white"
+                >
+                  <Users className="w-4 h-4 mr-1" />
+                  Assign
+                </Button>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={() => bulkUnassignMutation.mutate(selectedLeads)}
+                  disabled={bulkUnassignMutation.isPending}
+                >
+                  <XCircle className="w-4 h-4 mr-1" />
+                  Unassign
+                </Button>
+                <Button
+                  size="sm"
+                  variant="destructive"
+                  onClick={() => setDeleteDialogOpen(true)}
+                >
+                  <Trash2 className="w-4 h-4 mr-1" />
+                  Delete
+                </Button>
+                <Button size="sm" variant="outline" onClick={() => setSelectedLeads([])}>
+                  Clear
+                </Button>
+              </div>
+            </div>
+          )}
+        </div>
+
+        {/* Table */}
+        <div className="flex-1 bg-white border-t flex flex-col min-h-0">
+          {filteredLeads.length === 0 ? (
+            <div className="flex flex-col items-center justify-center h-full text-center">
+              <Sparkles className="w-16 h-16 text-slate-300 mb-4" />
+              <h3 className="text-lg font-semibold text-slate-600 mb-2">No Leads Found</h3>
+              <p className="text-sm text-slate-500">
+                {searchQuery
+                  ? "Try adjusting your search"
+                  : "Start by importing or creating leads"}
+              </p>
+            </div>
+          ) : (
+            <>
+              <div className="flex-1 overflow-x-auto overflow-y-auto relative table-container">
+                <Table className="min-w-max">
+                  <TableHeader className="sticky top-0 bg-white z-20 shadow-sm border-b">
+                    <TableRow>
+                      {user?.role === 'admin' && (
+                        <TableHead className="w-12 min-w-[3rem]">
+                          <Checkbox
+                            checked={selectedLeads.length === sortedLeads.length && sortedLeads.length > 0}
+                            onCheckedChange={(checked) => {
+                              if (checked) {
+                                setSelectedLeads(sortedLeads.map(l => l.id));
+                              } else {
+                                setSelectedLeads([]);
+                              }
+                            }}
+                          />
+                        </TableHead>
+                      )}
+                      <TableHead className="min-w-[120px] cursor-pointer hover:bg-slate-100" onClick={() => handleSort('id')}>
+                        <div className="flex items-center">
+                          Lead ID
+                          <SortIcon field="id" />
+                        </div>
+                      </TableHead>
+                      <TableHead className="min-w-[150px] cursor-pointer hover:bg-slate-100" onClick={() => handleSort('name')}>
+                        <div className="flex items-center">
+                          Name
+                          <SortIcon field="name" />
+                        </div>
+                      </TableHead>
+                      <TableHead className="min-w-[120px] cursor-pointer hover:bg-slate-100" onClick={() => handleSort('phone')}>
+                        <div className="flex items-center">
+                          Phone
+                          <SortIcon field="phone" />
+                        </div>
+                      </TableHead>
+                      <TableHead className="min-w-[180px] cursor-pointer hover:bg-slate-100" onClick={() => handleSort('email')}>
+                        <div className="flex items-center">
+                          Email
+                          <SortIcon field="email" />
+                        </div>
+                      </TableHead>
+                      <TableHead className="min-w-[100px] cursor-pointer hover:bg-slate-100" onClick={() => handleSort('status')}>
+                        <div className="flex items-center">
+                          Stage
+                          <SortIcon field="status" />
+                        </div>
+                      </TableHead>
+                      <TableHead className="min-w-[120px] cursor-pointer hover:bg-slate-100" onClick={() => handleSort('contact_status')}>
+                        <div className="flex items-center">
+                          Contact Status
+                          <SortIcon field="contact_status" />
+                        </div>
+                      </TableHead>
+                      <TableHead className="min-w-[100px] cursor-pointer hover:bg-slate-100" onClick={() => handleSort('lead_source')}>
+                        <div className="flex items-center">
+                          Source
+                          <SortIcon field="lead_source" />
+                        </div>
+                      </TableHead>
+                      <TableHead className="min-w-[150px] cursor-pointer hover:bg-slate-100" onClick={() => handleSort('form_name')}>
+                        <div className="flex items-center">
+                          Form Name
+                          <SortIcon field="form_name" />
+                        </div>
+                      </TableHead>
+                      <TableHead className="min-w-[80px]">Score</TableHead>
+                      <TableHead className="min-w-[120px] cursor-pointer hover:bg-slate-100" onClick={() => handleSort('location')}>
+                        <div className="flex items-center">
+                          Location
+                          <SortIcon field="location" />
+                        </div>
+                      </TableHead>
+                      <TableHead className="min-w-[100px] cursor-pointer hover:bg-slate-100" onClick={() => handleSort('assigned_to')}>
+                        <div className="flex items-center">
+                          Assigned To
+                          <SortIcon field="assigned_to" />
+                        </div>
+                      </TableHead>
+                      <TableHead className="min-w-[120px] cursor-pointer hover:bg-slate-100" onClick={() => handleSort('fb_created_time')}>
+                        <div className="flex items-center">
+                          FB Created
+                          <SortIcon field="fb_created_time" />
+                        </div>
+                      </TableHead>
+                      <TableHead className="min-w-[120px] cursor-pointer hover:bg-slate-100" onClick={() => handleSort('created_date')}>
+                        <div className="flex items-center">
+                          Imported Date
+                          <SortIcon field="created_date" />
+                        </div>
+                      </TableHead>
+                      <TableHead className="min-w-[120px] cursor-pointer hover:bg-slate-100" onClick={() => handleSort('last_activity')}>
+                        <div className="flex items-center">
+                          Last Activity
+                          <SortIcon field="last_activity" />
+                        </div>
+                      </TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {paginatedLeads.map(lead => {
+                      const isAdmin = user?.role === 'admin';
+                      const canViewLead = isAdmin || lead.assigned_to === user?.email;
+
+                      return (
+                        <TableRow
+                          key={lead.id}
+                          className={cn(
+                            canViewLead ? "cursor-pointer hover:bg-slate-50" : "cursor-default",
+                            lead.is_cold && "bg-blue-50/30",
+                            lead.status === 'lost' && "bg-red-50/30 opacity-60",
+                            overdueLeads.some(l => l.id === lead.id) && "bg-red-50"
+                          )}
+                        >
+                          {user?.role === 'admin' && (
+                            <TableCell onClick={(e) => e.stopPropagation()}>
+                              <Checkbox
+                                checked={selectedLeads.includes(lead.id)}
+                                onCheckedChange={(checked) => {
+                                  if (checked) {
+                                    setSelectedLeads([...selectedLeads, lead.id]);
+                                  } else {
+                                    setSelectedLeads(selectedLeads.filter(id => id !== lead.id));
+                                  }
+                                }}
+                              />
+                            </TableCell>
+                          )}
+                          <TableCell className="font-mono text-[10px] text-slate-500">
+                            {lead.id?.slice(-8).toUpperCase() || '-'}
+                          </TableCell>
+                          <TableCell
+                            className="font-medium"
+                            onClick={(e) => {
+                              if (canViewLead) {
+                                e.stopPropagation();
+                                window.location.href = createPageUrl('LeadDetail') + '?id=' + lead.id;
+                              }
+                            }}
+                          >
+                            <div className="flex items-center gap-2">
+                              {lead.lead_name || lead.name}
+                              {lead.is_cold && <Snowflake className="w-3 h-3 text-blue-400" />}
+                              {lead.status === 'lost' && (
+                                <Badge variant="outline" className="text-xs bg-red-50 text-red-700 border-red-200">
+                                  LOST
+                                </Badge>
+                              )}
+                              {!lead.assigned_to && (
+                                <Badge variant="outline" className="text-xs bg-amber-50 text-amber-700 border-amber-200">
+                                  UNASSIGNED
+                                </Badge>
+                              )}
+                            </div>
+                          </TableCell>
+                          <TableCell>{lead.phone}</TableCell>
+                          <TableCell className="text-sm text-slate-600">{lead.email || '-'}</TableCell>
+                          <TableCell>
+                            <Badge variant="outline" className="text-xs">
+                              {lead.status?.replace('_', ' ') || 'new'}
+                            </Badge>
+                          </TableCell>
+                          <TableCell>
+                            <Badge variant="outline" className={cn(
+                              "text-xs",
+                              lead.contact_status === 'connected' && "bg-green-50 text-green-700 border-green-200",
+                              lead.contact_status === 'not_contacted' && "bg-amber-50 text-amber-700 border-amber-200",
+                              lead.contact_status === 'not_interested' && "bg-red-50 text-red-700 border-red-200"
+                            )}>
+                              {lead.contact_status?.replace('_', ' ') || 'not contacted'}
+                            </Badge>
+                          </TableCell>
+                          <TableCell>
+                            {lead.lead_source && <LeadSourceBadge source={lead.lead_source} />}
+                          </TableCell>
+                          <TableCell className="text-xs text-slate-600">
+                            {extractFormName(lead.notes)}
+                          </TableCell>
+                          <TableCell>
+                            <LeadScoreBadge lead={lead} />
+                          </TableCell>
+                          <TableCell className="text-sm text-slate-600">{lead.location || '-'}</TableCell>
+                          <TableCell>
+                            {lead.assigned_to ? (
+                              <Avatar className="w-6 h-6">
+                                <AvatarFallback className="bg-indigo-100 text-indigo-700 text-[10px]">
+                                  {getInitials(lead.assigned_to)}
+                                </AvatarFallback>
+                              </Avatar>
+                            ) : (
+                              <span className="text-xs text-slate-400">-</span>
+                            )}
+                          </TableCell>
+                          <TableCell className="text-xs text-slate-500">
+                            {lead.fb_created_time
+                              ? new Date(lead.fb_created_time).toLocaleDateString()
+                              : '-'}
+                          </TableCell>
+                          <TableCell className="text-xs text-slate-500">
+                            {lead.created_date
+                              ? new Date(lead.created_date).toLocaleDateString()
+                              : '-'}
+                          </TableCell>
+                          <TableCell className="text-xs text-slate-500">
+                            {lead.last_activity
+                              ? new Date(lead.last_activity).toLocaleDateString()
+                              : '-'}
+                          </TableCell>
+                        </TableRow>
+                      );
+                    })}
+                  </TableBody>
+                </Table>
+              </div>
+
+              {/* Pagination Footer */}
+              <div className="p-4 border-t bg-slate-50 flex items-center justify-between sticky bottom-0 z-20">
+                <div className="text-sm text-slate-500">
+                  Showing <span className="font-medium text-slate-900">{Math.min(sortedLeads.length, (currentPage - 1) * pageSize + 1)}</span> to <span className="font-medium text-slate-900">{Math.min(sortedLeads.length, currentPage * pageSize)}</span> of <span className="font-medium text-slate-900">{sortedLeads.length}</span> leads
+                </div>
+                <div className="flex items-center gap-4">
+                  <Select value={String(pageSize)} onValueChange={(val) => {
+                    setPageSize(Number(val));
+                    setCurrentPage(1);
+                  }}>
+                    <SelectTrigger className="w-[110px] h-8 bg-white">
+                      <SelectValue placeholder="Page size" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="20">20 / page</SelectItem>
+                      <SelectItem value="50">50 / page</SelectItem>
+                      <SelectItem value="100">100 / page</SelectItem>
+                      <SelectItem value="250">250 / page</SelectItem>
+                    </SelectContent>
+                  </Select>
+                  <div className="flex items-center gap-1">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => handlePageChange(currentPage - 1)}
+                      disabled={currentPage === 1}
+                      className="h-8 w-8 p-0"
+                    >
+                      <ChevronDown className="w-4 h-4 rotate-90" />
+                    </Button>
+                    <div className="flex items-center gap-1.5 px-2">
+                      <span className="text-sm text-slate-500">Page</span>
+                      <Input
+                        className="w-12 h-8 text-center p-0"
+                        value={currentPage}
+                        onChange={(e) => {
+                          const val = parseInt(e.target.value);
+                          if (!isNaN(val) && val > 0 && val <= totalPages) {
+                            handlePageChange(val);
                           }
                         }}
                       />
-                    </TableHead>
-                  )}
-                  <TableHead className="min-w-[150px] cursor-pointer hover:bg-slate-100" onClick={() => handleSort('name')}>
-                    <div className="flex items-center">
-                      Name
-                      <SortIcon field="name" />
+                      <span className="text-sm text-slate-500">of {totalPages || 1}</span>
                     </div>
-                  </TableHead>
-                  <TableHead className="min-w-[120px] cursor-pointer hover:bg-slate-100" onClick={() => handleSort('phone')}>
-                    <div className="flex items-center">
-                      Phone
-                      <SortIcon field="phone" />
-                    </div>
-                  </TableHead>
-                  <TableHead className="min-w-[180px] cursor-pointer hover:bg-slate-100" onClick={() => handleSort('email')}>
-                    <div className="flex items-center">
-                      Email
-                      <SortIcon field="email" />
-                    </div>
-                  </TableHead>
-                  <TableHead className="min-w-[100px] cursor-pointer hover:bg-slate-100" onClick={() => handleSort('status')}>
-                    <div className="flex items-center">
-                      Stage
-                      <SortIcon field="status" />
-                    </div>
-                  </TableHead>
-                  <TableHead className="min-w-[120px] cursor-pointer hover:bg-slate-100" onClick={() => handleSort('contact_status')}>
-                    <div className="flex items-center">
-                      Contact Status
-                      <SortIcon field="contact_status" />
-                    </div>
-                  </TableHead>
-                  <TableHead className="min-w-[100px] cursor-pointer hover:bg-slate-100" onClick={() => handleSort('lead_source')}>
-                    <div className="flex items-center">
-                      Source
-                      <SortIcon field="lead_source" />
-                    </div>
-                  </TableHead>
-                  <TableHead className="min-w-[150px] cursor-pointer hover:bg-slate-100" onClick={() => handleSort('form_name')}>
-                    <div className="flex items-center">
-                      Form Name
-                      <SortIcon field="form_name" />
-                    </div>
-                  </TableHead>
-                  <TableHead className="min-w-[80px]">Score</TableHead>
-                  <TableHead className="min-w-[120px] cursor-pointer hover:bg-slate-100" onClick={() => handleSort('location')}>
-                    <div className="flex items-center">
-                      Location
-                      <SortIcon field="location" />
-                    </div>
-                  </TableHead>
-                  <TableHead className="min-w-[100px] cursor-pointer hover:bg-slate-100" onClick={() => handleSort('assigned_to')}>
-                    <div className="flex items-center">
-                      Assigned To
-                      <SortIcon field="assigned_to" />
-                    </div>
-                  </TableHead>
-                  <TableHead className="min-w-[120px] cursor-pointer hover:bg-slate-100" onClick={() => handleSort('fb_created_time')}>
-                    <div className="flex items-center">
-                      FB Created
-                      <SortIcon field="fb_created_time" />
-                    </div>
-                  </TableHead>
-                  <TableHead className="min-w-[120px] cursor-pointer hover:bg-slate-100" onClick={() => handleSort('created_date')}>
-                    <div className="flex items-center">
-                      Imported Date
-                      <SortIcon field="created_date" />
-                    </div>
-                  </TableHead>
-                  <TableHead className="min-w-[120px] cursor-pointer hover:bg-slate-100" onClick={() => handleSort('last_activity')}>
-                    <div className="flex items-center">
-                      Last Activity
-                      <SortIcon field="last_activity" />
-                    </div>
-                  </TableHead>
-                  </TableRow>
-                  </TableHeader>
-              <TableBody>
-                {sortedLeads.map(lead => {
-                  const isAdmin = user?.role === 'admin';
-                  const canViewLead = isAdmin || lead.assigned_to === user?.email;
-
-                  return (
-                  <TableRow
-                    key={lead.id}
-                    className={cn(
-                      canViewLead ? "cursor-pointer hover:bg-slate-50" : "cursor-default",
-                      lead.is_cold && "bg-blue-50/30",
-                      lead.status === 'lost' && "bg-red-50/30 opacity-60",
-                      overdueLeads.some(l => l.id === lead.id) && "bg-red-50"
-                    )}
-                  >
-                    {user?.role === 'admin' && (
-                      <TableCell onClick={(e) => e.stopPropagation()}>
-                        <Checkbox
-                          checked={selectedLeads.includes(lead.id)}
-                          onCheckedChange={(checked) => {
-                            if (checked) {
-                              setSelectedLeads([...selectedLeads, lead.id]);
-                            } else {
-                              setSelectedLeads(selectedLeads.filter(id => id !== lead.id));
-                            }
-                          }}
-                        />
-                      </TableCell>
-                    )}
-                    <TableCell 
-                      className="font-medium"
-                      onClick={(e) => {
-                        if (canViewLead) {
-                          e.stopPropagation();
-                          window.location.href = createPageUrl('LeadDetail') + '?id=' + lead.id;
-                        }
-                      }}
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => handlePageChange(currentPage + 1)}
+                      disabled={currentPage >= totalPages}
+                      className="h-8 w-8 p-0"
                     >
-                      <div className="flex items-center gap-2">
-                        {lead.lead_name || lead.name}
-                        {lead.is_cold && <Snowflake className="w-3 h-3 text-blue-400" />}
-                        {lead.status === 'lost' && (
-                          <Badge variant="outline" className="text-xs bg-red-50 text-red-700 border-red-200">
-                            LOST
-                          </Badge>
-                        )}
-                        {!lead.assigned_to && (
-                          <Badge variant="outline" className="text-xs bg-amber-50 text-amber-700 border-amber-200">
-                            UNASSIGNED
-                          </Badge>
-                        )}
-                      </div>
-                    </TableCell>
-                    <TableCell>{lead.phone}</TableCell>
-                    <TableCell className="text-sm text-slate-600">{lead.email || '-'}</TableCell>
-                    <TableCell>
-                      <Badge variant="outline" className="text-xs">
-                        {lead.status?.replace('_', ' ') || 'new'}
-                      </Badge>
-                    </TableCell>
-                    <TableCell>
-                      <Badge variant="outline" className={cn(
-                        "text-xs",
-                        lead.contact_status === 'connected' && "bg-green-50 text-green-700 border-green-200",
-                        lead.contact_status === 'not_contacted' && "bg-amber-50 text-amber-700 border-amber-200",
-                        lead.contact_status === 'not_interested' && "bg-red-50 text-red-700 border-red-200"
-                      )}>
-                        {lead.contact_status?.replace('_', ' ') || 'not contacted'}
-                      </Badge>
-                    </TableCell>
-                    <TableCell>
-                      {lead.lead_source && <LeadSourceBadge source={lead.lead_source} />}
-                    </TableCell>
-                    <TableCell className="text-xs text-slate-600">
-                      {extractFormName(lead.notes)}
-                    </TableCell>
-                    <TableCell>
-                      <LeadScoreBadge lead={lead} compact />
-                    </TableCell>
-                    <TableCell className="text-sm text-slate-600">{lead.location || '-'}</TableCell>
-                    <TableCell>
-                      {lead.assigned_to ? (
-                        <Avatar className="w-6 h-6">
-                          <AvatarFallback className="bg-indigo-100 text-indigo-700 text-[10px]">
-                            {getInitials(lead.assigned_to)}
-                          </AvatarFallback>
-                        </Avatar>
-                      ) : (
-                        <span className="text-xs text-slate-400">-</span>
-                      )}
-                    </TableCell>
-                    <TableCell className="text-xs text-slate-500">
-                      {lead.fb_created_time
-                        ? new Date(lead.fb_created_time).toLocaleDateString()
-                        : '-'}
-                    </TableCell>
-                    <TableCell className="text-xs text-slate-500">
-                      {lead.created_date
-                        ? new Date(lead.created_date).toLocaleDateString()
-                        : '-'}
-                    </TableCell>
-                    <TableCell className="text-xs text-slate-500">
-                      {lead.last_activity 
-                        ? new Date(lead.last_activity).toLocaleDateString()
-                        : '-'}
-                    </TableCell>
-                    </TableRow>
-                  );
-                })}
-              </TableBody>
-            </Table>
-          </div>
-        )}
+                      <ChevronDown className="w-4 h-4 -rotate-90" />
+                    </Button>
+                  </div>
+                </div>
+              </div>
+            </>
+          )}
+        </div>
+
+        {/* Dialogs */}
+        <CreateLeadDialog
+          open={createDialogOpen}
+          onOpenChange={setCreateDialogOpen}
+          currentUser={user}
+        />
+        <ImportLeadsDialog
+          open={importDialogOpen}
+          onOpenChange={setImportDialogOpen}
+          salesUsers={users}
+        />
+
+        <AssignLeadsDialog
+          open={showAssignDialog}
+          onOpenChange={setShowAssignDialog}
+          selectedLeads={selectedLeads}
+          leads={leads}
+          salesUsers={users}
+          onSuccess={() => {
+            setSelectedLeads([]);
+            setShowAssignDialog(false);
+          }}
+        />
+
+        {/* Bulk Delete Confirmation Dialog */}
+        <AlertDialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
+          <AlertDialogContent>
+            <AlertDialogHeader>
+              <AlertDialogTitle>Delete {selectedLeads.length} Lead{selectedLeads.length > 1 ? 's' : ''}</AlertDialogTitle>
+              <AlertDialogDescription>
+                Are you sure you want to delete {selectedLeads.length} lead{selectedLeads.length > 1 ? 's' : ''}? This action cannot be undone.
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel disabled={bulkDeleteMutation.isPending}>Cancel</AlertDialogCancel>
+              <AlertDialogAction
+                onClick={(e) => {
+                  e.preventDefault();
+                  bulkDeleteMutation.mutate(selectedLeads);
+                  setDeleteDialogOpen(false);
+                }}
+                disabled={bulkDeleteMutation.isPending}
+                className="bg-red-600 hover:bg-red-700"
+              >
+                {bulkDeleteMutation.isPending ? 'Deleting...' : 'Delete'}
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
+
+        {/* Advanced Filter Panel */}
+        <AdvancedFilterPanel
+          isOpen={showAdvancedFilter}
+          onClose={() => setShowAdvancedFilter(false)}
+          filters={advancedFilters}
+          onApplyFilters={setAdvancedFilters}
+          moduleConfig={LEAD_FILTERS}
+          savedFilters={savedFilters}
+          onSaveFilter={handleSaveFilter}
+          onLoadFilter={handleLoadFilter}
+          onDeleteFilter={handleDeleteFilter}
+        />
       </div>
-
-      {/* Dialogs */}
-      <CreateLeadDialog
-        open={createDialogOpen}
-        onOpenChange={setCreateDialogOpen}
-        currentUser={user}
-      />
-      <ImportLeadsDialog
-        open={importDialogOpen}
-        onOpenChange={setImportDialogOpen}
-        salesUsers={users}
-      />
-      
-      <AssignLeadsDialog
-        open={showAssignDialog}
-        onOpenChange={setShowAssignDialog}
-        selectedLeads={selectedLeads}
-        leads={leads}
-        salesUsers={users}
-        onSuccess={() => {
-          setSelectedLeads([]);
-          setShowAssignDialog(false);
-        }}
-      />
-
-      {/* Bulk Delete Confirmation Dialog */}
-      <AlertDialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>Delete {selectedLeads.length} Lead{selectedLeads.length > 1 ? 's' : ''}</AlertDialogTitle>
-            <AlertDialogDescription>
-              Are you sure you want to delete {selectedLeads.length} lead{selectedLeads.length > 1 ? 's' : ''}? This action cannot be undone.
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel disabled={bulkDeleteMutation.isPending}>Cancel</AlertDialogCancel>
-            <AlertDialogAction
-              onClick={(e) => {
-                e.preventDefault();
-                bulkDeleteMutation.mutate(selectedLeads);
-                setDeleteDialogOpen(false);
-              }}
-              disabled={bulkDeleteMutation.isPending}
-              className="bg-red-600 hover:bg-red-700"
-            >
-              {bulkDeleteMutation.isPending ? 'Deleting...' : 'Delete'}
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
-
-      {/* Advanced Filter Panel */}
-      <AdvancedFilterPanel
-        isOpen={showAdvancedFilter}
-        onClose={() => setShowAdvancedFilter(false)}
-        filters={advancedFilters}
-        onApplyFilters={setAdvancedFilters}
-        moduleConfig={LEAD_FILTERS}
-        savedFilters={savedFilters}
-        onSaveFilter={handleSaveFilter}
-        onLoadFilter={handleLoadFilter}
-        onDeleteFilter={handleDeleteFilter}
-      />
-      </div>
-    </div>
+    </div >
   );
 }

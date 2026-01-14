@@ -1,3 +1,4 @@
+// @ts-nocheck
 import React, { useState, useEffect } from 'react';
 import { Check, ChevronsUpDown, X } from 'lucide-react';
 import { cn } from '@/lib/utils';
@@ -32,17 +33,14 @@ export default function UserMultiSelect({
   // Ensure selectedEmails is always an array
   const safeSelectedEmails = Array.isArray(selectedEmails) ? selectedEmails : [];
 
-  // Always ensure teamsocialscrapers@gmail.com is in the list if it exists in users
-  const specialUser = users.find(u => u.email === 'teamsocialscrapers@gmail.com');
-  if (specialUser && !users.some(u => u.email === 'teamsocialscrapers@gmail.com')) {
-    users = [specialUser, ...users];
-  }
+  // Filter to only active users
+  const activeUsers = users.filter(u => u.status !== 'inactive' && u.is_active !== false);
 
   // Group users by department
   const usersByDepartment = React.useMemo(() => {
     const groups = {};
 
-    users.forEach(user => {
+    activeUsers.forEach(user => {
       const deptId = user.department_id || user.department?.id || user.department || 'no-department';
       const deptName = deptId === 'no-department' ? 'No Department' : (departments.find(d => String(d.id) === String(deptId))?.name || 'Unknown Department');
 
@@ -57,7 +55,7 @@ export default function UserMultiSelect({
 
     // Sort departments by name
     return Object.values(groups).sort((a, b) => a.name.localeCompare(b.name));
-  }, [users, departments]);
+  }, [activeUsers, departments]);
 
   const toggleSelection = (email) => {
     if (singleSelect) {
@@ -89,7 +87,7 @@ export default function UserMultiSelect({
             <div className="flex flex-wrap gap-1 items-center">
               {safeSelectedEmails.length === 0 && <span className="text-slate-500 font-normal">{placeholder}</span>}
               {safeSelectedEmails.map((email) => {
-                const user = users.find(u => u.email === email);
+                const user = activeUsers.find(u => u.email === email);
                 return (
                   <Badge key={email} variant="secondary" className="mr-1 mb-1">
                     {user?.full_name || email}
