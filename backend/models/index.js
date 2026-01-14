@@ -48,6 +48,13 @@ const taskSchema = new mongoose.Schema({
     updated_at: { type: Date, default: Date.now }
 });
 
+const breakEntrySchema = new mongoose.Schema({
+    start_time: Date,
+    end_time: Date,
+    duration_minutes: Number,
+    type: { type: String, default: 'regular' } // regular, lunch, meeting, etc.
+});
+
 const attendanceSchema = new mongoose.Schema({
     user_email: String,
     user_name: String,
@@ -55,11 +62,29 @@ const attendanceSchema = new mongoose.Schema({
     status: String, // present, absent, leave, half_day, weekoff, holiday
     check_in: Date,
     check_out: Date,
+    check_in_location: {
+        latitude: Number,
+        longitude: Number,
+        accuracy: Number,
+        address: String
+    },
+    check_out_location: {
+        latitude: Number,
+        longitude: Number,
+        accuracy: Number,
+        address: String
+    },
+    breaks: [breakEntrySchema],
+    total_break_duration: { type: Number, default: 0 }, // in minutes
+    actual_working_hours: Number, // calculated as (checkout - checkin) - break_duration
     is_late: Boolean,
     late_minutes: Number,
     is_early_checkout: Boolean,
+    current_status: { type: String, default: 'not_checked_in' }, // not_checked_in, checked_in, on_break, checked_out
+    break_start_time: Date, // when current break started
     notes: String,
-    created_at: { type: Date, default: Date.now }
+    created_at: { type: Date, default: Date.now },
+    updated_at: { type: Date, default: Date.now }
 });
 
 const salaryPolicySchema = new mongoose.Schema({
@@ -528,4 +553,96 @@ const subTaskSchema = new mongoose.Schema({
     updated_at: { type: Date, default: Date.now }
 });
 
+const timesheetEntrySchema = new mongoose.Schema({
+    task_id: String,
+    task_title: String,
+    date: String, // YYYY-MM-DD
+    hours: Number,
+    description: String,
+    project_id: String,
+    project_name: String
+});
+
+const timesheetSchema = new mongoose.Schema({
+    freelancer_email: String,
+    freelancer_name: String,
+    week_start_date: String, // YYYY-MM-DD (Monday of the week)
+    period_start: String, // YYYY-MM-DD
+    period_end: String, // YYYY-MM-DD
+    status: { type: String, default: 'draft' }, // draft, submitted, approved, rejected
+    entries: [timesheetEntrySchema],
+    total_hours: { type: Number, default: 0 },
+    submitted_at: Date,
+    approved_at: Date,
+    approved_by: String, // admin email who approved
+    rejected_at: Date,
+    rejection_reason: String,
+    rejected_by: String, // admin email who rejected
+    comments: String,
+    created_at: { type: Date, default: Date.now },
+    updated_at: { type: Date, default: Date.now }
+});
+
+const candidateSchema = new mongoose.Schema({
+    full_name: String,
+    email: { type: String, unique: true },
+    phone: String,
+    resume_url: String, // uploaded resume file URL
+    cv_text: String, // extracted text from resume for search
+    current_position: String,
+    current_company: String,
+    experience_years: Number,
+    skills: [String],
+    education: [{
+        degree: String,
+        institution: String,
+        year: Number,
+        grade: String
+    }],
+    expected_salary: Number,
+    current_salary: Number,
+    location: String,
+    source: String, // referral, job_portal, linkedin, etc.
+    status: { type: String, default: 'new' }, // new, screening, interviewed, offered, hired, rejected
+    priority: { type: String, default: 'medium' }, // low, medium, high
+    tags: [String],
+    created_by: String, // HR email
+    assigned_to: String, // HR email handling this candidate
+    created_at: { type: Date, default: Date.now },
+    updated_at: { type: Date, default: Date.now }
+});
+
+const interviewSchema = new mongoose.Schema({
+    candidate_id: String,
+    candidate_name: String,
+    candidate_email: String,
+    interviewer_email: String,
+    interviewer_name: String,
+    interview_type: String, // technical, hr, managerial
+    round: Number, // 1, 2, 3, etc.
+    scheduled_date: Date,
+    duration_minutes: Number,
+    status: { type: String, default: 'scheduled' }, // scheduled, completed, cancelled, no_show
+    feedback: String,
+    rating: Number, // 1-5 scale
+    decision: String, // proceed, hold, reject, offer
+    notes: String,
+    meeting_link: String,
+    created_by: String,
+    created_at: { type: Date, default: Date.now }
+});
+
+const candidateActivitySchema = new mongoose.Schema({
+    candidate_id: String,
+    activity_type: String, // applied, viewed, interviewed, offered, hired, rejected, etc.
+    description: String,
+    performed_by: String, // user email
+    metadata: mongoose.Schema.Types.Mixed, // additional data like interview feedback, offer details, etc.
+    created_at: { type: Date, default: Date.now }
+});
+
 export const SubTask = mongoose.model('SubTask', subTaskSchema);
+export const Timesheet = mongoose.model('Timesheet', timesheetSchema);
+export const Candidate = mongoose.model('Candidate', candidateSchema);
+export const Interview = mongoose.model('Interview', interviewSchema);
+export const CandidateActivity = mongoose.model('CandidateActivity', candidateActivitySchema);

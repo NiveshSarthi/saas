@@ -34,7 +34,9 @@ import {
   Wallet,
   MessageSquare,
   DollarSign,
-  HeadphonesIcon
+  HeadphonesIcon,
+  Clock,
+  UserPlus
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { ScrollArea } from '@/components/ui/scroll-area';
@@ -88,12 +90,17 @@ export default function Sidebar({ projects = [], currentPage, user, collapsed, o
     .map(d => d.id || d._id);
   const isHRUser = user?.department_id && hrDeptIds.includes(user.department_id);
 
+  const isFreelancer = user?.role_id === 'freelancer' || user?.role === 'freelancer';
+
   const isSalesExec = isSalesExecutive(user);
   const isSalesMgr = isSalesManager(user);
   const canAccessReportsProjects = canAccessReportsAndProjects(user, departments);
 
   const navItems = [
     { name: 'Dashboard', icon: LayoutDashboard, page: 'Dashboard' },
+    { name: 'Timesheet', icon: Clock, page: 'Timesheet', freelancerOnly: true },
+    { name: 'HR Dashboard', icon: UserCheck, page: 'HRDashboard', hrOnly: true },
+    { name: 'Recruitment', icon: UserPlus, page: 'Recruitment', hrOnly: true },
     { name: 'Inventory Bucket', icon: Database, page: 'MasterData', salesOnly: true },
     { name: 'Marketing Collateral', icon: Video, page: 'Marketing', marketingOnly: true },
     { name: 'Finance', icon: Wallet, page: 'FinanceDashboard', financeOnly: true },
@@ -109,6 +116,8 @@ export default function Sidebar({ projects = [], currentPage, user, collapsed, o
   ];
 
   const adminItems = [
+    { name: 'Timesheet Approval', icon: Clock, page: 'TimesheetApproval' },
+    { name: 'Freelancer Reports', icon: BarChart3, page: 'FreelancerReports' },
     { name: 'Roles', icon: Shield, page: 'RoleManagement' },
     { name: 'Users', icon: Users, page: 'UserManagement' },
     { name: 'Builders', icon: Building2, page: 'BuilderManagement' },
@@ -394,7 +403,9 @@ export default function Sidebar({ projects = [], currentPage, user, collapsed, o
               // Skip finance items if user doesn't have permission
               if (item.financeOnly && !can('finance_dashboard', 'read')) return null;
               // Skip HR-only items for non-HR users (unless admin)
-              if (item.hrOnly && !isHRUser && !isAdmin) return null;
+              if (item.hrOnly && user?.role_id !== 'hr' && !isAdmin) return null;
+              // Show timesheet only for freelancers
+              if (item.freelancerOnly && !isFreelancer) return null;
               // Hide items from Sales Executives
               if (item.hiddenForSalesExec && isSalesExec) return null;
               // Hide Reports and Projects from Sales Managers and Executives
@@ -422,7 +433,7 @@ export default function Sidebar({ projects = [], currentPage, user, collapsed, o
           </div>
 
           {/* Admin Section */}
-          {isAdmin && !collapsed && (
+          {(isAdmin || user?.role_id === 'hr' || isHRUser) && !collapsed && (
             <div className="mt-6 px-3">
               <Collapsible open={adminOpen} onOpenChange={setAdminOpen}>
                 <div className="flex items-center justify-between mb-2">

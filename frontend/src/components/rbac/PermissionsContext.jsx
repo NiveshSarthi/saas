@@ -9,7 +9,8 @@ export const MODULES = [
   'dashboard', 'comments', 'gantt', 'time_tracking',
   'worklog', 'backlog', 'reports', 'files', 'users', 'groups',
   'finance_dashboard', 'receivables', 'payables', 'cash_flow',
-  'financial_reports', 'marketing_expenses', 'salary_management'
+  'financial_reports', 'marketing_expenses', 'salary_management',
+  'timesheet_approval', 'freelancer_reports'
 ];
 
 export const ACTIONS = ['create', 'read', 'update', 'delete', 'assign'];

@@ -1,16 +1,22 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { base44 } from '@/api/base44Client';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { Clock, LogIn, LogOut, MapPin } from 'lucide-react';
+import { Clock, LogIn, LogOut, MapPin, Pause, Play, Coffee } from 'lucide-react';
 import { format } from 'date-fns';
 import { toast } from 'sonner';
 
 export default function TodayAttendanceWidget({ user }) {
   const [currentTime, setCurrentTime] = useState(new Date());
   const [location, setLocation] = useState(null);
+  const [workingTime, setWorkingTime] = useState(0); // in seconds
+  const [breakTime, setBreakTime] = useState(0); // in seconds
+  const [isOnBreak, setIsOnBreak] = useState(false);
+  const [breakStartTime, setBreakStartTime] = useState(null);
+  const workingTimerRef = useRef(null);
+  const breakTimerRef = useRef(null);
   const queryClient = useQueryClient();
 
   useEffect(() => {
@@ -103,6 +109,62 @@ export default function TodayAttendanceWidget({ user }) {
   const hasCheckedIn = !!todayRecord?.check_in_time;
   const hasCheckedOut = !!todayRecord?.check_out_time;
 
+  // Timer effects
+  useEffect(() => {
+    if (hasCheckedIn && !hasCheckedOut && !isOnBreak) {
+      // Start working timer
+      workingTimerRef.current = setInterval(() => {
+        setWorkingTime(prev => prev + 1);
+      }, 1000);
+    } else {
+      if (workingTimerRef.current) {
+        clearInterval(workingTimerRef.current);
+        workingTimerRef.current = null;
+      }
+    }
+
+    return () => {
+      if (workingTimerRef.current) {
+        clearInterval(workingTimerRef.current);
+      }
+    };
+  }, [hasCheckedIn, hasCheckedOut, isOnBreak]);
+
+  useEffect(() => {
+    if (isOnBreak) {
+      // Start break timer
+      breakTimerRef.current = setInterval(() => {
+        setBreakTime(prev => prev + 1);
+      }, 1000);
+    } else {
+      if (breakTimerRef.current) {
+        clearInterval(breakTimerRef.current);
+        breakTimerRef.current = null;
+      }
+    }
+
+    return () => {
+      if (breakTimerRef.current) {
+        clearInterval(breakTimerRef.current);
+      }
+    };
+  }, [isOnBreak]);
+
+  // Load existing timer data from attendance record
+  useEffect(() => {
+    if (todayRecord) {
+      if (todayRecord.total_working_seconds) {
+        setWorkingTime(todayRecord.total_working_seconds);
+      }
+      if (todayRecord.total_break_duration) {
+        setBreakTime(todayRecord.total_break_duration * 60); // convert minutes to seconds
+      }
+      if (todayRecord.current_status === 'on_break') {
+        setIsOnBreak(true);
+      }
+    }
+  }, [todayRecord]);
+
   const checkInMutation = useMutation({
     mutationFn: async () => {
       if (!location || !location.latitude || !location.longitude) {
@@ -174,6 +236,30 @@ export default function TodayAttendanceWidget({ user }) {
     }
   });
 
+  const breakMutation = useMutation({
+    mutationFn: async (onBreak) => {
+      if (!todayRecord) return;
+
+      const currentTime = new Date();
+      const totalWorkingSeconds = workingTime;
+      const totalBreakMinutes = Math.round(breakTime / 60);
+
+      return await base44.entities.Attendance.update(todayRecord.id, {
+        current_status: onBreak ? 'on_break' : 'checked_in',
+        total_working_seconds: totalWorkingSeconds,
+        total_break_duration: totalBreakMinutes,
+        last_break_start: onBreak ? currentTime.toISOString() : null
+      });
+    },
+    onSuccess: (data, onBreak) => {
+      setIsOnBreak(onBreak);
+      queryClient.invalidateQueries(['today-attendance']);
+    },
+    onError: (error) => {
+      toast.error('Failed to update break status');
+    }
+  });
+
   const checkOutMutation = useMutation({
     mutationFn: async () => {
       if (!todayRecord || !todayRecord.check_in_time) {
@@ -182,21 +268,35 @@ export default function TodayAttendanceWidget({ user }) {
 
       const now = new Date();
       const checkInTime = new Date(todayRecord.check_in_time);
-      const diffMs = now - checkInTime;
+      const diffMs = now.getTime() - checkInTime.getTime();
       const totalHours = Math.round((diffMs / (1000 * 60 * 60)) * 100) / 100;
+      const totalWorkingSeconds = workingTime;
+      const totalBreakMinutes = Math.round(breakTime / 60);
 
-      const isEarlyCheckout = settings && settings.early_checkout_threshold_hours 
-        ? totalHours < settings.early_checkout_threshold_hours 
+      const isEarlyCheckout = settings && settings.early_checkout_threshold_hours
+        ? totalHours < settings.early_checkout_threshold_hours
         : false;
 
       return await base44.entities.Attendance.update(todayRecord.id, {
         check_out_time: now.toISOString(),
         total_hours: totalHours,
+        total_working_seconds: totalWorkingSeconds,
+        total_break_duration: totalBreakMinutes,
         status: 'present',
+        current_status: 'checked_out',
         is_early_checkout: isEarlyCheckout
       });
     },
     onSuccess: () => {
+      // Stop all timers
+      if (workingTimerRef.current) {
+        clearInterval(workingTimerRef.current);
+        workingTimerRef.current = null;
+      }
+      if (breakTimerRef.current) {
+        clearInterval(breakTimerRef.current);
+        breakTimerRef.current = null;
+      }
       queryClient.invalidateQueries(['today-attendance']);
       toast.success('Checked out successfully');
     },
@@ -225,18 +325,29 @@ export default function TodayAttendanceWidget({ user }) {
 
   const formatTime = (timeStr) => {
     if (!timeStr) return '';
-    
+
     // Handle ISO timestamp format
     if (timeStr.includes('T') || timeStr.includes('Z')) {
       return format(new Date(timeStr), 'hh:mm a');
     }
-    
+
     // Handle HH:mm:ss format
     const [hours, minutes] = timeStr.split(':');
     const hour = parseInt(hours);
     const ampm = hour >= 12 ? 'PM' : 'AM';
     const displayHour = hour % 12 || 12;
     return `${displayHour.toString().padStart(2, '0')}:${minutes} ${ampm}`;
+  };
+
+  const formatDuration = (seconds) => {
+    const hours = Math.floor(seconds / 3600);
+    const minutes = Math.floor((seconds % 3600) / 60);
+    const secs = seconds % 60;
+    return `${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
+  };
+
+  const toggleBreak = () => {
+    breakMutation.mutate(!isOnBreak);
   };
 
   return (
@@ -270,6 +381,32 @@ export default function TodayAttendanceWidget({ user }) {
           </div>
         </div>
 
+        {/* Working Timer Display */}
+        {hasCheckedIn && !hasCheckedOut && (
+          <div className="bg-blue-50 border-2 border-blue-200 rounded-xl p-4">
+            <div className="flex items-center justify-between mb-2">
+              <div className="flex items-center gap-2 text-sm text-slate-600">
+                <Clock className="w-4 h-4" />
+                Working Time
+              </div>
+              {isOnBreak && (
+                <Badge className="bg-orange-100 text-orange-700 flex items-center gap-1">
+                  <Coffee className="w-3 h-3" />
+                  On Break
+                </Badge>
+              )}
+            </div>
+            <div className="text-3xl font-bold text-slate-900 font-mono">
+              {formatDuration(workingTime)}
+            </div>
+            {breakTime > 0 && (
+              <div className="text-sm text-slate-500 mt-1">
+                Break Time: {formatDuration(breakTime)}
+              </div>
+            )}
+          </div>
+        )}
+
         {/* Check In/Out Times */}
         <div className="grid grid-cols-2 gap-3">
           <div className={`rounded-xl p-4 ${hasCheckedIn ? 'bg-green-50 border-2 border-green-200' : 'bg-slate-50'}`}>
@@ -283,7 +420,7 @@ export default function TodayAttendanceWidget({ user }) {
                   {formatTime(todayRecord.check_in_time)}
                 </div>
                 {isLate() && (
-                  <Badge className="mt-2 bg-red-100 text-red-700">
+                  <Badge variant="secondary" className="mt-2 bg-red-100 text-red-700">
                     Late
                   </Badge>
                 )}
@@ -304,7 +441,7 @@ export default function TodayAttendanceWidget({ user }) {
                   {formatTime(todayRecord.check_out_time)}
                 </div>
                 {isEarly() && (
-                  <Badge className="mt-2 bg-orange-100 text-orange-700">
+                  <Badge variant="secondary" className="mt-2 bg-orange-100 text-orange-700">
                     Early
                   </Badge>
                 )}
@@ -317,20 +454,42 @@ export default function TodayAttendanceWidget({ user }) {
 
         {/* Action Buttons */}
         <div className="grid grid-cols-2 gap-3">
-          <Button
-            onClick={() => checkInMutation.mutate()}
-            disabled={!location || hasCheckedIn || checkInMutation.isPending}
-            className="bg-slate-700 hover:bg-slate-800 text-white"
-            size="lg"
-            title={!location ? 'Location permission required' : ''}
-          >
-            <LogIn className="w-4 h-4 mr-2" />
-            Check In
-          </Button>
+          {!hasCheckedIn ? (
+            <Button
+              onClick={() => checkInMutation.mutate()}
+              disabled={!location || checkInMutation.isPending}
+              className="bg-green-600 hover:bg-green-700 text-white"
+              size="lg"
+              title={!location ? 'Location permission required' : ''}
+            >
+              <LogIn className="w-4 h-4 mr-2" />
+              Check In
+            </Button>
+          ) : hasCheckedIn && !hasCheckedOut ? (
+            <Button
+              onClick={toggleBreak}
+              disabled={breakMutation.isPending}
+              className={isOnBreak ? "bg-blue-600 hover:bg-blue-700" : "bg-orange-600 hover:bg-orange-700"}
+              size="lg"
+            >
+              {isOnBreak ? (
+                <>
+                  <Play className="w-4 h-4 mr-2" />
+                  Resume Work
+                </>
+              ) : (
+                <>
+                  <Pause className="w-4 h-4 mr-2" />
+                  Take Break
+                </>
+              )}
+            </Button>
+          ) : null}
+
           <Button
             onClick={() => checkOutMutation.mutate()}
             disabled={!location || !hasCheckedIn || hasCheckedOut || checkOutMutation.isPending}
-            className="bg-slate-700 hover:bg-slate-800 text-white"
+            className="bg-red-600 hover:bg-red-700 text-white"
             size="lg"
             title={!location ? 'Location permission required' : ''}
           >
