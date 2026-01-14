@@ -38,7 +38,7 @@ export default function FacebookConnectionManager() {
     queryKey: ['facebook-pages'],
     queryFn: () => base44.entities.FacebookPageConnection.list('-created_date'),
     staleTime: 30 * 60 * 1000, // 30 minutes
-    cacheTime: 60 * 60 * 1000, // 1 hour
+    gcTime: 60 * 60 * 1000, // 1 hour
     retry: false,
     refetchOnWindowFocus: false,
     refetchOnMount: false,
@@ -318,12 +318,15 @@ export default function FacebookConnectionManager() {
               </div>
               <ol className="text-xs text-amber-800 space-y-1.5 list-decimal list-inside">
                 <li>Go to <a href="https://developers.facebook.com/tools/explorer" target="_blank" className="underline font-medium">Facebook Graph API Explorer</a></li>
-                <li>Select your App from dropdown (or create one)</li>
-                <li>Click "Generate Access Token"</li>
                 <li>Grant these permissions: <code className="bg-amber-100 px-1 py-0.5 rounded text-[10px]">pages_show_list, leads_retrieval, pages_manage_ads, pages_manage_metadata</code></li>
-                <li>Select your Facebook Page</li>
-                <li>Copy the generated token</li>
-                <li>Add it as FACEBOOK_PAGE_ACCESS_TOKEN in Dashboard Settings</li>
+                <li>Generate and copy a <strong>Page Access Token</strong> for your specific page.</li>
+                <li>Enter the Page ID and Token above to connect.</li>
+                <li className="pt-2 font-semibold">Webhooks for Real-time Sync:</li>
+                <ul className="pl-4 list-disc space-y-1">
+                  <li><strong>Callback URL:</strong> <code className="bg-amber-100 px-1 py-0.5 rounded text-[10px]">{window.location.origin.replace('3000', '5001')}/functions/webhooks/facebook</code></li>
+                  <li><strong>Verify Token:</strong> Use the value of <code className="bg-amber-100 px-1 py-0.5 rounded text-[10px]">FACEBOOK_VERIFY_TOKEN</code> from your backend .env</li>
+                  <li><strong>Subscription:</strong> Subscribe to <code className="bg-amber-100 px-1 py-0.5 rounded text-[10px]">leadgen</code> field in the "Page" object.</li>
+                </ul>
               </ol>
 
               <Button
