@@ -57,6 +57,8 @@ const taskSchema = new mongoose.Schema({
     subtask_effort_points: Number,
     created_by: String, // added to track creator
     reporter_email: String, // added to track reporter
+    attachments: [mongoose.Schema.Types.Mixed], // Array of file objects {name, url, type, size}
+    custom_fields: mongoose.Schema.Types.Mixed, // Key-value pairs for custom fields
     created_at: { type: Date, default: Date.now },
     updated_at: { type: Date, default: Date.now }
 });
