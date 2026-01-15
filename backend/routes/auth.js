@@ -102,16 +102,16 @@ router.get('/me', optionalAuth, async (req, res) => {
                     email: 'admin@sarthi.com',
                     full_name: 'Admin User',
                     role: 'admin',
-                    role_id: 'admin',
+                    role_id: 'super_admin',
                     password_hash: bcryptHash,
                     is_active: true
                 });
             } else {
                 return res.status(404).json({ error: 'User not found' });
             }
-        } else if (email === 'admin@sarthi.com' && (user.role !== 'admin' || user.role_id !== 'admin')) {
+        } else if (email === 'admin@sarthi.com' && !['admin', 'super_admin'].includes(user.role_id)) {
             user.role = 'admin';
-            user.role_id = 'admin';
+            user.role_id = 'super_admin';
             await user.save();
         }
 

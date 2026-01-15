@@ -2,8 +2,8 @@ import React, { useState, useMemo } from 'react';
 import { base44 } from '@/api/base44Client';
 import { useQuery } from '@tanstack/react-query';
 import { format, parseISO, differenceInDays } from 'date-fns';
-import { 
-  Download, Filter, Search, Users, Phone, Mail, Calendar, 
+import {
+  Download, Filter, Search, Users, Phone, Mail, Calendar,
   TrendingUp, AlertCircle, Building, ExternalLink, Eye,
   FileText, CheckCircle2, Clock, Target, Zap
 } from 'lucide-react';
@@ -46,7 +46,6 @@ const STATUS_CONFIG = {
   payment: { label: 'Payment', color: 'bg-green-100 text-green-700' },
   closed_won: { label: 'Closed Won', color: 'bg-green-700 text-white' },
   follow_up: { label: 'Follow Up', color: 'bg-amber-100 text-amber-700' },
-  negotiation: { label: 'Negotiation', color: 'bg-purple-100 text-purple-700' },
   closed_lost: { label: 'Closed Lost', color: 'bg-red-100 text-red-700' },
   lost: { label: 'Lost', color: 'bg-red-100 text-red-700' }
 };
@@ -100,7 +99,7 @@ export default function UnifiedAssignedLeadsReport({ user, allUsers, departments
   // Get visible users based on hierarchy
   const visibleSalesUsers = useMemo(() => {
     if (!user) return [];
-    return getVisibleSalesUsers(user, allUsers, departments).filter(u => 
+    return getVisibleSalesUsers(user, allUsers, departments).filter(u =>
       u.department_id && salesDeptIds.includes(u.department_id)
     );
   }, [user, allUsers, departments, salesDeptIds]);
@@ -113,7 +112,7 @@ export default function UnifiedAssignedLeadsReport({ user, allUsers, departments
     pageLeads.forEach(lead => {
       const assignedDate = lead.assigned_date || lead.import_date || lead.created_date;
       const lastActivityDate = lead.last_activity_date || lead.contacted_date || null;
-      
+
       // Extract campaign/page name from notes
       let campaignName = '-';
       if (lead.notes) {
@@ -181,7 +180,7 @@ export default function UnifiedAssignedLeadsReport({ user, allUsers, departments
   // Apply role-based filtering
   const roleFilteredLeads = useMemo(() => {
     if (!user) return [];
-    
+
     // Admin sees all leads
     if (user.role === 'admin') {
       return allLeads;
@@ -193,8 +192,8 @@ export default function UnifiedAssignedLeadsReport({ user, allUsers, departments
       .map(u => u.email);
 
     // User sees their own leads + subordinates' leads
-    return allLeads.filter(lead => 
-      lead.assigned_to === user.email || 
+    return allLeads.filter(lead =>
+      lead.assigned_to === user.email ||
       subordinateEmails.includes(lead.assigned_to)
     );
   }, [allLeads, user, allUsers]);
@@ -218,7 +217,7 @@ export default function UnifiedAssignedLeadsReport({ user, allUsers, departments
         const assignDate = new Date(lead.assignment_date);
         const now = new Date();
         now.setHours(0, 0, 0, 0);
-        
+
         if (dateRange === 'today') {
           const todayStart = new Date(now);
           const todayEnd = new Date(now);
@@ -252,8 +251,8 @@ export default function UnifiedAssignedLeadsReport({ user, allUsers, departments
         const normalizedSource = lead.lead_source.toLowerCase();
         if (filterSource === 'pages_leads' && lead.source_module !== 'Pages Leads') return false;
         if (filterSource === 'lead_management' && lead.source_module !== 'Lead Management') return false;
-        if (!['pages_leads', 'lead_management'].includes(filterSource) && 
-            !normalizedSource.includes(filterSource.toLowerCase())) return false;
+        if (!['pages_leads', 'lead_management'].includes(filterSource) &&
+          !normalizedSource.includes(filterSource.toLowerCase())) return false;
       }
 
       // Assignee filter
@@ -300,10 +299,10 @@ export default function UnifiedAssignedLeadsReport({ user, allUsers, departments
 
       return true;
     });
-    
+
     return result;
-  }, [roleFilteredLeads, searchQuery, dateRange, customStartDate, customEndDate, 
-      filterSource, filterAssignee, filterStatus, filterContactStatus, filterBuilder, filterFollowUp]);
+  }, [roleFilteredLeads, searchQuery, dateRange, customStartDate, customEndDate,
+    filterSource, filterAssignee, filterStatus, filterContactStatus, filterBuilder, filterFollowUp]);
 
   // Calculate summary stats - based on filtered leads
   const stats = useMemo(() => {
@@ -321,14 +320,14 @@ export default function UnifiedAssignedLeadsReport({ user, allUsers, departments
       const followUpDate = new Date(l.follow_up_date);
       return followUpDate < now;
     }).length;
-    
+
     return { total, active, closed, unfollowed, notContacted, hot, overdueFollowUps };
   }, [filteredLeads]);
 
   // Export to PDF
   const exportToPDF = () => {
     const doc = new jsPDF('landscape');
-    
+
     // Header
     doc.setFillColor(79, 70, 229);
     doc.rect(0, 0, 297, 35, 'F');
@@ -374,7 +373,7 @@ export default function UnifiedAssignedLeadsReport({ user, allUsers, departments
     // Table Rows
     doc.setFont(undefined, 'normal');
     doc.setFontSize(8);
-    
+
     filteredLeads.slice(0, 30).forEach((lead, idx) => {
       if (y > 190) {
         doc.addPage();
@@ -391,7 +390,7 @@ export default function UnifiedAssignedLeadsReport({ user, allUsers, departments
       doc.text((STATUS_CONFIG[lead.lead_status.toLowerCase()]?.label || lead.lead_status).substring(0, 15), 170, y);
       doc.text((CONTACT_STATUS_CONFIG[lead.contact_status]?.label || lead.contact_status).substring(0, 18), 205, y);
       doc.text(lead.last_activity_date ? format(new Date(lead.last_activity_date), 'MMM d, yyyy').substring(0, 12) : '-', 250, y);
-      
+
       y += 6;
     });
 
@@ -412,9 +411,9 @@ export default function UnifiedAssignedLeadsReport({ user, allUsers, departments
   // Export to Excel (CSV)
   const exportToExcel = () => {
     const headers = [
-      'Lead Name', 'Phone', 'Email', 'Source', 'Source Module', 
-      'Campaign/Page', 'Assigned To', 'Reporting To', 'Lead Status', 
-      'Contact Status', 'Assignment Date', 'Last Activity', 
+      'Lead Name', 'Phone', 'Email', 'Source', 'Source Module',
+      'Campaign/Page', 'Assigned To', 'Reporting To', 'Lead Status',
+      'Contact Status', 'Assignment Date', 'Last Activity',
       'Follow-up Date', 'Builder/Project', 'Location'
     ];
 
@@ -548,7 +547,7 @@ export default function UnifiedAssignedLeadsReport({ user, allUsers, departments
           </CardContent>
         </Card>
 
-        <Card 
+        <Card
           className="bg-gradient-to-br from-rose-500 to-red-600 text-white border-0 cursor-pointer hover:shadow-lg transition-all"
           onClick={() => setFilterFollowUp('overdue')}
         >
@@ -748,8 +747,8 @@ export default function UnifiedAssignedLeadsReport({ user, allUsers, departments
           </div>
 
           <div className="mt-4 flex justify-end">
-            <Button 
-              variant="outline" 
+            <Button
+              variant="outline"
               onClick={() => {
                 setSearchQuery('');
                 setDateRange('all');
@@ -859,8 +858,8 @@ export default function UnifiedAssignedLeadsReport({ user, allUsers, departments
                         </TableCell>
                         <TableCell>
                           <Badge className={
-                            lead.source_module === 'Pages Leads' 
-                              ? 'bg-blue-100 text-blue-700' 
+                            lead.source_module === 'Pages Leads'
+                              ? 'bg-blue-100 text-blue-700'
                               : 'bg-purple-100 text-purple-700'
                           }>
                             {lead.source_module}
@@ -910,8 +909,8 @@ export default function UnifiedAssignedLeadsReport({ user, allUsers, departments
                           </Badge>
                         </TableCell>
                         <TableCell className="text-sm text-slate-600">
-                          {lead.assignment_date 
-                            ? format(new Date(lead.assignment_date), 'MMM d, yyyy') 
+                          {lead.assignment_date
+                            ? format(new Date(lead.assignment_date), 'MMM d, yyyy')
                             : '-'}
                         </TableCell>
                         <TableCell>

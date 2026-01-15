@@ -5,6 +5,7 @@ import path from 'path'
 // https://vite.dev/config/
 export default defineConfig({
   logLevel: 'info', // Show info level logs
+  envDir: '../',
   plugins: [
     react(),
   ],
