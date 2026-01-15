@@ -17,6 +17,7 @@ import FinanceOverview from './pages/FinanceOverview';
 import FinancialReports from './pages/FinancialReports';
 import GroupManagement from './pages/GroupManagement';
 import Home from './pages/Home';
+import HRDashboard from './pages/HRDashboard';
 import ITSupport from './pages/ITSupport';
 import LeadDetail from './pages/LeadDetail';
 import LeadManagement from './pages/LeadManagement';
@@ -26,6 +27,8 @@ import LeaveManagement from './pages/LeaveManagement';
 import LeaveSettings from './pages/LeaveSettings';
 import LogSalesActivity from './pages/LogSalesActivity';
 import Marketing from './pages/Marketing';
+import MarketingCalendarPage from './pages/MarketingCalendarPage';
+import MarketingCategories from './pages/MarketingCategories';
 import MarketingExpenses from './pages/MarketingExpenses';
 import MarketingKPITracking from './pages/MarketingKPITracking';
 import MarketingReports from './pages/MarketingReports';
@@ -43,6 +46,7 @@ import PettyCashReimbursement from './pages/PettyCashReimbursement';
 import PrivacyPolicy from './pages/PrivacyPolicy';
 import Profile from './pages/Profile';
 import ProjectBoard from './pages/ProjectBoard';
+import Recruitment from './pages/Recruitment';
 import ProjectPnL from './pages/ProjectPnL';
 import Projects from './pages/Projects';
 import RELeadCapture from './pages/RELeadCapture';
@@ -66,6 +70,9 @@ import TaskList from './pages/TaskList';
 import Team from './pages/Team';
 import TeamCostRevenue from './pages/TeamCostRevenue';
 import TeamTasks from './pages/TeamTasks';
+import Timesheet from './pages/Timesheet';
+import TimesheetApproval from './pages/TimesheetApproval';
+import FreelancerReports from './pages/FreelancerReports';
 import UserManagement from './pages/UserManagement';
 import __Layout from './Layout.jsx';
 
@@ -90,6 +97,7 @@ export const PAGES = {
     "FinancialReports": FinancialReports,
     "GroupManagement": GroupManagement,
     "Home": Home,
+    "HRDashboard": HRDashboard,
     "ITSupport": ITSupport,
     "LeadDetail": LeadDetail,
     "LeadManagement": LeadManagement,
@@ -99,6 +107,8 @@ export const PAGES = {
     "LeaveSettings": LeaveSettings,
     "LogSalesActivity": LogSalesActivity,
     "Marketing": Marketing,
+    "MarketingCalendarPage": MarketingCalendarPage,
+    "MarketingCategories": MarketingCategories,
     "MarketingExpenses": MarketingExpenses,
     "MarketingKPITracking": MarketingKPITracking,
     "MarketingReports": MarketingReports,
@@ -118,6 +128,7 @@ export const PAGES = {
     "ProjectBoard": ProjectBoard,
     "ProjectPnL": ProjectPnL,
     "Projects": Projects,
+    "Recruitment": Recruitment,
     "RELeadCapture": RELeadCapture,
     "Receivables": Receivables,
     "Reports": Reports,
@@ -139,6 +150,9 @@ export const PAGES = {
     "Team": Team,
     "TeamCostRevenue": TeamCostRevenue,
     "TeamTasks": TeamTasks,
+    "Timesheet": Timesheet,
+    "TimesheetApproval": TimesheetApproval,
+    "FreelancerReports": FreelancerReports,
     "UserManagement": UserManagement,
 }
 

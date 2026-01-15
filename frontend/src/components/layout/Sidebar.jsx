@@ -34,7 +34,9 @@ import {
   Wallet,
   MessageSquare,
   DollarSign,
-  HeadphonesIcon
+  HeadphonesIcon,
+  Clock,
+  UserPlus
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { ScrollArea } from '@/components/ui/scroll-area';
@@ -53,13 +55,14 @@ const domainIcons = {
 };
 
 export default function Sidebar({ projects = [], currentPage, user, collapsed, onToggle, departments = [] }) {
-  const { can } = usePermissions();
+  const { can, isAdmin: isAdminFunc } = usePermissions();
   const [projectsOpen, setProjectsOpen] = useState(true);
   const [adminOpen, setAdminOpen] = useState(true);
   const [tasksOpen, setTasksOpen] = useState(true);
   const [salesOpen, setSalesOpen] = useState(true);
   const [leadsOpen, setLeadsOpen] = useState(true);
   const [accountsOpen, setAccountsOpen] = useState(true);
+  const [marketingOpen, setMarketingOpen] = useState(true);
 
   // Check if user is in a sales department
   const salesDeptIds = Array.isArray(departments)
@@ -88,12 +91,17 @@ export default function Sidebar({ projects = [], currentPage, user, collapsed, o
     .map(d => d.id || d._id);
   const isHRUser = user?.department_id && hrDeptIds.includes(user.department_id);
 
+  const isFreelancer = user?.role_id === 'freelancer' || user?.role === 'freelancer';
+
   const isSalesExec = isSalesExecutive(user);
   const isSalesMgr = isSalesManager(user);
   const canAccessReportsProjects = canAccessReportsAndProjects(user, departments);
 
   const navItems = [
     { name: 'Dashboard', icon: LayoutDashboard, page: 'Dashboard' },
+    { name: 'Timesheet', icon: Clock, page: 'Timesheet', freelancerOnly: true },
+    { name: 'HR Dashboard', icon: UserCheck, page: 'HRDashboard', hrOnly: true },
+    { name: 'Recruitment', icon: UserPlus, page: 'Recruitment', hrOnly: true },
     { name: 'Inventory Bucket', icon: Database, page: 'MasterData', salesOnly: true },
     { name: 'Marketing Collateral', icon: Video, page: 'Marketing', marketingOnly: true },
     { name: 'Finance', icon: Wallet, page: 'FinanceDashboard', financeOnly: true },
@@ -109,6 +117,8 @@ export default function Sidebar({ projects = [], currentPage, user, collapsed, o
   ];
 
   const adminItems = [
+    { name: 'Timesheet Approval', icon: Clock, page: 'TimesheetApproval' },
+    { name: 'Freelancer Reports', icon: BarChart3, page: 'FreelancerReports' },
     { name: 'Roles', icon: Shield, page: 'RoleManagement' },
     { name: 'Users', icon: Users, page: 'UserManagement' },
     { name: 'Builders', icon: Building2, page: 'BuilderManagement' },
@@ -301,6 +311,63 @@ export default function Sidebar({ projects = [], currentPage, user, collapsed, o
             </div>
           )}
 
+          {/* Marketing Section */}
+          {!collapsed && (isMarketingUser || isITUser || isAdmin) && (
+            <div className="mt-6 px-3">
+              <Collapsible open={marketingOpen} onOpenChange={setMarketingOpen}>
+                <div className="flex items-center justify-between mb-2">
+                  <CollapsibleTrigger className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wider text-slate-500 hover:text-slate-300 w-full">
+                    {marketingOpen ? <ChevronDown className="w-3 h-3" /> : <ChevronRight className="w-3 h-3" />}
+                    Marketing
+                  </CollapsibleTrigger>
+                </div>
+                <CollapsibleContent className="space-y-1">
+                  <Link
+                    to={createPageUrl('Marketing')}
+                    onClick={() => window.innerWidth < 1024 && onToggle()}
+                    className={cn(
+                      "flex items-center gap-3 px-3 py-2.5 rounded-lg transition-all duration-200",
+                      currentPage === 'Marketing'
+                        ? "bg-indigo-600 text-white shadow-lg shadow-indigo-500/25"
+                        : "text-slate-400 hover:text-white hover:bg-slate-800"
+                    )}
+                  >
+                    <Video className="w-5 h-5 flex-shrink-0" />
+                    <span className="font-medium">Video Workflow</span>
+                  </Link>
+                  <Link
+                    to={createPageUrl('MarketingCalendarPage')}
+                    onClick={() => window.innerWidth < 1024 && onToggle()}
+                    className={cn(
+                      "flex items-center gap-3 px-3 py-2.5 rounded-lg transition-all duration-200",
+                      currentPage === 'MarketingCalendarPage'
+                        ? "bg-indigo-600 text-white shadow-lg shadow-indigo-500/25"
+                        : "text-slate-400 hover:text-white hover:bg-slate-800"
+                    )}
+                  >
+                    <Calendar className="w-5 h-5 flex-shrink-0" />
+                    <span className="font-medium">Marketing Calendar</span>
+                  </Link>
+                  {(can('marketing_category', 'read') || isAdmin) && (
+                    <Link
+                      to={createPageUrl('MarketingCategories')}
+                      onClick={() => window.innerWidth < 1024 && onToggle()}
+                      className={cn(
+                        "flex items-center gap-3 px-3 py-2.5 rounded-lg transition-all duration-200",
+                        currentPage === 'MarketingCategories'
+                          ? "bg-indigo-600 text-white shadow-lg shadow-indigo-500/25"
+                          : "text-slate-400 hover:text-white hover:bg-slate-800"
+                      )}
+                    >
+                      <Layers className="w-5 h-5 flex-shrink-0" />
+                      <span className="font-medium">Categories</span>
+                    </Link>
+                  )}
+                </CollapsibleContent>
+              </Collapsible>
+            </div>
+          )}
+
           {/* Accounts Section */}
           {!collapsed && isAdmin && (
             <div className="mt-6 px-3">
@@ -394,7 +461,9 @@ export default function Sidebar({ projects = [], currentPage, user, collapsed, o
               // Skip finance items if user doesn't have permission
               if (item.financeOnly && !can('finance_dashboard', 'read')) return null;
               // Skip HR-only items for non-HR users (unless admin)
-              if (item.hrOnly && !isHRUser && !isAdmin) return null;
+              if (item.hrOnly && user?.role_id !== 'hr' && !isAdmin) return null;
+              // Show timesheet only for freelancers
+              if (item.freelancerOnly && !isFreelancer) return null;
               // Hide items from Sales Executives
               if (item.hiddenForSalesExec && isSalesExec) return null;
               // Hide Reports and Projects from Sales Managers and Executives
@@ -422,7 +491,7 @@ export default function Sidebar({ projects = [], currentPage, user, collapsed, o
           </div>
 
           {/* Admin Section */}
-          {isAdmin && !collapsed && (
+          {(isAdmin || user?.role_id === 'hr' || isHRUser) && !collapsed && (
             <div className="mt-6 px-3">
               <Collapsible open={adminOpen} onOpenChange={setAdminOpen}>
                 <div className="flex items-center justify-between mb-2">

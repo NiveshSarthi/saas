@@ -22,8 +22,8 @@ router.post('/:entity/filter', async (req, res) => {
         delete filters._sort;
         delete filters._limit;
 
-        // Map 'id' to '_id' for Mongoose find
-        if (filters.id) {
+        // Map 'id' to '_id' for Mongoose find, BUT ONLY if 'id' is not a dedicated field in the schema
+        if (filters.id && !Model.schema.paths.id) {
             filters._id = filters.id;
             delete filters.id;
         }

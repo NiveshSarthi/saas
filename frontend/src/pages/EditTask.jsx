@@ -290,6 +290,14 @@ export default function EditTask() {
     }
   };
 
+  const handleBack = () => {
+    if (window.history.length > 1) {
+      window.history.back();
+    } else {
+      navigate('/');
+    }
+  };
+
   const handleRemoveTag = (tag) => {
     setFormData(prev => ({ ...prev, tags: prev.tags.filter(t => t !== tag) }));
   };
@@ -319,7 +327,7 @@ export default function EditTask() {
       <div className="max-w-6xl mx-auto p-4 sm:p-6 lg:p-8">
         {/* Header */}
         <div className="mb-8">
-          <Button variant="ghost" className="mb-4 hover:bg-white/50" onClick={() => navigate(-1)}>
+          <Button variant="ghost" className="mb-4 hover:bg-white/50" onClick={handleBack}>
             <ArrowLeft className="w-4 h-4 mr-2" />
             Back to Task
           </Button>
@@ -713,7 +721,7 @@ export default function EditTask() {
           </div>
 
           <div className="flex justify-end gap-3">
-            <Button type="button" variant="outline" onClick={() => navigate(-1)}>Cancel</Button>
+            <Button type="button" variant="outline" onClick={handleBack}>Cancel</Button>
             <Button
               type="submit"
               className="bg-indigo-600 hover:bg-indigo-700"
