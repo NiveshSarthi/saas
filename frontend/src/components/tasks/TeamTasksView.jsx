@@ -88,8 +88,9 @@ export default function TeamTasksView() {
     },
   });
 
-  const usersFromEntity = teamData?.users || [];
-  const invitations = teamData?.invitations || [];
+  /* Robustly handle teamData structure */
+  const usersFromEntity = teamData?.users || teamData?.data?.users || [];
+  const invitations = teamData?.invitations || teamData?.data?.invitations || [];
 
   const users = useMemo(() => [
     ...usersFromEntity,
@@ -264,14 +265,21 @@ export default function TeamTasksView() {
     }
     // Assignees filter
     if (advancedFilters.assignees?.length > 0) {
-      const taskAssignees = task.assignees || (task.assignee_email ? [task.assignee_email] : []);
-      if (!advancedFilters.assignees.some(email => taskAssignees.includes(email))) {
+      const taskAssignees = task.assignees?.map(e => e.toLowerCase()) ||
+        (task.assignee_email ? [task.assignee_email.toLowerCase()] : []);
+
+      const filterAssigneesLower = advancedFilters.assignees.map(e => e.toLowerCase());
+
+      if (!filterAssigneesLower.some(email => taskAssignees.includes(email))) {
         return false;
       }
     }
     // Created by filter
-    if (advancedFilters.created_by?.length > 0 && !advancedFilters.created_by.includes(task.created_by)) {
-      return false;
+    if (advancedFilters.created_by?.length > 0) {
+      const filterCreatorsLower = advancedFilters.created_by.map(e => e.toLowerCase());
+      if (!filterCreatorsLower.includes(task.created_by?.toLowerCase())) {
+        return false;
+      }
     }
     // Project filter
     if (advancedFilters.project_id && task.project_id !== advancedFilters.project_id) {
@@ -322,17 +330,27 @@ export default function TeamTasksView() {
 
       // Role-based filtering: Non-admins only see their own tasks
       if (user && user.role !== 'admin') {
-        const isMyTask = task.assignee_email === user.email ||
-          (task.assignees && task.assignees.includes(user.email)) ||
-          (task.created_by === user.email && !task.assignee_email && (!task.assignees || task.assignees.length === 0));
+        const userEmailLower = user.email.toLowerCase();
+        const taskAssigneeEmailLower = task.assignee_email?.toLowerCase();
+        const taskAssigneesLower = task.assignees?.map(e => e.toLowerCase()) || [];
+        const taskCreatorLower = task.created_by?.toLowerCase();
+
+        const isMyTask = taskAssigneeEmailLower === userEmailLower ||
+          taskAssigneesLower.includes(userEmailLower) ||
+          (taskCreatorLower === userEmailLower && !task.assignee_email && taskAssigneesLower.length === 0);
         if (!isMyTask) return false;
       }
 
       // View filter - My Tasks (for admins)
       if (filters.view === 'my_tasks' && user && user.role === 'admin') {
-        const isMyTask = task.assignee_email === user.email ||
-          (task.assignees && task.assignees.includes(user.email)) ||
-          (task.created_by === user.email && !task.assignee_email && (!task.assignees || task.assignees.length === 0));
+        const userEmailLower = user.email.toLowerCase();
+        const taskAssigneeEmailLower = task.assignee_email?.toLowerCase();
+        const taskAssigneesLower = task.assignees?.map(e => e.toLowerCase()) || [];
+        const taskCreatorLower = task.created_by?.toLowerCase();
+
+        const isMyTask = taskAssigneeEmailLower === userEmailLower ||
+          taskAssigneesLower.includes(userEmailLower) ||
+          (taskCreatorLower === userEmailLower && !task.assignee_email && taskAssigneesLower.length === 0);
         if (!isMyTask) return false;
       }
 
@@ -340,7 +358,7 @@ export default function TeamTasksView() {
       if (filters.search) {
         const searchLower = filters.search.toLowerCase();
         const matchesTitle = task.title?.toLowerCase().includes(searchLower);
-        const assignee = users.find(u => u.email === task.assignee_email);
+        const assignee = users.find(u => u.email?.toLowerCase() === task.assignee_email?.toLowerCase());
         const matchesAssignee = assignee?.full_name?.toLowerCase().includes(searchLower) ||
           task.assignee_email?.toLowerCase().includes(searchLower);
 
@@ -350,16 +368,20 @@ export default function TeamTasksView() {
       // Member Filter
       if (filters.member !== 'all') {
         const taskAssignees = task.assignees && task.assignees.length > 0
-          ? task.assignees
-          : task.assignee_email ? [task.assignee_email] : [];
+          ? task.assignees.map(e => e.toLowerCase())
+          : task.assignee_email ? [task.assignee_email.toLowerCase()] : [];
 
         if (filters.member === 'unassigned' && taskAssignees.length > 0) return false;
-        if (filters.member !== 'unassigned' && !taskAssignees.includes(filters.member)) return false;
+
+        if (filters.member !== 'unassigned') {
+          const filterMemberLower = filters.member.toLowerCase();
+          if (!taskAssignees.includes(filterMemberLower)) return false;
+        }
       }
 
       // Department Filter
       if (filters.department !== 'all') {
-        const assignee = users.find(u => u.email === task.assignee_email);
+        const assignee = users.find(u => u.email?.toLowerCase() === task.assignee_email?.toLowerCase());
         if (!assignee || assignee.department_id !== filters.department) return false;
       }
 
@@ -407,8 +429,8 @@ export default function TeamTasksView() {
             bValue = (b.title || '').toLowerCase();
             break;
           case 'assignee':
-            const aAssignee = users.find(u => u.email === a.assignee_email);
-            const bAssignee = users.find(u => u.email === b.assignee_email);
+            const aAssignee = users.find(u => u.email?.toLowerCase() === a.assignee_email?.toLowerCase());
+            const bAssignee = users.find(u => u.email?.toLowerCase() === b.assignee_email?.toLowerCase());
             aValue = aAssignee?.full_name?.toLowerCase() || '';
             bValue = bAssignee?.full_name?.toLowerCase() || '';
             break;
@@ -639,12 +661,113 @@ export default function TeamTasksView() {
     doc.text(`${overdueSubtasks} / ${overdueParentTasks}`, 20 + (statsBoxWidth + spacing) * 3, y + 10);
     doc.setFontSize(6);
     doc.setFont(undefined, 'normal');
-    doc.text('Subtasks / Tasks', 20 + (statsBoxWidth + spacing) * 3, y + 15.5);
+    doc.text('Overdue', 20 + (statsBoxWidth + spacing) * 3, y + 17.5);
     doc.text('Overdue', 20 + (statsBoxWidth + spacing) * 3, y + 17.5);
 
     y += 30;
 
+    // ==========================================
+    // NEW SECTION: Tasks Only (Top Level)
+    // ==========================================
+    doc.setTextColor(0, 0, 0);
+    doc.setFontSize(12);
+    doc.setFont(undefined, 'bold');
+    doc.text('Tasks', 14, y);
+    y += 7;
+
+    // Helper to draw table header
+    const drawTableHeader = (currentY) => {
+      doc.setFillColor(248, 250, 252);
+      doc.rect(14, currentY - 4, 182, 8, 'F');
+      doc.setDrawColor(226, 232, 240);
+      doc.setLineWidth(0.5);
+      doc.rect(14, currentY - 4, 182, 8, 'S');
+
+      doc.setTextColor(0, 0, 0);
+      doc.setFontSize(9);
+      doc.setFont(undefined, 'bold');
+      doc.text('S.No', 16, currentY);
+      doc.text('Task', 28, currentY); // Changed from Task / Subtask since it's just Tasks
+      doc.text('Assignee', 95, currentY);
+      doc.text('Status', 130, currentY);
+      doc.text('Priority', 155, currentY);
+      doc.text('Due Date', 175, currentY);
+    };
+
+    drawTableHeader(y);
+    y += 8;
+
+    const parentTasksList = filteredByDept.filter(t => !t.parent_task_id);
+
+    parentTasksList.forEach((task, index) => {
+      if (y > 275) {
+        doc.addPage();
+        y = 20;
+        drawTableHeader(y);
+        y += 8;
+      }
+
+      const taskAssignees = task.assignees && task.assignees.length > 0
+        ? task.assignees
+        : task.assignee_email ? [task.assignee_email] : [];
+
+      // Row border
+      doc.setDrawColor(226, 232, 240);
+      doc.setLineWidth(0.3);
+      doc.line(14, y + 3, 196, y + 3);
+
+      // Serial Number
+      doc.setTextColor(0, 0, 0);
+      doc.setFontSize(8);
+      doc.setFont(undefined, 'normal');
+      doc.text((index + 1).toString(), 16, y);
+
+      // Task Title
+      doc.setFont(undefined, 'bold');
+      let taskTitle = task.title || 'Untitled Task';
+      if (taskTitle.length > 50) taskTitle = taskTitle.substring(0, 47) + '...';
+      doc.text(taskTitle, 28, y);
+
+      // Assignee
+      doc.setFont(undefined, 'normal');
+      let assigneeText = 'Unassigned';
+      if (taskAssignees.length > 0) {
+        const primaryAssignee = users.find(u => u.email === taskAssignees[0]);
+        const primaryName = primaryAssignee?.full_name || taskAssignees[0].split('@')[0];
+        assigneeText = taskAssignees.length > 1
+          ? `${primaryName} +${taskAssignees.length - 1}`
+          : primaryName;
+      }
+      const assigneeShort = assigneeText.length > 20 ? assigneeText.substring(0, 17) + '...' : assigneeText;
+      doc.text(assigneeShort, 95, y);
+
+      // Status
+      const statusLabel = statusConfig[task.status]?.label || task.status;
+      doc.text(statusLabel, 130, y);
+
+      // Priority
+      const priorityLabel = priorityConfig[task.priority]?.label || task.priority;
+      doc.text(priorityLabel, 155, y);
+
+      // Due Date
+      const dueDate = task.due_date ? format(new Date(task.due_date), 'MMM d, yyyy') : '-';
+      doc.text(dueDate, 175, y);
+
+      y += 7;
+    });
+
+    y += 10; // Space between sections
+
+    // ==========================================
+    // EXISTING SECTION: Tasks & Subtasks
+    // ==========================================
+
     // Tasks Table Section
+    if (y > 260) {
+      doc.addPage();
+      y = 20;
+    }
+
     doc.setTextColor(0, 0, 0);
     doc.setFontSize(12);
     doc.setFont(undefined, 'bold');
