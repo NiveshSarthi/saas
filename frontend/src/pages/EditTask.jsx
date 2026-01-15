@@ -12,7 +12,12 @@ import {
   Flag,
   Plus,
   X,
-  Loader2
+  Loader2,
+  Paperclip,
+  Video,
+  Tag,
+  Layers,
+  Users
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -40,6 +45,9 @@ import AITaskSuggestions from '@/components/tasks/AITaskSuggestions';
 import AIAssigneeSuggestions from '@/components/tasks/AIAssigneeSuggestions';
 import AICompletionPredictor from '@/components/tasks/AICompletionPredictor';
 import UserMultiSelect from '@/components/common/UserMultiSelect';
+import CustomFieldsForm from '@/components/tasks/CustomFieldsForm';
+import FileUpload from '@/components/common/FileUpload';
+import { notifyMultipleAssignees, MODULES } from '@/components/utils/notificationService';
 
 export default function EditTask() {
   const navigate = useNavigate();
@@ -50,6 +58,7 @@ export default function EditTask() {
   const [tagInput, setTagInput] = useState('');
   const [startDateOpen, setStartDateOpen] = useState(false);
   const [dueDateOpen, setDueDateOpen] = useState(false);
+  const [taskCategory, setTaskCategory] = useState('normal');
 
   const { data: task, isLoading: taskLoading } = useQuery({
     queryKey: ['edit-task', taskId],
@@ -86,7 +95,14 @@ export default function EditTask() {
         recurrence_type: task.recurrence_type || null,
         recurrence_day_of_week: task.recurrence_day_of_week || null,
         recurrence_day_of_month: task.recurrence_day_of_month || null,
+        custom_fields: task.custom_fields || {},
+        attachments: task.attachments || [],
+        marketing_task_id: task.marketing_task_id || null,
       });
+
+      if (task.marketing_task_id) {
+        setTaskCategory('marketing');
+      }
     }
   }, [task]);
 
@@ -103,10 +119,10 @@ export default function EditTask() {
     },
   });
 
-  const usersFromEntity = teamData?.users || [];
-  const invitations = teamData?.invitations || [];
+  const usersFromEntity = teamData?.users || teamData?.data?.users || [];
+  const invitations = teamData?.invitations || teamData?.data?.invitations || [];
 
-  // Normalize user shape so downstream code can rely on `id`, `email`, `department_id`
+  // Normalize user shape
   const normalizedUsersFromEntity = (usersFromEntity || []).map(u => ({
     ...u,
     id: u.id || u._id || (u.email && String(u.email).toLowerCase()),
@@ -143,14 +159,9 @@ export default function EditTask() {
     queryFn: () => base44.entities.Group.list(),
   });
 
-  const { data: taskGroups = [] } = useQuery({
-    queryKey: ['task-groups', formData?.project_id],
-    queryFn: async () => {
-      if (!formData?.project_id) return [];
-      const groups = await base44.entities.TaskGroup.filter({ project_id: formData.project_id });
-      return groups;
-    },
-    enabled: !!formData?.project_id,
+  const { data: customFields = [] } = useQuery({
+    queryKey: ['custom-fields'],
+    queryFn: () => base44.entities.CustomField.list('order'),
   });
 
   const { data: projectTasks = [] } = useQuery({
@@ -158,6 +169,12 @@ export default function EditTask() {
     queryFn: () => base44.entities.Task.filter({ project_id: formData.project_id }, '-created_date', 20),
     enabled: !!formData?.project_id,
   });
+
+  const selectedProject = projects.find(p => p.id === formData?.project_id);
+  const projectDomain = selectedProject?.domain || 'generic';
+  const relevantCustomFields = customFields.filter(f =>
+    f.domain === 'all' || f.domain === projectDomain
+  );
 
   const [user, setUser] = useState(null);
   const queryClient = useQueryClient();
@@ -267,7 +284,7 @@ export default function EditTask() {
         qc.invalidateQueries({ queryKey: ['task', taskId] });
         qc.invalidateQueries({ queryKey: ['my-tasks'] });
         qc.invalidateQueries({ queryKey: ['project-tasks-for-ai', formData?.project_id] });
-      } catch (e) {}
+      } catch (e) { }
 
       navigate(createPageUrl(`TaskDetail?id=${task.id || task._id}`));
     },
@@ -279,15 +296,9 @@ export default function EditTask() {
       ...formData,
       estimated_hours: formData.estimated_hours ? parseFloat(formData.estimated_hours) : null,
       story_points: formData.story_points ? parseInt(formData.story_points) : null,
+      assignee_email: formData.assignees.length > 0 ? formData.assignees[0] : null,
     };
     updateTaskMutation.mutate(dataToSubmit);
-  };
-
-  const handleAddTag = () => {
-    if (tagInput.trim() && !formData.tags.includes(tagInput.trim())) {
-      setFormData(prev => ({ ...prev, tags: [...prev.tags, tagInput.trim()] }));
-      setTagInput('');
-    }
   };
 
   const handleBack = () => {
@@ -298,447 +309,489 @@ export default function EditTask() {
     }
   };
 
-  const handleRemoveTag = (tag) => {
-    setFormData(prev => ({ ...prev, tags: prev.tags.filter(t => t !== tag) }));
-  };
-
   if (taskLoading || !formData) {
     return (
-      <div className="max-w-5xl mx-auto p-4 sm:p-6 lg:p-8">
-        <Skeleton className="h-10 w-64 mb-6" />
-        <Skeleton className="h-[600px] w-full rounded-xl" />
+      <div className="min-h-screen bg-gradient-to-br from-indigo-50 via-purple-50 to-pink-50 p-8 flex items-center justify-center">
+        <div className="flex flex-col items-center">
+          <Loader2 className="w-10 h-10 text-indigo-500 animate-spin mb-4" />
+          <p className="text-slate-500">Loading task details...</p>
+        </div>
       </div>
     );
   }
 
   if (!task) {
     return (
-      <div className="p-6 lg:p-8 text-center">
-        <h2 className="text-xl font-semibold text-slate-900">Task not found</h2>
-        <Link to={createPageUrl('MyTasks')}>
-          <Button className="mt-4">Back to Tasks</Button>
-        </Link>
+      <div className="min-h-screen bg-slate-50 flex items-center justify-center p-8">
+        <div className="text-center">
+          <h2 className="text-2xl font-bold text-slate-800 mb-2">Task Not Found</h2>
+          <p className="text-slate-500 mb-6">The task you are looking for does not exist or has been deleted.</p>
+          <Link to={createPageUrl('MyTasks')}>
+            <Button>Back to Tasks</Button>
+          </Link>
+        </div>
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-50 via-indigo-50/30 to-purple-50/20">
-      <div className="max-w-6xl mx-auto p-4 sm:p-6 lg:p-8">
+    <div className="min-h-screen bg-gradient-to-br from-indigo-50 via-purple-50 to-pink-50 dark:from-slate-950 dark:via-indigo-950/30 dark:to-slate-900 pb-20">
+      <div className="max-w-7xl mx-auto p-4 sm:p-6 lg:p-8">
+
         {/* Header */}
-        <div className="mb-8">
-          <Button variant="ghost" className="mb-4 hover:bg-white/50" onClick={handleBack}>
+        <div className="mb-10 animate-in fade-in slide-in-from-top-4 duration-700">
+          <Button
+            variant="ghost"
+            className="mb-6 hover:bg-white/50 dark:hover:bg-slate-800/50 backdrop-blur-sm -ml-2 text-slate-600 hover:text-indigo-600 transition-all"
+            onClick={handleBack}
+          >
             <ArrowLeft className="w-4 h-4 mr-2" />
             Back to Task
           </Button>
-          <div className="flex items-center gap-4">
-            <div className="p-3 bg-gradient-to-br from-indigo-500 to-purple-600 rounded-2xl shadow-lg">
-              <ArrowLeft className="w-8 h-8 text-white" />
+
+          <div className="flex flex-col md:flex-row md:items-center justify-between gap-6">
+            <div className="flex items-center gap-5">
+              <div className="relative group">
+                <div className="absolute -inset-1 bg-gradient-to-r from-indigo-600 to-purple-600 rounded-2xl blur opacity-30 group-hover:opacity-60 transition duration-500"></div>
+                <div className="relative p-4 bg-white dark:bg-slate-800 rounded-2xl shadow-lg border border-indigo-100 dark:border-slate-700">
+                  <ArrowLeft className="w-8 h-8 text-indigo-600 dark:text-indigo-400 rotate-180" /> {/* Using generic icon for 'Edit' feel */}
+                </div>
+              </div>
+              <div>
+                <h1 className="text-4xl font-extrabold text-transparent bg-clip-text bg-gradient-to-r from-indigo-600 via-purple-600 to-pink-600 dark:from-indigo-400 dark:via-purple-400 dark:to-pink-400 tracking-tight">
+                  Edit Task
+                </h1>
+                <p className="text-slate-500 dark:text-slate-400 mt-2 font-medium">Update task details and assignments</p>
+              </div>
             </div>
-            <div>
-              <h1 className="text-3xl font-bold text-slate-900 bg-gradient-to-r from-indigo-600 to-purple-600 bg-clip-text text-transparent">
-                Edit Task
-              </h1>
-              <p className="text-slate-600 mt-1">Update and refine your task details</p>
+
+            <div className="flex gap-3">
+              <Button
+                variant="outline"
+                onClick={handleBack}
+                className="border-slate-200 hover:bg-white/50 hover:border-slate-300 dark:border-slate-700 dark:hover:bg-slate-800"
+              >
+                Cancel
+              </Button>
+              <Button
+                onClick={handleSubmit}
+                disabled={updateTaskMutation.isPending || !formData.title}
+                className="bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-700 hover:to-purple-700 text-white shadow-lg shadow-indigo-200/50 dark:shadow-none transition-all hover:scale-[1.02] active:scale-[0.98]"
+              >
+                {updateTaskMutation.isPending ? (
+                  <>
+                    <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                    Saving Changes...
+                  </>
+                ) : (
+                  <>
+                    <Save className="w-4 h-4 mr-2" />
+                    Save Changes
+                  </>
+                )}
+              </Button>
             </div>
           </div>
         </div>
 
-        <form onSubmit={handleSubmit} className="space-y-6">
-          {/* Main Form Card */}
-          <div className="bg-white/80 backdrop-blur-sm rounded-3xl shadow-xl border border-slate-200/50 overflow-hidden">
-            {/* Header Section */}
-            <div className="bg-gradient-to-r from-indigo-500 to-purple-600 p-6 sm:p-8">
-              <h2 className="text-xl font-bold text-white mb-2">Task Details</h2>
-              <p className="text-indigo-100 text-sm">Core information about your task</p>
+        <form onSubmit={handleSubmit} className="space-y-8">
+          {/* Main Layout Grid */}
+          <div className="grid grid-cols-1 xl:grid-cols-3 gap-8">
+
+            {/* Left Column: Task Details */}
+            <div className="xl:col-span-2 space-y-8">
+              {/* Task Details Card */}
+              <div className="bg-white/70 dark:bg-slate-900/70 backdrop-blur-xl rounded-3xl p-1 shadow-2xl shadow-indigo-100/50 dark:shadow-none border border-white/50 dark:border-slate-800 ring-1 ring-white/50 animate-in fade-in slide-in-from-bottom-8 duration-700 delay-200">
+                <div className="bg-gradient-to-b from-white/50 to-white/10 dark:from-slate-800/50 dark:to-slate-900/10 rounded-[1.4rem] p-6 sm:p-8 space-y-6">
+                  <div className="flex items-center gap-3 mb-2">
+                    <div className="p-2 bg-indigo-100 dark:bg-indigo-900/30 rounded-lg text-indigo-600 dark:text-indigo-400">
+                      <Tag className="w-5 h-5" />
+                    </div>
+                    <h2 className="text-xl font-bold text-slate-800 dark:text-slate-100">Task Information</h2>
+                  </div>
+
+                  <div className="space-y-4">
+                    <div className="space-y-2">
+                      <Label className="text-sm font-medium text-slate-700 dark:text-slate-300">Title <span className="text-red-500">*</span></Label>
+                      <Input
+                        id="title"
+                        placeholder="Enter a descriptive title..."
+                        value={formData.title}
+                        onChange={(e) => setFormData(prev => ({ ...prev, title: e.target.value }))}
+                        className="text-lg bg-white/50 dark:bg-slate-800/50 border-slate-200 dark:border-slate-700 h-12 rounded-xl focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all font-medium"
+                        required
+                      />
+                    </div>
+
+                    <div className="space-y-2">
+                      <Label className="text-sm font-medium text-slate-700 dark:text-slate-300">Description</Label>
+                      <Textarea
+                        id="description"
+                        placeholder="Add details, acceptance criteria, or context..."
+                        value={formData.description}
+                        onChange={(e) => setFormData(prev => ({ ...prev, description: e.target.value }))}
+                        rows={6}
+                        className="bg-white/50 dark:bg-slate-800/50 border-slate-200 dark:border-slate-700 rounded-xl focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all resize-none p-4"
+                      />
+                    </div>
+
+                    <div className="space-y-2 pt-2">
+                      <Label className="text-sm font-medium text-slate-700 dark:text-slate-300">Attachments</Label>
+                      <div className="bg-slate-50 dark:bg-slate-800/30 rounded-xl p-2 border border-slate-100 dark:border-slate-700">
+                        <FileUpload
+                          files={formData.attachments}
+                          onFilesChange={(files) => setFormData(prev => ({ ...prev, attachments: files }))}
+                        />
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* AI Task Suggestions */}
+                  {formData.project_id && user?.role === 'admin' && (
+                    <div className="pt-4 border-t border-slate-100 dark:border-slate-700">
+                      <AITaskSuggestions
+                        projectData={projects.find(p => p.id === formData.project_id)}
+                        currentTitle={formData.title}
+                        currentDescription={formData.description}
+                        currentTags={formData.tags}
+                        onApplyTitle={(title) => setFormData(prev => ({ ...prev, title }))}
+                        onApplyDescription={(desc) => setFormData(prev => ({ ...prev, description: desc }))}
+                        onApplyTag={(tag) => setFormData(prev => ({ ...prev, tags: [...prev.tags, tag] }))}
+                        existingTasks={projectTasks}
+                      />
+                    </div>
+                  )}
+                </div>
+              </div>
             </div>
 
-            <div className="p-6 sm:p-8 space-y-6">
-              {/* Title */}
-              <div className="space-y-3">
-                <div className="flex items-center gap-2">
-                  <div className="w-1 h-6 bg-gradient-to-b from-indigo-500 to-purple-600 rounded-full"></div>
-                  <Label htmlFor="title" className="text-base font-semibold text-slate-900">
-                    Task Title <span className="text-red-500">*</span>
-                  </Label>
-                </div>
-                <Input
-                  id="title"
-                  placeholder="What needs to be done?"
-                  value={formData.title}
-                  onChange={(e) => setFormData(prev => ({ ...prev, title: e.target.value }))}
-                  className="text-lg border-2 border-slate-200 focus:border-indigo-500 rounded-xl h-12 px-4 transition-all"
-                  required
-                />
-              </div>
+            {/* Right Column: Settings */}
+            <div className="space-y-8">
+              {/* Settings Card */}
+              <div className="bg-white/70 dark:bg-slate-900/70 backdrop-blur-xl rounded-3xl p-1 shadow-2xl shadow-indigo-100/50 dark:shadow-none border border-white/50 dark:border-slate-800 ring-1 ring-white/50 animate-in fade-in slide-in-from-bottom-8 duration-700 delay-300">
+                <div className="bg-gradient-to-b from-white/50 to-white/10 dark:from-slate-800/50 dark:to-slate-900/10 rounded-[1.4rem] p-6 space-y-5">
+                  <div className="flex items-center gap-3 mb-2">
+                    <div className="p-2 bg-purple-100 dark:bg-purple-900/30 rounded-lg text-purple-600 dark:text-purple-400">
+                      <Flag className="w-5 h-5" />
+                    </div>
+                    <h2 className="text-xl font-bold text-slate-800 dark:text-slate-100">Settings</h2>
+                  </div>
 
-              {/* Description */}
-              <div className="space-y-3">
-                <div className="flex items-center gap-2">
-                  <div className="w-1 h-6 bg-gradient-to-b from-indigo-500 to-purple-600 rounded-full"></div>
-                  <Label htmlFor="description" className="text-base font-semibold text-slate-900">Description</Label>
-                </div>
-                <Textarea
-                  id="description"
-                  placeholder="Describe the task in detail..."
-                  value={formData.description}
-                  onChange={(e) => setFormData(prev => ({ ...prev, description: e.target.value }))}
-                  rows={4}
-                  className="border-2 border-slate-200 focus:border-indigo-500 rounded-xl px-4 py-3 transition-all resize-none"
-                />
-              </div>
-
-              {/* AI Task Suggestions */}
-              {formData.project_id && user?.role === 'admin' && (
-                <AITaskSuggestions
-                  projectData={projects.find(p => p.id === formData.project_id)}
-                  currentTitle={formData.title}
-                  currentDescription={formData.description}
-                  currentTags={formData.tags}
-                  onApplyTitle={(title) => setFormData(prev => ({ ...prev, title }))}
-                  onApplyDescription={(desc) => setFormData(prev => ({ ...prev, description: desc }))}
-                  onApplyTag={(tag) => setFormData(prev => ({ ...prev, tags: [...prev.tags, tag] }))}
-                  existingTasks={projectTasks}
-                />
-              )}
-
-              {/* Row: Project & Task Section */}
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                <div className="space-y-2">
-                  <Label className="text-sm font-medium">Project</Label>
-                  <Select
-                    value={formData.project_id}
-                    onValueChange={(value) => setFormData(prev => ({ ...prev, project_id: value, group_id: '' }))}
-                  >
-                    <SelectTrigger>
-                      <SelectValue placeholder="Select project" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {projects.map(project => (
-                        <SelectItem key={project.id} value={project.id}>
-                          {project.name}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-
-                <div className="space-y-2">
-                  <Label className="text-sm font-medium">Group (Optional)</Label>
-                  <Select
-                    value={formData.assigned_group_id || "none"}
-                    onValueChange={(value) => setFormData(prev => ({ ...prev, assigned_group_id: value === "none" ? '' : value }))}
-                  >
-                    <SelectTrigger>
-                      <SelectValue placeholder="Select group" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="none">No Group</SelectItem>
-                      {userGroups.map(group => (
-                        <SelectItem key={group.id} value={group.id}>
-                          <div className="flex items-center gap-2">
-                            <div
-                              className="w-2 h-2 rounded-full"
-                              style={{ backgroundColor: group.color || '#6366F1' }}
-                            />
-                            {group.name}
-                          </div>
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-              </div>
-
-              {/* Row: Task Type & Assigned Group */}
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                <div className="space-y-2">
-                  <Label className="text-sm font-medium">Task Type</Label>
-                  <Select
-                    value={formData.task_type}
-                    onValueChange={(value) => setFormData(prev => ({ ...prev, task_type: value }))}
-                  >
-                    <SelectTrigger>
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="epic">Epic</SelectItem>
-                      <SelectItem value="story">Story</SelectItem>
-                      <SelectItem value="task">Task</SelectItem>
-                      <SelectItem value="bug">Bug</SelectItem>
-                      <SelectItem value="feature">Feature</SelectItem>
-                      <SelectItem value="improvement">Improvement</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-
-                <div className="space-y-2">
-                  <Label className="text-sm font-medium">Assigned Group (Optional)</Label>
-                  <Select
-                    value={formData.assigned_group_id || "none"}
-                    onValueChange={(value) => setFormData(prev => ({ ...prev, assigned_group_id: value === "none" ? '' : value }))}
-                  >
-                    <SelectTrigger>
-                      <SelectValue placeholder="Select group" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="none">No Group</SelectItem>
-                      {userGroups.map(group => (
-                        <SelectItem key={group.id} value={group.id}>
-                          <div className="flex items-center gap-2">
-                            <div
-                              className="w-2 h-2 rounded-full"
-                              style={{ backgroundColor: group.color || '#6366F1' }}
-                            />
-                            {group.name}
-                          </div>
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-              </div>
-
-              {/* Row: Status & Priority */}
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                <div className="space-y-2">
-                  <Label className="text-sm font-medium">Status</Label>
-                  <Select
-                    value={formData.status}
-                    onValueChange={(value) => setFormData(prev => ({ ...prev, status: value }))}
-                  >
-                    <SelectTrigger>
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="backlog">Backlog</SelectItem>
-                      <SelectItem value="todo">To Do</SelectItem>
-                      <SelectItem value="in_progress">In Progress</SelectItem>
-                      <SelectItem value="review">Review</SelectItem>
-                      <SelectItem value="done">Done</SelectItem>
-                      <SelectItem value="blocked">Blocked</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-
-                <div className="space-y-2">
-                  <Label className="text-sm font-medium">Priority</Label>
-                  <Select
-                    value={formData.priority}
-                    onValueChange={(value) => setFormData(prev => ({ ...prev, priority: value }))}
-                  >
-                    <SelectTrigger>
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="critical">Critical</SelectItem>
-                      <SelectItem value="high">High</SelectItem>
-                      <SelectItem value="medium">Medium</SelectItem>
-                      <SelectItem value="low">Low</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-              </div>
-
-              {/* Blocked Reason */}
-              {formData.status === 'blocked' && (
-                <div className="space-y-2">
-                  <Label className="text-sm font-medium">Blocked Reason</Label>
-                  <Input
-                    value={formData.blocked_reason}
-                    onChange={(e) => setFormData(prev => ({ ...prev, blocked_reason: e.target.value }))}
-                    placeholder="Why is this task blocked?"
-                  />
-                </div>
-              )}
-
-              {/* AI Assignee Suggestions */}
-              {user?.role === 'admin' && (
-                <AIAssigneeSuggestions
-                  taskData={{
-                    ...formData,
-                    project_name: projects.find(p => p.id === formData.project_id)?.name
-                  }}
-                  teamMembers={users}
-                  tasks={projectTasks}
-                  onSelectAssignee={(email) => {
-                    setFormData(prev => ({ ...prev, assignee_email: email }));
-                  }}
-                  selectedAssignees={formData.assignee_email ? [formData.assignee_email] : []}
-                />
-              )}
-
-              {/* Assignee */}
-              <div className="space-y-2">
-                <Label className="text-sm font-medium">Assignee</Label>
-                <UserMultiSelect
-                  users={users}
-                  departments={departments}
-                  selectedEmails={formData.assignees && formData.assignees.length > 0 ? formData.assignees : (formData.assignee_email ? [formData.assignee_email] : [])}
-                  onChange={(selected) => {
-                    const email = selected && selected.length > 0 ? selected[0] : null;
-                    setFormData(prev => ({ ...prev, assignee_email: email, assignees: selected }));
-                  }}
-                  placeholder="Select assignee"
-                  singleSelect={true}
-                  className=""
-                />
-              </div>
-
-              {/* Dates */}
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                <div className="space-y-2">
-                  <Label className="text-sm font-medium">Start Date</Label>
-                  <Popover open={startDateOpen} onOpenChange={setStartDateOpen}>
-                    <PopoverTrigger asChild>
-                      <Button
-                        variant="outline"
-                        className={cn(
-                          "w-full justify-start text-left font-normal",
-                          !formData.start_date && "text-slate-500"
-                        )}
+                  <div className="space-y-4">
+                    <div className="space-y-2">
+                      <Label className="text-xs font-semibold uppercase tracking-wider text-slate-500">Project</Label>
+                      <Select
+                        value={formData.project_id}
+                        onValueChange={(value) => setFormData(prev => ({ ...prev, project_id: value, group_id: '' }))}
                       >
-                        <CalendarIcon className="mr-2 h-4 w-4" />
-                        {formData.start_date ? format(new Date(formData.start_date), 'PPP') : 'Pick a date'}
-                      </Button>
-                    </PopoverTrigger>
-                    <PopoverContent className="w-auto p-0">
-                      <Calendar
-                        mode="single"
-                        selected={formData.start_date ? new Date(formData.start_date) : undefined}
-                        onSelect={(date) => {
-                          setFormData(prev => ({
-                            ...prev,
-                            start_date: date ? format(date, 'yyyy-MM-dd') : ''
-                          }));
-                          setStartDateOpen(false);
-                        }}
-                        className=""
-                        classNames={{}}
-                      />
-                    </PopoverContent>
-                  </Popover>
-                </div>
+                        <SelectTrigger className="bg-white/50 dark:bg-slate-800/50 border-slate-200 dark:border-slate-700 h-11 rounded-xl">
+                          <SelectValue placeholder="Select Project" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {projects.map(project => (
+                            <SelectItem key={project.id} value={project.id}>
+                              <div className="flex items-center gap-2">
+                                <div
+                                  className="w-2.5 h-2.5 rounded-full ring-2 ring-white/50 dark:ring-slate-800/50"
+                                  style={{ backgroundColor: project.color || '#6366F1' }}
+                                />
+                                {project.name}
+                              </div>
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
 
-                <div className="space-y-2">
-                  <Label className="text-sm font-medium">Due Date</Label>
-                  <Popover open={dueDateOpen} onOpenChange={setDueDateOpen}>
-                    <PopoverTrigger asChild>
-                      <Button
-                        variant="outline"
-                        className={cn(
-                          "w-full justify-start text-left font-normal",
-                          !formData.due_date && "text-slate-500"
-                        )}
+                    <div className="space-y-2">
+                      <Label className="text-xs font-semibold uppercase tracking-wider text-slate-500">Group</Label>
+                      <Select
+                        value={formData.assigned_group_id || "none"}
+                        onValueChange={(value) => setFormData(prev => ({ ...prev, assigned_group_id: value === "none" ? '' : value }))}
                       >
-                        <CalendarIcon className="mr-2 h-4 w-4" />
-                        {formData.due_date ? format(new Date(formData.due_date), 'PPP') : 'Pick a date'}
-                      </Button>
-                    </PopoverTrigger>
-                    <PopoverContent className="w-auto p-0">
-                      <Calendar
-                        mode="single"
-                        selected={formData.due_date ? new Date(formData.due_date) : undefined}
-                        onSelect={(date) => {
-                          setFormData(prev => ({
-                            ...prev,
-                            due_date: date ? format(date, 'yyyy-MM-dd') : ''
-                          }));
-                          setDueDateOpen(false);
-                        }}
-                        className=""
-                        classNames={{}}
+                        <SelectTrigger className="bg-white/50 dark:bg-slate-800/50 border-slate-200 dark:border-slate-700 h-11 rounded-xl">
+                          <SelectValue placeholder="No Group" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="none">No Group</SelectItem>
+                          {userGroups.map(group => (
+                            <SelectItem key={group.id} value={group.id}>
+                              {group.name}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-4">
+                      <div className="space-y-2">
+                        <Label className="text-xs font-semibold uppercase tracking-wider text-slate-500">Task Type</Label>
+                        <Select
+                          value={formData.task_type}
+                          onValueChange={(value) => setFormData(prev => ({ ...prev, task_type: value }))}
+                        >
+                          <SelectTrigger className="bg-white/50 dark:bg-slate-800/50 border-slate-200 dark:border-slate-700 h-11 rounded-xl">
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="epic">Epic</SelectItem>
+                            <SelectItem value="story">Story</SelectItem>
+                            <SelectItem value="task">Task</SelectItem>
+                            <SelectItem value="bug">Bug</SelectItem>
+                            <SelectItem value="feature">Feature</SelectItem>
+                            <SelectItem value="improvement">Improvement</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      </div>
+
+                      <div className="space-y-2">
+                        <Label className="text-xs font-semibold uppercase tracking-wider text-slate-500">Priority</Label>
+                        <Select
+                          value={formData.priority}
+                          onValueChange={(value) => setFormData(prev => ({ ...prev, priority: value }))}
+                        >
+                          <SelectTrigger className="bg-white/50 dark:bg-slate-800/50 border-slate-200 dark:border-slate-700 h-11 rounded-xl">
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="critical">Critical</SelectItem>
+                            <SelectItem value="high">High</SelectItem>
+                            <SelectItem value="medium">Medium</SelectItem>
+                            <SelectItem value="low">Low</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      </div>
+                    </div>
+
+                    <div className="space-y-2">
+                      <Label className="text-xs font-semibold uppercase tracking-wider text-slate-500">Status</Label>
+                      <Select
+                        value={formData.status}
+                        onValueChange={(value) => setFormData(prev => ({ ...prev, status: value }))}
+                      >
+                        <SelectTrigger className="bg-white/50 dark:bg-slate-800/50 border-slate-200 dark:border-slate-700 h-11 rounded-xl text-indigo-600 font-semibold uppercase tracking-wide">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="backlog">Backlog</SelectItem>
+                          <SelectItem value="todo">To Do</SelectItem>
+                          <SelectItem value="in_progress">In Progress</SelectItem>
+                          <SelectItem value="review">Review</SelectItem>
+                          <SelectItem value="done">Done</SelectItem>
+                          <SelectItem value="blocked">Blocked</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+
+                    {/* Custom Fields */}
+                    {relevantCustomFields.length > 0 && (
+                      <div className="space-y-2 pt-2 border-t border-slate-100 dark:border-slate-700">
+                        <CustomFieldsForm
+                          fields={relevantCustomFields}
+                          values={formData.custom_fields}
+                          onChange={(newFields) => setFormData(prev => ({ ...prev, custom_fields: newFields }))}
+                        />
+                      </div>
+                    )}
+
+                    {/* Blocked Reason */}
+                    {formData.status === 'blocked' && (
+                      <div className="space-y-2 animate-in fade-in zoom-in-95">
+                        <Label className="text-xs font-semibold uppercase tracking-wider text-red-500">Blocked Reason</Label>
+                        <Input
+                          value={formData.blocked_reason}
+                          onChange={(e) => setFormData(prev => ({ ...prev, blocked_reason: e.target.value }))}
+                          placeholder="Why is this task blocked?"
+                          className="bg-red-50 border-red-200 h-11 rounded-xl focus:border-red-500 focus:ring-red-200"
+                        />
+                      </div>
+                    )}
+
+                    <div className="space-y-2 pt-2">
+                      <Label className="text-xs font-semibold uppercase tracking-wider text-slate-500">Tags</Label>
+                      <StandardTagSelect
+                        selectedTags={formData.tags}
+                        onChange={(tags) => setFormData(prev => ({ ...prev, tags }))}
                       />
-                    </PopoverContent>
-                  </Popover>
+                    </div>
+                  </div>
                 </div>
               </div>
 
-              {/* Sprint Assignment */}
-              <div className="space-y-2">
-                <Label className="text-sm font-medium">Sprint</Label>
-                <Select
-                  value={formData.sprint_id || "none"}
-                  onValueChange={(val) => setFormData(prev => ({ ...prev, sprint_id: val === "none" ? null : val }))}
-                >
-                  <SelectTrigger>
-                    <SelectValue placeholder="Select Sprint" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="none">No Sprint</SelectItem>
-                    {sprints.map(s => (
-                      <SelectItem key={s.id} value={String(s.id)}>
-                        {s.name}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
 
-              {/* Estimates */}
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                <div className="space-y-2">
-                  <Label className="text-sm font-medium">Estimated Hours</Label>
-                  <Input
-                    type="number"
-                    min="0"
-                    step="0.5"
-                    value={formData.estimated_hours}
-                    onChange={(e) => setFormData(prev => ({ ...prev, estimated_hours: e.target.value }))}
-                  />
+              {/* Assignment Card */}
+              <div className="bg-white/70 dark:bg-slate-900/70 backdrop-blur-xl rounded-3xl p-1 shadow-2xl shadow-indigo-100/50 dark:shadow-none border border-white/50 dark:border-slate-800 ring-1 ring-white/50 animate-in fade-in slide-in-from-bottom-8 duration-700 delay-400">
+                <div className="bg-gradient-to-b from-white/50 to-white/10 dark:from-slate-800/50 dark:to-slate-900/10 rounded-[1.4rem] p-6 space-y-5">
+                  <div className="flex items-center gap-3 mb-2">
+                    <div className="p-2 bg-emerald-100 dark:bg-emerald-900/30 rounded-lg text-emerald-600 dark:text-emerald-400">
+                      <Users className="w-5 h-5" />
+                    </div>
+                    <h2 className="text-xl font-bold text-slate-800 dark:text-slate-100">Assignment</h2>
+                  </div>
+
+                  <div className="space-y-4">
+                    {/* AI Assignee Suggestions */}
+                    {user?.role === 'admin' && (
+                      <AIAssigneeSuggestions
+                        taskData={{
+                          ...formData,
+                          project_name: projects.find(p => p.id === formData.project_id)?.name
+                        }}
+                        teamMembers={users}
+                        tasks={projectTasks}
+                        onSelectAssignee={(email) => {
+                          setFormData(prev => ({ ...prev, assignee_email: email }));
+                        }}
+                        selectedAssignees={formData.assignee_email ? [formData.assignee_email] : []}
+                      />
+                    )}
+
+                    <div className="space-y-2">
+                      <Label className="text-sm font-medium text-slate-700 dark:text-slate-300">Assignees</Label>
+                      <UserMultiSelect
+                        users={users}
+                        departments={departments}
+                        selectedEmails={formData.assignees && formData.assignees.length > 0 ? formData.assignees : (formData.assignee_email ? [formData.assignee_email] : [])}
+                        onChange={(selected) => {
+                          const email = selected && selected.length > 0 ? selected[0] : null;
+                          setFormData(prev => ({ ...prev, assignee_email: email, assignees: selected }));
+                        }}
+                        placeholder="Select team members..."
+                        singleSelect={true}
+                        className="bg-white/50 dark:bg-slate-800/50 border-slate-200 dark:border-slate-700 h-auto min-h-[44px] rounded-xl"
+                      />
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-4">
+                      <div className="space-y-2">
+                        <Label className="text-xs font-semibold uppercase tracking-wider text-slate-500">Start Date</Label>
+                        <Popover open={startDateOpen} onOpenChange={setStartDateOpen}>
+                          <PopoverTrigger asChild>
+                            <Button
+                              variant="outline"
+                              className={cn(
+                                "w-full justify-start text-left font-normal bg-white/50 dark:bg-slate-800/50 border-slate-200 dark:border-slate-700 h-11 rounded-xl",
+                                !formData.start_date && "text-slate-500"
+                              )}
+                            >
+                              <CalendarIcon className="mr-2 h-4 w-4" />
+                              {formData.start_date ? format(new Date(formData.start_date), 'PPP') : 'Select'}
+                            </Button>
+                          </PopoverTrigger>
+                          <PopoverContent className="w-auto p-0" align="start">
+                            <Calendar
+                              mode="single"
+                              selected={formData.start_date ? new Date(formData.start_date) : undefined}
+                              onSelect={(date) => {
+                                setFormData(prev => ({
+                                  ...prev,
+                                  start_date: date ? format(date, 'yyyy-MM-dd') : ''
+                                }));
+                                setStartDateOpen(false);
+                              }}
+                            />
+                          </PopoverContent>
+                        </Popover>
+                      </div>
+
+                      <div className="space-y-2">
+                        <Label className="text-xs font-semibold uppercase tracking-wider text-slate-500">Due Date</Label>
+                        <Popover open={dueDateOpen} onOpenChange={setDueDateOpen}>
+                          <PopoverTrigger asChild>
+                            <Button
+                              variant="outline"
+                              className={cn(
+                                "w-full justify-start text-left font-normal bg-white/50 dark:bg-slate-800/50 border-slate-200 dark:border-slate-700 h-11 rounded-xl",
+                                !formData.due_date && "text-slate-500"
+                              )}
+                            >
+                              <CalendarIcon className="mr-2 h-4 w-4" />
+                              {formData.due_date ? format(new Date(formData.due_date), 'PPP') : 'Select'}
+                            </Button>
+                          </PopoverTrigger>
+                          <PopoverContent className="w-auto p-0" align="start">
+                            <Calendar
+                              mode="single"
+                              selected={formData.due_date ? new Date(formData.due_date) : undefined}
+                              onSelect={(date) => {
+                                setFormData(prev => ({
+                                  ...prev,
+                                  due_date: date ? format(date, 'yyyy-MM-dd') : ''
+                                }));
+                                setDueDateOpen(false);
+                              }}
+                            />
+                          </PopoverContent>
+                        </Popover>
+                      </div>
+                    </div>
+
+                    <div className="space-y-2">
+                      <Label className="text-xs font-semibold uppercase tracking-wider text-slate-500">Sprint</Label>
+                      <Select
+                        value={formData.sprint_id || "none"}
+                        onValueChange={(val) => setFormData(prev => ({ ...prev, sprint_id: val === "none" ? null : val }))}
+                      >
+                        <SelectTrigger className="bg-white/50 dark:bg-slate-800/50 border-slate-200 dark:border-slate-700 h-11 rounded-xl">
+                          <SelectValue placeholder="Select Sprint" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="none">No Sprint</SelectItem>
+                          {sprints.map(s => (
+                            <SelectItem key={s.id} value={String(s.id)}>
+                              {s.name}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-4">
+                      <div className="space-y-2">
+                        <Label className="text-xs font-semibold uppercase tracking-wider text-slate-500">Est. Hours</Label>
+                        <Input
+                          type="number"
+                          min="0"
+                          step="0.5"
+                          placeholder="0"
+                          value={formData.estimated_hours}
+                          onChange={(e) => setFormData(prev => ({ ...prev, estimated_hours: e.target.value }))}
+                          className="bg-white/50 dark:bg-slate-800/50 border-slate-200 dark:border-slate-700 h-11 rounded-xl"
+                        />
+                      </div>
+                      <div className="space-y-2">
+                        <Label className="text-xs font-semibold uppercase tracking-wider text-slate-500">Points</Label>
+                        <Input
+                          type="number"
+                          min="0"
+                          placeholder="0"
+                          value={formData.story_points}
+                          onChange={(e) => setFormData(prev => ({ ...prev, story_points: e.target.value }))}
+                          className="bg-white/50 dark:bg-slate-800/50 border-slate-200 dark:border-slate-700 h-11 rounded-xl"
+                        />
+                      </div>
+                    </div>
+
+                    {/* AI Completion Time Prediction */}
+                    {user?.role === 'admin' && (
+                      <div className="pt-2">
+                        <AICompletionPredictor
+                          taskData={formData}
+                          tasks={projectTasks}
+                        />
+                      </div>
+                    )}
+
+                    {/* Recurring Task Options */}
+                    <div className="pt-2 border-t border-slate-100 dark:border-slate-700">
+                      <RecurringTaskForm formData={formData} setFormData={setFormData} isEditing={true} />
+                    </div>
+
+                  </div>
                 </div>
-                <div className="space-y-2">
-                  <Label className="text-sm font-medium">Story Points</Label>
-                  <Input
-                    type="number"
-                    min="0"
-                    value={formData.story_points}
-                    onChange={(e) => setFormData(prev => ({ ...prev, story_points: e.target.value }))}
-                  />
-                </div>
               </div>
-
-              {/* AI Completion Time Prediction */}
-              {user?.role === 'admin' && (
-                <AICompletionPredictor
-                  taskData={formData}
-                  tasks={projectTasks}
-                />
-              )}
-
-              {/* Tags */}
-              <div className="space-y-2">
-                <Label className="text-sm font-medium">Tags</Label>
-                <StandardTagSelect
-                  selectedTags={formData.tags}
-                  onChange={(tags) => setFormData(prev => ({ ...prev, tags }))}
-                />
-              </div>
-
-              {/* Recurring Task Options */}
-              <RecurringTaskForm formData={formData} setFormData={setFormData} isEditing={true} />
             </div>
-          </div>
 
-          <div className="flex justify-end gap-3">
-            <Button type="button" variant="outline" onClick={handleBack}>Cancel</Button>
-            <Button
-              type="submit"
-              className="bg-indigo-600 hover:bg-indigo-700"
-              disabled={updateTaskMutation.isPending || !formData.title}
-            >
-              {updateTaskMutation.isPending ? (
-                <>
-                  <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                  Saving...
-                </>
-              ) : (
-                <>
-                  <Save className="w-4 h-4 mr-2" />
-                  Save Changes
-                </>
-              )}
-            </Button>
           </div>
         </form>
       </div>

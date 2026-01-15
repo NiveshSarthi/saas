@@ -16,7 +16,10 @@ import {
   Paperclip,
   Plus,
   Loader2,
-  Video
+  Video,
+  Sparkles,
+  Layers,
+  Users
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -123,7 +126,6 @@ export default function NewTask() {
 
   const queryClient = useQueryClient();
 
-  // Query client setup
   React.useEffect(() => {
     // Removed window.__REACT_QUERY_CLIENT__ assignment for compatibility
   }, [queryClient]);
@@ -142,11 +144,8 @@ export default function NewTask() {
     },
   });
 
-  // `['dashboard-users']` cache may hold either an object { users, invitations }
-  // or a flattened array (other pages sometimes return a flattened array).
   let usersFromEntity = [];
   let invitations = [];
-  // Unwrap one layer if functions.invoke returned { data: { users, invitations } }
   const rawDashboard = dashboardData?.data || dashboardData;
   if (Array.isArray(rawDashboard)) {
     usersFromEntity = rawDashboard;
@@ -156,7 +155,6 @@ export default function NewTask() {
     invitations = rawDashboard?.invitations || [];
   }
 
-  // Normalize user shape so downstream code can rely on `id`, `email`, `department_id`
   usersFromEntity = (usersFromEntity || []).map(u => ({
     ...u,
     id: u.id || u._id || (u.email && String(u.email).toLowerCase()),
@@ -169,8 +167,6 @@ export default function NewTask() {
     id: inv.id || inv._id || (inv.email && String(inv.email).toLowerCase()),
     email: inv.email || inv.email_address || null,
   }));
-
-  
 
   const users = React.useMemo(() => [
     ...usersFromEntity,
@@ -193,19 +189,16 @@ export default function NewTask() {
         setUser(userData);
         setFormData(prev => ({ ...prev, reporter_email: userData.email }));
 
-        // Fetch Marketing department
         const depts = await base44.entities.Department.filter({ name: 'Marketing' });
         if (depts.length > 0) {
           setMarketingDepartment(depts[0]);
         }
 
-        // Fetch Marketing_Collateral project
         const projs = await base44.entities.Project.filter({ name: 'Marketing_Collateral' });
         if (projs.length > 0) {
           setMarketingProject(projs[0]);
         }
 
-        // Fetch Digital Marketing group
         const groups = await base44.entities.Group.filter({ name: 'Digital Marketing' });
         if (groups.length > 0) {
           setMarketingGroup(groups[0]);
@@ -217,23 +210,8 @@ export default function NewTask() {
     fetchUser();
   }, []);
 
-  // Manual debug fetch in case the react-query hook isn't running in your environment
-  React.useEffect(() => {
-    const debugFetch = async () => {
-      try {
-        const res = await base44.functions.invoke('getDashboardUsers');
-        console.debug('debugFetch getDashboardUsers', res);
-      } catch (err) {
-        console.error('debugFetch failed', err);
-      }
-    };
-    debugFetch();
-  }, []);
-
-  // Set marketing project, group, and assignees when marketing category is selected
   React.useEffect(() => {
     if (taskCategory === 'marketing' && marketingProject && marketingGroup && marketingDepartment && users.length > 0) {
-      // Get all active marketing department members
       const marketingMemberEmails = users
         .filter(u => String(u.department_id) === String(marketingDepartment.id) && u.status !== 'inactive' && u.is_active !== false)
         .map(u => u.email);
@@ -247,12 +225,9 @@ export default function NewTask() {
     }
   }, [taskCategory, marketingProject, marketingGroup, marketingDepartment, users]);
 
-  // Apply marketing template when selected
   React.useEffect(() => {
     if (taskCategory === 'marketing' && marketingTemplate && marketingProject && marketingDepartment && users.length > 0) {
       const template = MARKETING_TEMPLATES[marketingTemplate];
-
-      // Get all active marketing department members
       const marketingMemberEmails = users
         .filter(u => String(u.department_id) === String(marketingDepartment.id) && u.status !== 'inactive' && u.is_active !== false)
         .map(u => u.email);
@@ -311,24 +286,10 @@ export default function NewTask() {
     return isActive && matchesDepartment && matchesGroup;
   });
 
-  // Debugging: log dashboard users shape and filtered users to diagnose missing members
-  React.useEffect(() => {
-    try {
-      console.debug('NewTask.dashboardData', { dashboardData });
-      console.debug('NewTask.usersFromEntity_sample', (usersFromEntity || []).slice(0,6));
-      console.debug('NewTask.invitations_sample', (invitations || []).slice(0,6));
-      console.debug('NewTask.users_combined_sample', (users || []).slice(0,6));
-      console.debug('NewTask.filteredUsers_count', filteredUsers.length, filteredUsers.slice(0,6));
-    } catch (e) {
-      console.debug('NewTask.debug failed', e);
-    }
-  }, [dashboardData, usersFromEntity, invitations, users, filteredUsers]);
-
   const createTaskMutation = useMutation({
     mutationFn: async (data) => {
       const task = await base44.entities.Task.create(data);
 
-      // If marketing collateral task, create MarketingTask
       if (taskCategory === 'marketing' && marketingTemplate) {
         const template = MARKETING_TEMPLATES[marketingTemplate];
         const marketingTask = await base44.entities.MarketingTask.create({
@@ -344,13 +305,11 @@ export default function NewTask() {
           tags: template.tags
         });
 
-        // Update task with marketing_task_id
         await base44.entities.Task.update(task.id, {
           marketing_task_id: marketingTask.id
         });
       }
 
-      // Log activity
       await base44.entities.Activity.create({
         task_id: task.id,
         project_id: data.project_id,
@@ -359,7 +318,6 @@ export default function NewTask() {
         metadata: { title: data.title }
       });
 
-      // Send assignment notifications to all assignees
       if (data.assignees && data.assignees.length > 0) {
         await notifyMultipleAssignees({
           assignees: data.assignees,
@@ -390,7 +348,7 @@ export default function NewTask() {
       estimated_hours: formData.estimated_hours ? parseFloat(formData.estimated_hours) : null,
       story_points: formData.story_points ? parseInt(formData.story_points) : null,
       reporter_email: user?.email,
-      created_by: user?.email, // Ensure created_by is set for filtering
+      created_by: user?.email,
       assignee_email: formData.assignees.length > 0 ? formData.assignees[0] : null,
     };
     createTaskMutation.mutate(dataToSubmit);
@@ -408,627 +366,471 @@ export default function NewTask() {
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-50 via-indigo-50/30 to-purple-50/20">
-      <div className="max-w-6xl mx-auto p-4 sm:p-6 lg:p-8">
-        {/* Header */}
-        <div className="mb-8">
-          <Button variant="ghost" className="mb-4 hover:bg-white/50" onClick={() => navigate(-1)}>
+    <div className="min-h-screen bg-gradient-to-br from-indigo-50 via-purple-50 to-pink-50 dark:from-slate-950 dark:via-indigo-950/30 dark:to-slate-900 pb-20">
+      <div className="max-w-7xl mx-auto p-4 sm:p-6 lg:p-8">
+
+        {/* Header Section */}
+        <div className="mb-10 animate-in fade-in slide-in-from-top-4 duration-700">
+          <Button
+            variant="ghost"
+            className="mb-6 hover:bg-white/50 dark:hover:bg-slate-800/50 backdrop-blur-sm -ml-2 text-slate-600 hover:text-indigo-600 transition-all"
+            onClick={() => navigate(-1)}
+          >
             <ArrowLeft className="w-4 h-4 mr-2" />
-            Back
+            Back to Dashboard
           </Button>
-          <div className="flex items-center gap-4">
-            <div className="p-3 bg-gradient-to-br from-indigo-500 to-purple-600 rounded-2xl shadow-lg">
-              <Plus className="w-8 h-8 text-white" />
+
+          <div className="flex flex-col md:flex-row md:items-center justify-between gap-6">
+            <div className="flex items-center gap-5">
+              <div className="relative group">
+                <div className="absolute -inset-1 bg-gradient-to-r from-indigo-600 to-purple-600 rounded-2xl blur opacity-30 group-hover:opacity-60 transition duration-500"></div>
+                <div className="relative p-4 bg-white dark:bg-slate-800 rounded-2xl shadow-lg border border-indigo-100 dark:border-slate-700">
+                  <Plus className="w-8 h-8 text-indigo-600 dark:text-indigo-400" />
+                </div>
+              </div>
+              <div>
+                <h1 className="text-4xl font-extrabold text-transparent bg-clip-text bg-gradient-to-r from-indigo-600 via-purple-600 to-pink-600 dark:from-indigo-400 dark:via-purple-400 dark:to-pink-400 tracking-tight">
+                  New Task
+                </h1>
+                <p className="text-slate-500 dark:text-slate-400 mt-2 font-medium">Create and assign tasks to your team</p>
+              </div>
             </div>
-            <div>
-              <h1 className="text-3xl font-bold text-slate-900 bg-gradient-to-r from-indigo-600 to-purple-600 bg-clip-text text-transparent">
-                Create New Task
-              </h1>
-              <p className="text-slate-600 mt-1">Build something amazing, one task at a time</p>
+
+            <div className="flex gap-3">
+              <Button
+                variant="outline"
+                onClick={() => navigate(-1)}
+                className="border-slate-200 hover:bg-white/50 hover:border-slate-300 dark:border-slate-700 dark:hover:bg-slate-800"
+              >
+                Cancel
+              </Button>
+              <Button
+                onClick={handleSubmit}
+                disabled={createTaskMutation.isPending || !formData.title}
+                className="bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-700 hover:to-purple-700 text-white shadow-lg shadow-indigo-200/50 dark:shadow-none transition-all hover:scale-[1.02] active:scale-[0.98]"
+              >
+                {createTaskMutation.isPending ? (
+                  <>
+                    <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                    Creating Task...
+                  </>
+                ) : (
+                  <>
+                    <Save className="w-4 h-4 mr-2" />
+                    Create Task
+                  </>
+                )}
+              </Button>
             </div>
           </div>
         </div>
 
-        <form onSubmit={handleSubmit} className="space-y-6">
-          {/* Task Category Selection */}
-          <div className="bg-white/80 backdrop-blur-sm rounded-3xl shadow-xl border border-slate-200/50 overflow-hidden">
-            <div className="bg-gradient-to-r from-violet-500 to-fuchsia-600 p-6 sm:p-8">
-              <h2 className="text-xl font-bold text-white mb-2">Task Category</h2>
-              <p className="text-violet-100 text-sm">Choose the type of task you're creating</p>
-            </div>
-            <div className="p-6 sm:p-8 space-y-6">
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <button
-                  type="button"
-                  onClick={() => {
-                    setTaskCategory('normal');
-                    setMarketingTemplate('');
-                  }}
-                  className={cn(
-                    "p-6 rounded-2xl border-2 transition-all text-left",
-                    taskCategory === 'normal'
-                      ? "border-indigo-500 bg-indigo-50 shadow-lg"
-                      : "border-slate-200 hover:border-slate-300"
-                  )}
-                >
-                  <div className="flex items-center gap-3 mb-2">
-                    <div className={cn(
-                      "w-12 h-12 rounded-xl flex items-center justify-center",
-                      taskCategory === 'normal' ? "bg-indigo-500" : "bg-slate-200"
-                    )}>
-                      <Flag className={cn("w-6 h-6", taskCategory === 'normal' ? "text-white" : "text-slate-600")} />
+        <form onSubmit={handleSubmit} className="space-y-8">
+
+          {/* Main Layout Grid */}
+          <div className="grid grid-cols-1 xl:grid-cols-3 gap-8">
+
+            {/* Left Column: Task Details & Category */}
+            <div className="xl:col-span-2 space-y-8">
+
+              {/* Task Category Card */}
+              <div className="bg-white/70 dark:bg-slate-900/70 backdrop-blur-xl rounded-3xl p-1 shadow-2xl shadow-indigo-100/50 dark:shadow-none border border-white/50 dark:border-slate-800 ring-1 ring-white/50 animate-in fade-in slide-in-from-bottom-8 duration-700 delay-100">
+                <div className="bg-gradient-to-br from-white/50 to-white/10 dark:from-slate-800/50 dark:to-slate-900/10 rounded-[1.4rem] p-6 sm:p-8">
+                  <div className="flex items-center gap-3 mb-6">
+                    <div className="p-2 bg-pink-100 dark:bg-pink-900/30 rounded-lg text-pink-600 dark:text-pink-400">
+                      <Layers className="w-5 h-5" />
                     </div>
-                    <div>
-                      <div className="font-semibold text-lg">Normal Task</div>
-                      <div className="text-sm text-slate-600">Standard project task</div>
+                    <h2 className="text-xl font-bold text-slate-800 dark:text-slate-100">Category & Type</h2>
+                  </div>
+
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setTaskCategory('normal');
+                        setMarketingTemplate('');
+                      }}
+                      className={cn(
+                        "group relative p-4 rounded-2xl border transition-all duration-300 text-left overflow-hidden",
+                        taskCategory === 'normal'
+                          ? "border-indigo-500 bg-indigo-50/50 dark:bg-indigo-900/20 dark:border-indigo-400 shadow-md transform scale-[1.01]"
+                          : "border-slate-200 hover:border-indigo-300 bg-white/50 dark:bg-slate-800/50 dark:border-slate-700"
+                      )}
+                    >
+                      {taskCategory === 'normal' && <div className="absolute inset-0 bg-gradient-to-r from-indigo-500/5 to-purple-500/5 pointer-events-none" />}
+                      <div className="flex items-center gap-4 relative z-10">
+                        <div className={cn(
+                          "w-12 h-12 rounded-xl flex items-center justify-center transition-colors",
+                          taskCategory === 'normal' ? "bg-indigo-500 text-white shadow-lg shadow-indigo-200" : "bg-slate-100 dark:bg-slate-700 text-slate-500"
+                        )}>
+                          <Flag className="w-6 h-6" />
+                        </div>
+                        <div>
+                          <div className="font-bold text-lg text-slate-900 dark:text-slate-100">Standard Task</div>
+                          <div className="text-sm text-slate-500 dark:text-slate-400 mt-1">Regular project activity</div>
+                        </div>
+                        {taskCategory === 'normal' && (
+                          <div className="absolute top-4 right-4 w-3 h-3 bg-indigo-500 rounded-full shadow-sm ring-2 ring-white dark:ring-slate-800"></div>
+                        )}
+                      </div>
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => setTaskCategory('marketing')}
+                      className={cn(
+                        "group relative p-4 rounded-2xl border transition-all duration-300 text-left overflow-hidden",
+                        taskCategory === 'marketing'
+                          ? "border-fuchsia-500 bg-fuchsia-50/50 dark:bg-fuchsia-900/20 dark:border-fuchsia-400 shadow-md transform scale-[1.01]"
+                          : "border-slate-200 hover:border-fuchsia-300 bg-white/50 dark:bg-slate-800/50 dark:border-slate-700"
+                      )}
+                    >
+                      {taskCategory === 'marketing' && <div className="absolute inset-0 bg-gradient-to-r from-fuchsia-500/5 to-pink-500/5 pointer-events-none" />}
+                      <div className="flex items-center gap-4 relative z-10">
+                        <div className={cn(
+                          "w-12 h-12 rounded-xl flex items-center justify-center transition-colors",
+                          taskCategory === 'marketing' ? "bg-fuchsia-500 text-white shadow-lg shadow-fuchsia-200" : "bg-slate-100 dark:bg-slate-700 text-slate-500"
+                        )}>
+                          <Video className="w-6 h-6" />
+                        </div>
+                        <div>
+                          <div className="font-bold text-lg text-slate-900 dark:text-slate-100">Marketing Content</div>
+                          <div className="text-sm text-slate-500 dark:text-slate-400 mt-1">Video & creative assets</div>
+                        </div>
+                        {taskCategory === 'marketing' && (
+                          <div className="absolute top-4 right-4 w-3 h-3 bg-fuchsia-500 rounded-full shadow-sm ring-2 ring-white dark:ring-slate-800"></div>
+                        )}
+                      </div>
+                    </button>
+                  </div>
+
+                  {/* Marketing Template Selection */}
+                  {taskCategory === 'marketing' && (
+                    <div className="mt-6 animate-in fade-in slide-in-from-top-2 duration-300">
+                      <Label className="text-sm font-semibold text-slate-700 dark:text-slate-300 mb-2 block">
+                        Video Template
+                      </Label>
+                      <Select value={marketingTemplate} onValueChange={setMarketingTemplate}>
+                        <SelectTrigger className="bg-white/50 dark:bg-slate-800/50 border-slate-200 dark:border-slate-700 h-11 rounded-xl focus:ring-fuchsia-500/20">
+                          <SelectValue placeholder="Select a template..." />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="samarpan">🙏 Samarpan Videos</SelectItem>
+                          <SelectItem value="egc">👥 EGC Videos (Employee Content)</SelectItem>
+                          <SelectItem value="campaign">📢 Campaign Videos</SelectItem>
+                          <SelectItem value="awareness">✨ Awareness Videos</SelectItem>
+                        </SelectContent>
+                      </Select>
+
+                      {marketingTemplate && (
+                        <div className="mt-4 p-4 bg-fuchsia-50/80 dark:bg-fuchsia-900/20 border border-fuchsia-100 dark:border-fuchsia-800 rounded-xl flex flex-col sm:flex-row sm:items-center gap-3">
+                          <div className="p-2 bg-fuchsia-100 dark:bg-fuchsia-800 rounded-lg shrink-0">
+                            <Sparkles className="w-4 h-4 text-fuchsia-600 dark:text-fuchsia-300" />
+                          </div>
+                          <div>
+                            <p className="text-sm font-semibold text-fuchsia-900 dark:text-fuchsia-300">Template Active</p>
+                            <p className="text-xs text-fuchsia-700 dark:text-fuchsia-400 mt-0.5">
+                              Auto-assigning to "Digital Marketing" group and setting up workflow.
+                            </p>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              {/* Task Details Card */}
+              <div className="bg-white/70 dark:bg-slate-900/70 backdrop-blur-xl rounded-3xl p-1 shadow-2xl shadow-indigo-100/50 dark:shadow-none border border-white/50 dark:border-slate-800 ring-1 ring-white/50 animate-in fade-in slide-in-from-bottom-8 duration-700 delay-200">
+                <div className="bg-gradient-to-b from-white/50 to-white/10 dark:from-slate-800/50 dark:to-slate-900/10 rounded-[1.4rem] p-6 sm:p-8 space-y-6">
+                  <div className="flex items-center gap-3 mb-2">
+                    <div className="p-2 bg-indigo-100 dark:bg-indigo-900/30 rounded-lg text-indigo-600 dark:text-indigo-400">
+                      <Tag className="w-5 h-5" />
+                    </div>
+                    <h2 className="text-xl font-bold text-slate-800 dark:text-slate-100">Task Information</h2>
+                  </div>
+
+                  <div className="space-y-4">
+                    <div className="space-y-2">
+                      <Label className="text-sm font-medium text-slate-700 dark:text-slate-300">Title <span className="text-red-500">*</span></Label>
+                      <Input
+                        id="title"
+                        placeholder="Enter a descriptive title..."
+                        value={formData.title}
+                        onChange={(e) => setFormData(prev => ({ ...prev, title: e.target.value }))}
+                        className="text-lg bg-white/50 dark:bg-slate-800/50 border-slate-200 dark:border-slate-700 h-12 rounded-xl focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all font-medium"
+                        required
+                      />
+                    </div>
+
+                    <div className="space-y-2">
+                      <Label className="text-sm font-medium text-slate-700 dark:text-slate-300">Description</Label>
+                      <Textarea
+                        id="description"
+                        placeholder="Add details, acceptance criteria, or context..."
+                        value={formData.description}
+                        onChange={(e) => setFormData(prev => ({ ...prev, description: e.target.value }))}
+                        rows={6}
+                        className="bg-white/50 dark:bg-slate-800/50 border-slate-200 dark:border-slate-700 rounded-xl focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all resize-none p-4"
+                      />
+                    </div>
+
+                    <div className="space-y-2 pt-2">
+                      <Label className="text-sm font-medium text-slate-700 dark:text-slate-300">Attachments</Label>
+                      <div className="bg-slate-50 dark:bg-slate-800/30 rounded-xl p-2 border border-slate-100 dark:border-slate-700">
+                        <FileUpload
+                          files={formData.attachments}
+                          onFilesChange={(files) => setFormData(prev => ({ ...prev, attachments: files }))}
+                        />
+                      </div>
                     </div>
                   </div>
-                </button>
 
-                <button
-                  type="button"
-                  onClick={() => setTaskCategory('marketing')}
-                  className={cn(
-                    "p-6 rounded-2xl border-2 transition-all text-left",
-                    taskCategory === 'marketing'
-                      ? "border-fuchsia-500 bg-fuchsia-50 shadow-lg"
-                      : "border-slate-200 hover:border-slate-300"
-                  )}
-                >
-                  <div className="flex items-center gap-3 mb-2">
-                    <div className={cn(
-                      "w-12 h-12 rounded-xl flex items-center justify-center",
-                      taskCategory === 'marketing' ? "bg-fuchsia-500" : "bg-slate-200"
-                    )}>
-                      <Video className={cn("w-6 h-6", taskCategory === 'marketing' ? "text-white" : "text-slate-600")} />
+                  {/* AI Task Suggestions */}
+                  {formData.project_id && user?.role === 'admin' && (
+                    <div className="pt-4 border-t border-slate-100 dark:border-slate-700">
+                      <AITaskSuggestions
+                        projectData={projects.find(p => p.id === formData.project_id)}
+                        currentTitle={formData.title}
+                        currentDescription={formData.description}
+                        currentTags={formData.tags}
+                        onApplyTitle={(title) => setFormData(prev => ({ ...prev, title }))}
+                        onApplyDescription={(desc) => setFormData(prev => ({ ...prev, description: desc }))}
+                        onApplyTag={(tag) => setFormData(prev => ({ ...prev, tags: [...prev.tags, tag] }))}
+                        existingTasks={projectTasks}
+                      />
                     </div>
-                    <div>
-                      <div className="font-semibold text-lg">Marketing Collateral</div>
-                      <div className="text-sm text-slate-600">Video & content production</div>
+                  )}
+                </div>
+              </div>
+            </div>
+
+            {/* Right Column: Settings & Assignment */}
+            <div className="space-y-8">
+
+              {/* Classification Card */}
+              <div className="bg-white/70 dark:bg-slate-900/70 backdrop-blur-xl rounded-3xl p-1 shadow-2xl shadow-indigo-100/50 dark:shadow-none border border-white/50 dark:border-slate-800 ring-1 ring-white/50 animate-in fade-in slide-in-from-bottom-8 duration-700 delay-300">
+                <div className="bg-gradient-to-b from-white/50 to-white/10 dark:from-slate-800/50 dark:to-slate-900/10 rounded-[1.4rem] p-6 space-y-5">
+                  <div className="flex items-center gap-3 mb-2">
+                    <div className="p-2 bg-purple-100 dark:bg-purple-900/30 rounded-lg text-purple-600 dark:text-purple-400">
+                      <Flag className="w-5 h-5" />
+                    </div>
+                    <h2 className="text-xl font-bold text-slate-800 dark:text-slate-100">Settings</h2>
+                  </div>
+
+                  <div className="space-y-4">
+                    <div className="space-y-2">
+                      <Label className="text-xs font-semibold uppercase tracking-wider text-slate-500">Project</Label>
+                      <Select
+                        value={formData.project_id}
+                        onValueChange={(value) => setFormData(prev => ({ ...prev, project_id: value, group_id: '' }))}
+                      >
+                        <SelectTrigger className="bg-white/50 dark:bg-slate-800/50 border-slate-200 dark:border-slate-700 h-11 rounded-xl">
+                          <SelectValue placeholder="Select Project" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {projects.map(project => (
+                            <SelectItem key={project.id || project._id} value={project.id || project._id}>
+                              <div className="flex items-center gap-2">
+                                <div
+                                  className="w-2.5 h-2.5 rounded-full ring-2 ring-white/50 dark:ring-slate-800/50"
+                                  style={{ backgroundColor: project.color || '#6366F1' }}
+                                />
+                                {project.name}
+                              </div>
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+
+                    <div className="space-y-2">
+                      <Label className="text-xs font-semibold uppercase tracking-wider text-slate-500">Group</Label>
+                      <Select
+                        value={formData.assigned_group_id || "none"}
+                        onValueChange={(value) => setFormData(prev => ({ ...prev, assigned_group_id: value === "none" ? '' : value }))}
+                      >
+                        <SelectTrigger className="bg-white/50 dark:bg-slate-800/50 border-slate-200 dark:border-slate-700 h-11 rounded-xl">
+                          <SelectValue placeholder="No Group" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="none">No Group</SelectItem>
+                          {userGroups.map(group => (
+                            <SelectItem key={group.id || group._id} value={group.id || group._id}>
+                              {group.name}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-4">
+                      <div className="space-y-2">
+                        <Label className="text-xs font-semibold uppercase tracking-wider text-slate-500">Status</Label>
+                        <Select
+                          value={formData.status}
+                          onValueChange={(value) => setFormData(prev => ({ ...prev, status: value }))}
+                        >
+                          <SelectTrigger className="bg-white/50 dark:bg-slate-800/50 border-slate-200 dark:border-slate-700 h-11 rounded-xl">
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="backlog">Backlog</SelectItem>
+                            <SelectItem value="todo">To Do</SelectItem>
+                            <SelectItem value="in_progress">In Progress</SelectItem>
+                            <SelectItem value="review">Review</SelectItem>
+                            <SelectItem value="done">Done</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      </div>
+
+                      <div className="space-y-2">
+                        <Label className="text-xs font-semibold uppercase tracking-wider text-slate-500">Priority</Label>
+                        <Select
+                          value={formData.priority}
+                          onValueChange={(value) => setFormData(prev => ({ ...prev, priority: value }))}
+                        >
+                          <SelectTrigger className="bg-white/50 dark:bg-slate-800/50 border-slate-200 dark:border-slate-700 h-11 rounded-xl">
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="critical">Critical</SelectItem>
+                            <SelectItem value="high">High</SelectItem>
+                            <SelectItem value="medium">Medium</SelectItem>
+                            <SelectItem value="low">Low</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      </div>
+                    </div>
+
+                    <div className="space-y-2 pt-2">
+                      <Label className="text-xs font-semibold uppercase tracking-wider text-slate-500">Tags</Label>
+                      <StandardTagSelect
+                        selectedTags={formData.tags}
+                        onChange={(tags) => setFormData(prev => ({ ...prev, tags }))}
+                      />
                     </div>
                   </div>
-                </button>
+                </div>
               </div>
 
-              {/* Marketing Template Selection */}
-              {taskCategory === 'marketing' && (
-                <div className="space-y-3 animate-in fade-in slide-in-from-top-4">
-                  <Label className="text-base font-semibold text-slate-900 flex items-center gap-2">
-                    <div className="w-1 h-5 bg-gradient-to-b from-fuchsia-500 to-violet-600 rounded-full"></div>
-                    Video Template
-                  </Label>
-                  <Select value={marketingTemplate} onValueChange={setMarketingTemplate}>
-                    <SelectTrigger className="border-2 border-slate-200 focus:border-fuchsia-500 rounded-xl h-12 transition-all">
-                      <SelectValue placeholder="Choose a template" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="samarpan">🙏 Samarpan Videos</SelectItem>
-                      <SelectItem value="egc">👥 EGC Videos (Employee Content)</SelectItem>
-                      <SelectItem value="campaign">📢 Campaign Videos</SelectItem>
-                      <SelectItem value="awareness">✨ Awareness Videos</SelectItem>
-                    </SelectContent>
-                  </Select>
-                  {marketingTemplate && (
-                    <div className="mt-3 p-4 bg-fuchsia-50 border border-fuchsia-200 rounded-xl">
-                      <p className="text-sm text-fuchsia-900 font-medium mb-1">Template Applied ✓</p>
-                      <p className="text-xs text-fuchsia-700">
-                        Project: "Marketing_Collateral" • Group: "Digital Marketing" • All marketing members assigned • Marketing workflow will be auto-created
-                      </p>
+              {/* Assignment Card */}
+              <div className="bg-white/70 dark:bg-slate-900/70 backdrop-blur-xl rounded-3xl p-1 shadow-2xl shadow-indigo-100/50 dark:shadow-none border border-white/50 dark:border-slate-800 ring-1 ring-white/50 animate-in fade-in slide-in-from-bottom-8 duration-700 delay-400">
+                <div className="bg-gradient-to-b from-white/50 to-white/10 dark:from-slate-800/50 dark:to-slate-900/10 rounded-[1.4rem] p-6 space-y-5">
+                  <div className="flex items-center gap-3 mb-2">
+                    <div className="p-2 bg-emerald-100 dark:bg-emerald-900/30 rounded-lg text-emerald-600 dark:text-emerald-400">
+                      <Users className="w-5 h-5" />
                     </div>
-                  )}
-                </div>
-              )}
-            </div>
-          </div>
+                    <h2 className="text-xl font-bold text-slate-800 dark:text-slate-100">Assignment</h2>
+                  </div>
 
-          {/* Main Form Card */}
-          <div className="bg-white/80 backdrop-blur-sm rounded-3xl shadow-xl border border-slate-200/50 overflow-hidden">
-            <div className="bg-gradient-to-r from-indigo-500 to-purple-600 p-6 sm:p-8">
-              <h2 className="text-xl font-bold text-white mb-2">Task Details</h2>
-              <p className="text-indigo-100 text-sm">Essential information about your task</p>
-            </div>
-
-            <div className="p-6 sm:p-8 space-y-6">
-              {/* Title */}
-              <div className="space-y-3">
-                <div className="flex items-center gap-2">
-                  <div className="w-1 h-6 bg-gradient-to-b from-indigo-500 to-purple-600 rounded-full"></div>
-                  <Label htmlFor="title" className="text-base font-semibold text-slate-900">
-                    Task Title <span className="text-red-500">*</span>
-                  </Label>
-                </div>
-                <Input
-                  id="title"
-                  placeholder="What needs to be done?"
-                  value={formData.title}
-                  onChange={(e) => setFormData(prev => ({ ...prev, title: e.target.value }))}
-                  className="text-lg border-2 border-slate-200 focus:border-indigo-500 rounded-xl h-12 px-4 transition-all"
-                  required
-                />
-              </div>
-
-              {/* Description */}
-              <div className="space-y-3">
-                <div className="flex items-center gap-2">
-                  <div className="w-1 h-6 bg-gradient-to-b from-indigo-500 to-purple-600 rounded-full"></div>
-                  <Label htmlFor="description" className="text-base font-semibold text-slate-900">Description</Label>
-                </div>
-                <Textarea
-                  id="description"
-                  placeholder="Describe the task in detail..."
-                  value={formData.description}
-                  onChange={(e) => setFormData(prev => ({ ...prev, description: e.target.value }))}
-                  rows={4}
-                  className="border-2 border-slate-200 focus:border-indigo-500 rounded-xl px-4 py-3 transition-all resize-none"
-                />
-              </div>
-
-              {/* AI Task Suggestions */}
-              {formData.project_id && user?.role === 'admin' && (
-                <AITaskSuggestions
-                  projectData={projects.find(p => p.id === formData.project_id)}
-                  currentTitle={formData.title}
-                  currentDescription={formData.description}
-                  currentTags={formData.tags}
-                  onApplyTitle={(title) => setFormData(prev => ({ ...prev, title }))}
-                  onApplyDescription={(desc) => setFormData(prev => ({ ...prev, description: desc }))}
-                  onApplyTag={(tag) => setFormData(prev => ({ ...prev, tags: [...prev.tags, tag] }))}
-                  existingTasks={projectTasks}
-                />
-              )}
-            </div>
-          </div>
-
-          {/* Project & Classification Section */}
-          <div className="bg-white/80 backdrop-blur-sm rounded-3xl shadow-xl border border-slate-200/50 overflow-hidden">
-            <div className="bg-gradient-to-r from-blue-500 to-cyan-600 p-6 sm:p-8">
-              <h2 className="text-xl font-bold text-white mb-2">Project & Classification</h2>
-              <p className="text-blue-100 text-sm">Organize and categorize your task</p>
-            </div>
-
-            <div className="p-6 sm:p-8 space-y-6">
-              {/* Row: Project & Group */}
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                <div className="space-y-3">
-                  <Label className="text-base font-semibold text-slate-900 flex items-center gap-2">
-                    <div className="w-1 h-5 bg-gradient-to-b from-blue-500 to-cyan-600 rounded-full"></div>
-                    Project
-                  </Label>
-                  <Select
-                    value={formData.project_id}
-                    onValueChange={(value) => setFormData(prev => ({ ...prev, project_id: value, group_id: '' }))}
-                  >
-                    <SelectTrigger className="border-2 border-slate-200 focus:border-blue-500 rounded-xl h-12 transition-all">
-                      <SelectValue placeholder="Choose a project" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {projects.map(project => (
-                        <SelectItem key={project.id || project._id} value={project.id || project._id}>
-                          <div className="flex items-center gap-2">
-                            <div
-                              className="w-3 h-3 rounded-full shadow-sm"
-                              style={{ backgroundColor: project.color || '#6366F1' }}
-                            />
-                            {project.name}
-                          </div>
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-
-                <div className="space-y-3">
-                  <Label className="text-base font-semibold text-slate-900 flex items-center gap-2">
-                    <div className="w-1 h-5 bg-gradient-to-b from-blue-500 to-cyan-600 rounded-full"></div>
-                    Group (Optional)
-                  </Label>
-                  <Select
-                    value={formData.assigned_group_id || "none"}
-                    onValueChange={(value) => setFormData(prev => ({ ...prev, assigned_group_id: value === "none" ? '' : value }))}
-                  >
-                    <SelectTrigger className="border-2 border-slate-200 focus:border-blue-500 rounded-xl h-12 transition-all">
-                      <SelectValue placeholder="Choose a group" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="none">No Group</SelectItem>
-                      {userGroups.map(group => (
-                        <SelectItem key={group.id || group._id} value={group.id || group._id}>
-                          <div className="flex items-center gap-2">
-                            <div
-                              className="w-3 h-3 rounded-full shadow-sm"
-                              style={{ backgroundColor: group.color || '#6366F1' }}
-                            />
-                            {group.name}
-                          </div>
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-              </div>
-
-              {/* Task Type */}
-              <div className="space-y-3">
-                <Label className="text-base font-semibold text-slate-900 flex items-center gap-2">
-                  <div className="w-1 h-5 bg-gradient-to-b from-blue-500 to-cyan-600 rounded-full"></div>
-                  Task Type
-                </Label>
-                <Select
-                  value={formData.task_type}
-                  onValueChange={(value) => setFormData(prev => ({ ...prev, task_type: value }))}
-                >
-                  <SelectTrigger className="border-2 border-slate-200 focus:border-blue-500 rounded-xl h-12 transition-all">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="epic">🎯 Epic</SelectItem>
-                    <SelectItem value="story">📖 Story</SelectItem>
-                    <SelectItem value="task">✅ Task</SelectItem>
-                    <SelectItem value="bug">🐛 Bug</SelectItem>
-                    <SelectItem value="feature">⭐ Feature</SelectItem>
-                    <SelectItem value="improvement">🚀 Improvement</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-
-              {/* Status & Priority */}
-              <div className="grid grid-cols-2 gap-6">
-                <div className="space-y-3">
-                  <Label className="text-base font-semibold text-slate-900 flex items-center gap-2">
-                    <div className="w-1 h-5 bg-gradient-to-b from-blue-500 to-cyan-600 rounded-full"></div>
-                    Status
-                  </Label>
-                  <Select
-                    value={formData.status}
-                    onValueChange={(value) => setFormData(prev => ({ ...prev, status: value }))}
-                  >
-                    <SelectTrigger className="border-2 border-slate-200 focus:border-blue-500 rounded-xl h-12 transition-all">
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="backlog">📋 Backlog</SelectItem>
-                      <SelectItem value="todo">📝 To Do</SelectItem>
-                      <SelectItem value="in_progress">🚧 In Progress</SelectItem>
-                      <SelectItem value="review">👀 Review</SelectItem>
-                      <SelectItem value="done">✅ Done</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-
-                <div className="space-y-3">
-                  <Label className="text-base font-semibold text-slate-900 flex items-center gap-2">
-                    <div className="w-1 h-5 bg-gradient-to-b from-blue-500 to-cyan-600 rounded-full"></div>
-                    Priority
-                  </Label>
-                  <Select
-                    value={formData.priority}
-                    onValueChange={(value) => setFormData(prev => ({ ...prev, priority: value }))}
-                  >
-                    <SelectTrigger className="border-2 border-slate-200 focus:border-blue-500 rounded-xl h-12 transition-all">
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="critical">
-                        <div className="flex items-center gap-2">
-                          <Flag className="w-4 h-4 text-red-500" />
-                          Critical
-                        </div>
-                      </SelectItem>
-                      <SelectItem value="high">
-                        <div className="flex items-center gap-2">
-                          <Flag className="w-4 h-4 text-orange-500" />
-                          High
-                        </div>
-                      </SelectItem>
-                      <SelectItem value="medium">
-                        <div className="flex items-center gap-2">
-                          <Flag className="w-4 h-4 text-blue-500" />
-                          Medium
-                        </div>
-                      </SelectItem>
-                      <SelectItem value="low">
-                        <div className="flex items-center gap-2">
-                          <Flag className="w-4 h-4 text-slate-400" />
-                          Low
-                        </div>
-                      </SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-              </div>
-            </div>
-          </div>
-
-          {/* Team & Assignment Section */}
-          <div className="bg-white/80 backdrop-blur-sm rounded-3xl shadow-xl border border-slate-200/50 overflow-hidden">
-            <div className="bg-gradient-to-r from-emerald-500 to-teal-600 p-6 sm:p-8">
-              <h2 className="text-xl font-bold text-white mb-2">Team & Assignment</h2>
-              <p className="text-emerald-100 text-sm">Who will work on this task</p>
-            </div>
-
-            <div className="p-6 sm:p-8 space-y-6">
-              {/* Assignees */}
-              <div className="space-y-3">
-                <Label className="text-base font-semibold text-slate-900 flex items-center gap-2">
-                  <div className="w-1 h-5 bg-gradient-to-b from-emerald-500 to-teal-600 rounded-full"></div>
-                  Assignees
-                </Label>
-                <UserMultiSelect
-                  users={users}
-                  departments={departments}
-                  selectedEmails={formData.assignees}
-                  onChange={(newAssignees) => setFormData(prev => ({ ...prev, assignees: newAssignees }))}
-                  placeholder="Select team members..."
-                  className=""
-                />
-
-                {/* Debug panel: shows counts and a manual fetch button */}
-                <div className="mt-2 text-sm text-slate-500">
-                  <div>debug: usersFromEntity={usersFromEntity?.length || 0}, combined users={users?.length || 0}, filtered={filteredUsers?.length || 0}</div>
-                  <button
-                    type="button"
-                    onClick={async () => {
-                      // Try base44.functions.invoke first
-                      try {
-                        const r = await base44.functions.invoke('getDashboardUsers');
-                        console.debug('manual debug fetch via base44.functions.invoke', r);
-                      } catch (e) {
-                        console.error('manual debug fetch via base44.functions.invoke failed', e);
-                      }
-
-                      // Try relative fetch to functions endpoint
-                      try {
-                        const res = await fetch('/functions/v1/invoke/getDashboardUsers', { method: 'POST', headers: { 'Content-Type': 'application/json' } });
-                        const text = await res.text();
-                        console.debug('manual debug fetch via /functions path', { ok: res.ok, status: res.status, body: text });
-                      } catch (e) {
-                        console.error('manual debug fetch via /functions path failed', e);
-                      }
-
-                      // Try direct backend host (fallback)
-                      try {
-                        const res2 = await fetch('http://localhost:3000/functions/v1/invoke/getDashboardUsers', { method: 'POST', headers: { 'Content-Type': 'application/json' } });
-                        const text2 = await res2.text();
-                        console.debug('manual debug fetch via http://localhost:3000', { ok: res2.ok, status: res2.status, body: text2 });
-                      } catch (e) {
-                        console.error('manual debug fetch via http://localhost:3000 failed', e);
-                      }
-
-                      alert('Manual debug fetch attempts logged to console');
-                    }}
-                    className="mt-2 text-xs text-indigo-600 underline"
-                  >
-                    Debug: fetch dashboard users
-                  </button>
-                </div>
-              </div>
-
-              {/* AI Assignee Suggestions */}
-              {user?.role === 'admin' && (
-                <AIAssigneeSuggestions
-                  taskData={{
-                    ...formData,
-                    project_name: projects.find(p => p.id === formData.project_id)?.name
-                  }}
-                  teamMembers={users}
-                  tasks={[]}
-                  onSelectAssignee={(email) => {
-                    if (!formData.assignees.includes(email)) {
-                      setFormData(prev => ({ ...prev, assignees: [...prev.assignees, email] }));
-                    }
-                  }}
-                  selectedAssignees={formData.assignees}
-                />
-              )}
-            </div>
-          </div>
-
-          {/* Timeline & Estimation Section */}
-          <div className="bg-white/80 backdrop-blur-sm rounded-3xl shadow-xl border border-slate-200/50 overflow-hidden">
-            <div className="bg-gradient-to-r from-amber-500 to-orange-600 p-6 sm:p-8">
-              <h2 className="text-xl font-bold text-white mb-2">Timeline & Estimation</h2>
-              <p className="text-amber-100 text-sm">Schedule and time estimates</p>
-            </div>
-
-            <div className="p-6 sm:p-8 space-y-6">
-              {/* Row: Dates */}
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                <div className="space-y-3">
-                  <Label className="text-base font-semibold text-slate-900 flex items-center gap-2">
-                    <div className="w-1 h-5 bg-gradient-to-b from-amber-500 to-orange-600 rounded-full"></div>
-                    Start Date
-                  </Label>
-                  <Popover open={startDateOpen} onOpenChange={setStartDateOpen}>
-                    <PopoverTrigger asChild>
-                      <Button
-                        variant="outline"
-                        className={cn(
-                          "w-full justify-start text-left font-normal border-2 border-slate-200 hover:border-amber-500 rounded-xl h-12 transition-all",
-                          !formData.start_date && "text-slate-500"
-                        )}
-                      >
-                        <CalendarIcon className="mr-2 h-5 w-5" />
-                        {formData.start_date ? format(new Date(formData.start_date), 'PPP') : 'Pick a date'}
-                      </Button>
-                    </PopoverTrigger>
-                    <PopoverContent className="w-auto p-0">
-                      <Calendar
-                        mode="single"
-                        selected={formData.start_date ? new Date(formData.start_date) : undefined}
-                        onSelect={(date) => {
-                          setFormData(prev => ({
-                            ...prev,
-                            start_date: date ? format(date, 'yyyy-MM-dd') : ''
-                          }));
-                          setStartDateOpen(false);
-                        }}
-                        className=""
-                        classNames={{}}
+                  <div className="space-y-4">
+                    <div className="space-y-2">
+                      <Label className="text-sm font-medium text-slate-700 dark:text-slate-300">Assignees</Label>
+                      <UserMultiSelect
+                        users={users}
+                        departments={departments}
+                        selectedEmails={formData.assignees}
+                        onChange={(newAssignees) => setFormData(prev => ({ ...prev, assignees: newAssignees }))}
+                        placeholder="Select team members..."
+                        className="bg-white/50 dark:bg-slate-800/50 border-slate-200 dark:border-slate-700 h-auto min-h-[44px] rounded-xl"
                       />
-                    </PopoverContent>
-                  </Popover>
-                </div>
+                    </div>
 
-                <div className="space-y-3">
-                  <Label className="text-base font-semibold text-slate-900 flex items-center gap-2">
-                    <div className="w-1 h-5 bg-gradient-to-b from-amber-500 to-orange-600 rounded-full"></div>
-                    Due Date
-                  </Label>
-                  <Popover open={dueDateOpen} onOpenChange={setDueDateOpen}>
-                    <PopoverTrigger asChild>
-                      <Button
-                        variant="outline"
-                        className={cn(
-                          "w-full justify-start text-left font-normal border-2 border-slate-200 hover:border-amber-500 rounded-xl h-12 transition-all",
-                          !formData.due_date && "text-slate-500"
-                        )}
-                      >
-                        <CalendarIcon className="mr-2 h-5 w-5" />
-                        {formData.due_date ? format(new Date(formData.due_date), 'PPP') : 'Pick a date'}
-                      </Button>
-                    </PopoverTrigger>
-                    <PopoverContent className="w-auto p-0">
-                      <Calendar
-                        mode="single"
-                        selected={formData.due_date ? new Date(formData.due_date) : undefined}
-                        onSelect={(date) => {
-                          setFormData(prev => ({
-                            ...prev,
-                            due_date: date ? format(date, 'yyyy-MM-dd') : ''
-                          }));
-                          setDueDateOpen(false);
-                        }}
-                        className=""
-                        classNames={{}}
-                      />
-                    </PopoverContent>
-                  </Popover>
+                    <div className="grid grid-cols-2 gap-4">
+                      <div className="space-y-2">
+                        <Label className="text-xs font-semibold uppercase tracking-wider text-slate-500">Start Date</Label>
+                        <Popover open={startDateOpen} onOpenChange={setStartDateOpen}>
+                          <PopoverTrigger asChild>
+                            <Button
+                              variant="outline"
+                              className={cn(
+                                "w-full justify-start text-left font-normal bg-white/50 dark:bg-slate-800/50 border-slate-200 dark:border-slate-700 h-11 rounded-xl",
+                                !formData.start_date && "text-slate-500"
+                              )}
+                            >
+                              <CalendarIcon className="mr-2 h-4 w-4" />
+                              {formData.start_date ? format(new Date(formData.start_date), 'PPP') : 'Select'}
+                            </Button>
+                          </PopoverTrigger>
+                          <PopoverContent className="w-auto p-0" align="start">
+                            <Calendar
+                              mode="single"
+                              selected={formData.start_date ? new Date(formData.start_date) : undefined}
+                              onSelect={(date) => {
+                                setFormData(prev => ({
+                                  ...prev,
+                                  start_date: date ? format(date, 'yyyy-MM-dd') : ''
+                                }));
+                                setStartDateOpen(false);
+                              }}
+                            />
+                          </PopoverContent>
+                        </Popover>
+                      </div>
+
+                      <div className="space-y-2">
+                        <Label className="text-xs font-semibold uppercase tracking-wider text-slate-500">Due Date</Label>
+                        <Popover open={dueDateOpen} onOpenChange={setDueDateOpen}>
+                          <PopoverTrigger asChild>
+                            <Button
+                              variant="outline"
+                              className={cn(
+                                "w-full justify-start text-left font-normal bg-white/50 dark:bg-slate-800/50 border-slate-200 dark:border-slate-700 h-11 rounded-xl",
+                                !formData.due_date && "text-slate-500"
+                              )}
+                            >
+                              <CalendarIcon className="mr-2 h-4 w-4" />
+                              {formData.due_date ? format(new Date(formData.due_date), 'PPP') : 'Select'}
+                            </Button>
+                          </PopoverTrigger>
+                          <PopoverContent className="w-auto p-0" align="start">
+                            <Calendar
+                              mode="single"
+                              selected={formData.due_date ? new Date(formData.due_date) : undefined}
+                              onSelect={(date) => {
+                                setFormData(prev => ({
+                                  ...prev,
+                                  due_date: date ? format(date, 'yyyy-MM-dd') : ''
+                                }));
+                                setDueDateOpen(false);
+                              }}
+                            />
+                          </PopoverContent>
+                        </Popover>
+                      </div>
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-4">
+                      <div className="space-y-2">
+                        <Label className="text-xs font-semibold uppercase tracking-wider text-slate-500">Est. Hours</Label>
+                        <Input
+                          type="number"
+                          min="0"
+                          step="0.5"
+                          placeholder="0"
+                          value={formData.estimated_hours}
+                          onChange={(e) => setFormData(prev => ({ ...prev, estimated_hours: e.target.value }))}
+                          className="bg-white/50 dark:bg-slate-800/50 border-slate-200 dark:border-slate-700 h-11 rounded-xl"
+                        />
+                      </div>
+                      <div className="space-y-2">
+                        <Label className="text-xs font-semibold uppercase tracking-wider text-slate-500">Points</Label>
+                        <Input
+                          type="number"
+                          min="0"
+                          placeholder="0"
+                          value={formData.story_points}
+                          onChange={(e) => setFormData(prev => ({ ...prev, story_points: e.target.value }))}
+                          className="bg-white/50 dark:bg-slate-800/50 border-slate-200 dark:border-slate-700 h-11 rounded-xl"
+                        />
+                      </div>
+                    </div>
+                  </div>
                 </div>
               </div>
-
-              {/* Row: Estimates */}
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                <div className="space-y-3">
-                  <Label htmlFor="estimated_hours" className="text-base font-semibold text-slate-900 flex items-center gap-2">
-                    <div className="w-1 h-5 bg-gradient-to-b from-amber-500 to-orange-600 rounded-full"></div>
-                    Estimated Hours
-                  </Label>
-                  <Input
-                    id="estimated_hours"
-                    type="number"
-                    min="0"
-                    step="0.5"
-                    placeholder="e.g., 4"
-                    value={formData.estimated_hours}
-                    onChange={(e) => setFormData(prev => ({ ...prev, estimated_hours: e.target.value }))}
-                    className="border-2 border-slate-200 focus:border-amber-500 rounded-xl h-12 px-4 transition-all"
-                  />
-                </div>
-
-                <div className="space-y-3">
-                  <Label htmlFor="story_points" className="text-base font-semibold text-slate-900 flex items-center gap-2">
-                    <div className="w-1 h-5 bg-gradient-to-b from-amber-500 to-orange-600 rounded-full"></div>
-                    Story Points
-                  </Label>
-                  <Input
-                    id="story_points"
-                    type="number"
-                    min="0"
-                    placeholder="e.g., 3"
-                    value={formData.story_points}
-                    onChange={(e) => setFormData(prev => ({ ...prev, story_points: e.target.value }))}
-                    className="border-2 border-slate-200 focus:border-amber-500 rounded-xl h-12 px-4 transition-all"
-                  />
-                </div>
-              </div>
-
-              {/* AI Completion Time Prediction */}
-              {user?.role === 'admin' && (
-                <AICompletionPredictor
-                  taskData={formData}
-                  tasks={[]}
-                />
-              )}
             </div>
-          </div>
 
-          {/* Additional Details Section */}
-          <div className="bg-white/80 backdrop-blur-sm rounded-3xl shadow-xl border border-slate-200/50 overflow-hidden">
-            <div className="bg-gradient-to-r from-rose-500 to-pink-600 p-6 sm:p-8">
-              <h2 className="text-xl font-bold text-white mb-2">Additional Details</h2>
-              <p className="text-rose-100 text-sm">Tags, attachments, and custom fields</p>
-            </div>
-
-            <div className="p-6 sm:p-8 space-y-6">
-              {/* Tags */}
-              <div className="space-y-3">
-                <Label className="text-base font-semibold text-slate-900 flex items-center gap-2">
-                  <div className="w-1 h-5 bg-gradient-to-b from-rose-500 to-pink-600 rounded-full"></div>
-                  Tags
-                </Label>
-                <StandardTagSelect
-                  selectedTags={formData.tags}
-                  onChange={(tags) => setFormData(prev => ({ ...prev, tags }))}
-                />
-              </div>
-
-              {/* Attachments */}
-              <div className="space-y-3">
-                <Label className="text-base font-semibold text-slate-900 flex items-center gap-2">
-                  <div className="w-1 h-5 bg-gradient-to-b from-rose-500 to-pink-600 rounded-full"></div>
-                  Attachments
-                </Label>
-                <FileUpload
-                  files={formData.attachments}
-                  onUpload={(file) => setFormData(prev => ({
-                    ...prev,
-                    attachments: [...prev.attachments, file]
-                  }))}
-                  onRemove={(i) => setFormData(prev => ({
-                    ...prev,
-                    attachments: prev.attachments.filter((_, idx) => idx !== i)
-                  }))}
-                />
-              </div>
-
-              {/* Custom Fields */}
-              {relevantCustomFields.length > 0 && (
-                <CustomFieldsForm
-                  fields={relevantCustomFields}
-                  values={formData.custom_fields}
-                  onChange={(values) => setFormData(prev => ({ ...prev, custom_fields: values }))}
-                  taskStatus={formData.status}
-                />
-              )}
-
-              {/* Recurring Task Options */}
-              <RecurringTaskForm formData={formData} setFormData={setFormData} />
-            </div>
-          </div>
-
-          {/* Action Buttons */}
-          <div className="flex flex-col sm:flex-row justify-end gap-3 pt-4">
-            <Button type="button" variant="outline" className="w-full sm:w-auto border-2 rounded-xl h-12" onClick={() => navigate(-1)}>
-              <X className="w-4 h-4 mr-2" />
-              Cancel
-            </Button>
-            <Button
-              type="submit"
-              className="w-full sm:w-auto bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-700 hover:to-purple-700 text-white shadow-lg hover:shadow-xl transition-all rounded-xl h-12 px-8"
-              disabled={createTaskMutation.isPending || !formData.title}
-            >
-              {createTaskMutation.isPending ? (
-                <>
-                  <Loader2 className="w-5 h-5 mr-2 animate-spin" />
-                  Creating Task...
-                </>
-              ) : (
-                <>
-                  <Save className="w-5 h-5 mr-2" />
-                  Create Task
-                </>
-              )}
-            </Button>
           </div>
         </form>
       </div>
