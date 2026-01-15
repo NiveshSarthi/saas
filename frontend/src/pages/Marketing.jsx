@@ -51,13 +51,15 @@ export default function MarketingPage() {
         const currentUser = await base44.auth.me();
         setUser(currentUser);
 
-        // Check if admin or marketing/IT department
-        if (currentUser.role === 'admin') {
+        // Use permissions context for super_admin bypass
+        if (currentUser.role_id === 'super_admin' || currentUser.role === 'admin') {
           setIsAuthorized(true);
         } else {
-          const departments = await base44.entities.Department.list();
-          const marketingDept = departments.find(d => d.name.toLowerCase().includes('marketing'));
-          const itDept = departments.find(d => d.name.toLowerCase().includes('it'));
+          // Check for specific departments only if not super_admin
+          const depts = await base44.entities.Department.list();
+          const marketingDept = depts.find(d => d.name.toLowerCase().includes('marketing'));
+          const itDept = depts.find(d => d.name.toLowerCase().includes('it'));
+
           if ((marketingDept && currentUser.department_id === marketingDept.id) ||
             (itDept && currentUser.department_id === itDept.id)) {
             setIsAuthorized(true);

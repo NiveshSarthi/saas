@@ -56,6 +56,7 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Badge } from '@/components/ui/badge';
 import MarketingReports from '@/components/marketing/MarketingReports';
+import { jsPDF } from 'jspdf';
 
 const COLORS = ['#6366F1', '#8B5CF6', '#EC4899', '#F59E0B', '#10B981', '#3B82F6'];
 
@@ -85,7 +86,7 @@ export default function Reports() {
       try {
         const userData = await base44.auth.me();
         setUser(userData);
-      } catch (e) {}
+      } catch (e) { }
     };
     fetchUser();
   }, []);
@@ -125,6 +126,16 @@ export default function Reports() {
     queryFn: () => base44.entities.MarketingTask.list('-updated_date', 1000),
   });
 
+  const { data: marketingVideos = [] } = useQuery({
+    queryKey: ['marketing-videos-reports'],
+    queryFn: () => base44.entities.Video.list('-created_at', 1000),
+  });
+
+  const { data: marketingCategories = [] } = useQuery({
+    queryKey: ['marketing-categories-reports'],
+    queryFn: () => base44.entities.MarketingCategory.list('name', 100),
+  });
+
   // Filter tasks based on selections
   const filteredTasks = tasks.filter(t => {
     if (selectedProject !== 'all' && t.project_id !== selectedProject) return false;
@@ -136,7 +147,7 @@ export default function Reports() {
         return false;
       }
     }
-    
+
     if (selectedDepartment !== 'all') {
       const assignee = users.find(u => u.email === t.assignee_email);
       if (!assignee || assignee.department_id !== selectedDepartment) return false;
@@ -159,11 +170,11 @@ export default function Reports() {
     } else {
       const dateToCompare = new Date(t.created_date);
       const now = new Date();
-      
+
       if (timeRange === 'week' && dateToCompare < subDays(now, 7)) return false;
       if (timeRange === 'month' && dateToCompare < subDays(now, 30)) return false;
       if (timeRange === 'quarter' && dateToCompare < subDays(now, 90)) return false;
-      
+
       if (timeRange === 'custom' && customDateRange.from) {
         if (dateToCompare < startOfDay(customDateRange.from)) return false;
         if (customDateRange.to && dateToCompare > endOfDay(customDateRange.to)) return false;
@@ -185,21 +196,21 @@ export default function Reports() {
   const totalTasks = filteredTasks.length;
   const completedTasks = filteredTasks.filter(t => t.status === 'done').length;
   const inProgressTasks = filteredTasks.filter(t => t.status === 'in_progress').length;
-  const overdueTasks = filteredTasks.filter(t => 
+  const overdueTasks = filteredTasks.filter(t =>
     t.due_date && new Date(t.due_date) < new Date() && t.status !== 'done'
   ).length;
   const completionRate = totalTasks > 0 ? Math.round((completedTasks / totalTasks) * 100) : 0;
 
   const totalEstimatedHours = filteredTasks.reduce((sum, t) => sum + (t.estimated_hours || 0), 0);
   const totalActualHours = filteredTasks.reduce((sum, t) => sum + (t.actual_hours || 0), 0);
-  const avgCycleTime = completedTasks > 0 
+  const avgCycleTime = completedTasks > 0
     ? filteredTasks
-        .filter(t => t.status === 'done' && t.created_date)
-        .reduce((sum, t) => {
-          const created = new Date(t.created_date);
-          const updated = new Date(t.updated_date);
-          return sum + (updated - created) / (1000 * 60 * 60 * 24);
-        }, 0) / completedTasks
+      .filter(t => t.status === 'done' && t.created_date)
+      .reduce((sum, t) => {
+        const created = new Date(t.created_date);
+        const updated = new Date(t.updated_date);
+        return sum + (updated - created) / (1000 * 60 * 60 * 24);
+      }, 0) / completedTasks
     : 0;
 
   const tasksByStatus = Object.entries(
@@ -207,7 +218,7 @@ export default function Reports() {
       acc[task.status] = (acc[task.status] || 0) + 1;
       return acc;
     }, {})
-  ).map(([name, value]) => ({ 
+  ).map(([name, value]) => ({
     name: name.replace('_', ' ').charAt(0).toUpperCase() + name.replace('_', ' ').slice(1),
     value,
     color: STATUS_COLORS[name]
@@ -241,7 +252,7 @@ export default function Reports() {
     }
 
     if (start > end) start = end;
-    
+
     return { start, end };
   };
 
@@ -251,7 +262,7 @@ export default function Reports() {
   const tasksPerDay = chartDays.map(day => {
     const dayStr = format(day, 'yyyy-MM-dd');
     const created = filteredTasks.filter(t => t.created_date?.startsWith(dayStr)).length;
-    const completed = filteredTasks.filter(t => 
+    const completed = filteredTasks.filter(t =>
       t.status === 'done' && t.updated_date?.startsWith(dayStr)
     ).length;
     return {
@@ -308,12 +319,12 @@ export default function Reports() {
         item.priority || '',
         item.assignee_name || '',
         `"${item.project_name?.replace(/"/g, '""') || ''}"`,
-        item.due_date || '',
-        item.created_date || '',
+        item.due_date ? format(new Date(item.due_date), 'yyyy-MM-dd') : '',
+        item.created_date ? format(new Date(item.created_date), 'yyyy-MM-dd') : '',
         item.estimated_hours,
         item.actual_hours
       ].join(','));
-      
+
       const csvContent = [headers.join(','), ...rows].join('\n');
       const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
       const url = URL.createObjectURL(blob);
@@ -324,16 +335,97 @@ export default function Reports() {
       link.click();
       document.body.removeChild(link);
       URL.revokeObjectURL(url);
+    } else if (exportFormat === 'pdf') {
+      const doc = new jsPDF('landscape');
+      const pageWidth = 297;
+
+      // Header
+      doc.setFillColor(79, 70, 229); // indigo-600
+      doc.rect(0, 0, pageWidth, 40, 'F');
+
+      doc.setTextColor(255, 255, 255);
+      doc.setFontSize(22);
+      doc.setFont(undefined, 'bold');
+      doc.text('Tasks Report', 14, 20);
+
+      doc.setFontSize(10);
+      doc.setFont(undefined, 'normal');
+      doc.text(`Generated: ${format(new Date(), 'MMM d, yyyy h:mm a')}`, 14, 28);
+      doc.text(`Total Tasks: ${totalTasks} | Completion Rate: ${completionRate}%`, 14, 34);
+
+      // Table Header
+      let y = 50;
+      doc.setFillColor(248, 250, 252); // slate-50
+      doc.rect(14, y - 5, pageWidth - 28, 8, 'F');
+      doc.setDrawColor(226, 232, 240); // slate-200
+      doc.rect(14, y - 5, pageWidth - 28, 8, 'S');
+
+      doc.setTextColor(0, 0, 0);
+      doc.setFontSize(9);
+      doc.setFont(undefined, 'bold');
+      doc.text('Task Title', 16, y);
+      doc.text('Status', 100, y);
+      doc.text('Priority', 130, y);
+      doc.text('Assignee', 160, y);
+      doc.text('Project', 200, y);
+      doc.text('Due Date', 250, y);
+
+      y += 8;
+      doc.setFont(undefined, 'normal');
+      doc.setFontSize(8);
+
+      cleanData.forEach((task, index) => {
+        if (y > 185) {
+          doc.addPage();
+          y = 20;
+          // Repeat Header on new page
+          doc.setFillColor(248, 250, 252);
+          doc.rect(14, y - 5, pageWidth - 28, 8, 'F');
+          doc.rect(14, y - 5, pageWidth - 28, 8, 'S');
+          doc.setFont(undefined, 'bold');
+          doc.text('Task Title', 16, y);
+          doc.text('Status', 100, y);
+          doc.text('Priority', 130, y);
+          doc.text('Assignee', 160, y);
+          doc.text('Project', 200, y);
+          doc.text('Due Date', 250, y);
+          y += 8;
+          doc.setFont(undefined, 'normal');
+        }
+
+        // Truncate title
+        let title = task.title || 'Untitled';
+        if (title.length > 50) title = title.substring(0, 47) + '...';
+
+        doc.text(title, 16, y);
+        doc.text(task.status || '-', 100, y);
+        doc.text(task.priority || '-', 130, y);
+        doc.text(task.assignee_name || '-', 160, y);
+
+        let projectName = task.project_name || '-';
+        if (projectName.length > 25) projectName = projectName.substring(0, 22) + '...';
+        doc.text(projectName, 200, y);
+
+        doc.text(task.due_date ? format(new Date(task.due_date), 'MMM d, yyyy') : '-', 250, y);
+
+        // Border
+        doc.setDrawColor(241, 245, 249);
+        doc.line(14, y + 2, pageWidth - 14, y + 2);
+
+        y += 7;
+      });
+
+      doc.save(`tasks_report_${format(new Date(), 'yyyy-MM-dd')}.pdf`);
     } else {
       try {
-        const response = await base44.functions.invoke('generateReport', { 
-          data: cleanData, 
-          format: exportFormat 
+        const response = await base44.functions.invoke('generateReport', {
+          data: cleanData,
+          format: exportFormat
         });
-        
+
         const type = exportFormat === 'pdf' ? 'application/pdf' : 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
         const extension = exportFormat === 'pdf' ? 'pdf' : 'xlsx';
-        
+
         const blob = new Blob([response.data], { type });
         const url = window.URL.createObjectURL(blob);
         const a = document.createElement('a');
@@ -406,7 +498,7 @@ export default function Reports() {
             <Filter className="w-4 h-4 text-slate-400" />
             <span className="text-sm font-medium text-slate-600">Filters:</span>
           </div>
-          
+
           <select
             value={reportType}
             onChange={(e) => setReportType(e.target.value)}
@@ -536,6 +628,8 @@ export default function Reports() {
       {reportType === 'marketing' && (
         <MarketingReports
           tasks={marketingTasks}
+          videos={marketingVideos}
+          categories={marketingCategories}
           users={users}
           departments={departments}
         />
@@ -628,12 +722,12 @@ export default function Reports() {
               <CardContent>
                 <div className="h-[250px] relative">
                   <ResponsiveContainer width="100%" height="100%">
-                    <RadialBarChart 
-                      cx="50%" 
-                      cy="50%" 
-                      innerRadius="60%" 
-                      outerRadius="90%" 
-                      barSize={20} 
+                    <RadialBarChart
+                      cx="50%"
+                      cy="50%"
+                      innerRadius="60%"
+                      outerRadius="90%"
+                      barSize={20}
                       data={completionData}
                       startAngle={180}
                       endAngle={0}
@@ -688,7 +782,7 @@ export default function Reports() {
                             <Cell key={index} fill={entry.color} />
                           ))}
                         </Pie>
-                        <Tooltip 
+                        <Tooltip
                           content={({ active, payload }) => {
                             if (active && payload && payload.length) {
                               return (
@@ -707,7 +801,7 @@ export default function Reports() {
                   <div className="flex-1 flex flex-col justify-center gap-3">
                     {tasksByStatus.map((item, i) => (
                       <div key={i} className="flex items-center gap-3">
-                        <div 
+                        <div
                           className="w-4 h-4 rounded-full flex-shrink-0"
                           style={{ backgroundColor: item.color }}
                         />
@@ -739,18 +833,18 @@ export default function Reports() {
                   <AreaChart data={tasksPerDay}>
                     <defs>
                       <linearGradient id="colorCreated" x1="0" y1="0" x2="0" y2="1">
-                        <stop offset="5%" stopColor="#6366F1" stopOpacity={0.3}/>
-                        <stop offset="95%" stopColor="#6366F1" stopOpacity={0}/>
+                        <stop offset="5%" stopColor="#6366F1" stopOpacity={0.3} />
+                        <stop offset="95%" stopColor="#6366F1" stopOpacity={0} />
                       </linearGradient>
                       <linearGradient id="colorCompleted" x1="0" y1="0" x2="0" y2="1">
-                        <stop offset="5%" stopColor="#10B981" stopOpacity={0.3}/>
-                        <stop offset="95%" stopColor="#10B981" stopOpacity={0}/>
+                        <stop offset="5%" stopColor="#10B981" stopOpacity={0.3} />
+                        <stop offset="95%" stopColor="#10B981" stopOpacity={0} />
                       </linearGradient>
                     </defs>
                     <CartesianGrid strokeDasharray="3 3" stroke="#E2E8F0" vertical={false} />
                     <XAxis dataKey="date" stroke="#94A3B8" axisLine={false} tickLine={false} />
                     <YAxis stroke="#94A3B8" axisLine={false} tickLine={false} />
-                    <Tooltip 
+                    <Tooltip
                       content={({ active, payload, label }) => {
                         if (active && payload && payload.length) {
                           return (
@@ -773,19 +867,19 @@ export default function Reports() {
                       }}
                     />
                     <Legend />
-                    <Area 
-                      type="monotone" 
-                      dataKey="created" 
-                      stroke="#6366F1" 
+                    <Area
+                      type="monotone"
+                      dataKey="created"
+                      stroke="#6366F1"
                       strokeWidth={2}
                       fillOpacity={1}
                       fill="url(#colorCreated)"
                       name="Created"
                     />
-                    <Area 
-                      type="monotone" 
-                      dataKey="completed" 
-                      stroke="#10B981" 
+                    <Area
+                      type="monotone"
+                      dataKey="completed"
+                      stroke="#10B981"
                       strokeWidth={2}
                       fillOpacity={1}
                       fill="url(#colorCompleted)"
@@ -812,7 +906,7 @@ export default function Reports() {
                       <CartesianGrid strokeDasharray="3 3" stroke="#E2E8F0" horizontal={true} vertical={false} />
                       <XAxis type="number" stroke="#94A3B8" axisLine={false} tickLine={false} />
                       <YAxis type="category" dataKey="name" stroke="#64748B" width={80} axisLine={false} tickLine={false} />
-                      <Tooltip 
+                      <Tooltip
                         content={({ active, payload }) => {
                           if (active && payload && payload.length) {
                             const data = payload[0].payload;
@@ -856,7 +950,7 @@ export default function Reports() {
                       <CartesianGrid strokeDasharray="3 3" stroke="#E2E8F0" vertical={false} />
                       <XAxis dataKey="name" stroke="#94A3B8" axisLine={false} tickLine={false} tick={{ fontSize: 11 }} />
                       <YAxis stroke="#94A3B8" axisLine={false} tickLine={false} domain={[0, 100]} />
-                      <Tooltip 
+                      <Tooltip
                         content={({ active, payload }) => {
                           if (active && payload && payload.length) {
                             const data = payload[0].payload;
@@ -891,21 +985,21 @@ export default function Reports() {
                 {tasksByPriority.map((item) => {
                   const percentage = totalTasks > 0 ? Math.round((item.value / totalTasks) * 100) : 0;
                   return (
-                    <div 
+                    <div
                       key={item.name}
                       className="p-5 rounded-2xl border-2 text-center relative overflow-hidden transition-all hover:shadow-md"
                       style={{ borderColor: item.color }}
                     >
-                      <div 
+                      <div
                         className="absolute bottom-0 left-0 right-0 opacity-10"
-                        style={{ 
+                        style={{
                           backgroundColor: item.color,
                           height: `${percentage}%`,
                           transition: 'height 0.5s ease'
                         }}
                       />
                       <div className="relative">
-                        <div 
+                        <div
                           className="w-4 h-4 rounded-full mx-auto mb-3"
                           style={{ backgroundColor: item.color }}
                         />
@@ -960,18 +1054,18 @@ export default function Reports() {
                 const completed = userTasks.filter(t => t.status === 'done').length;
                 const inProgress = userTasks.filter(t => t.status === 'in_progress').length;
                 const total = userTasks.length;
-                
+
                 return (
                   <div key={u.email} className="flex items-center gap-4">
                     <div className="w-32 truncate text-sm font-medium">
                       {u.full_name || u.email.split('@')[0]}
                     </div>
                     <div className="flex-1 h-4 bg-slate-100 rounded-full overflow-hidden flex">
-                      <div 
+                      <div
                         className="h-full bg-emerald-500"
                         style={{ width: `${total > 0 ? (completed / total) * 100 : 0}%` }}
                       />
-                      <div 
+                      <div
                         className="h-full bg-amber-500"
                         style={{ width: `${total > 0 ? (inProgress / total) * 100 : 0}%` }}
                       />
