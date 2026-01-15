@@ -2,8 +2,8 @@ import React, { useState, useMemo } from 'react';
 import { base44 } from '@/api/base44Client';
 import { useQuery } from '@tanstack/react-query';
 import { format, parseISO, differenceInDays, startOfDay, endOfDay, isWithinInterval } from 'date-fns';
-import { 
-  BarChart3, FileText, Users, TrendingUp, Calendar as CalendarIcon, 
+import {
+  BarChart3, FileText, Users, TrendingUp, Calendar as CalendarIcon,
   Download, Filter, ChevronDown, Package, Video, Image as ImageIcon,
   Youtube, Instagram, Facebook, Linkedin, Twitter, PlayCircle
 } from 'lucide-react';
@@ -48,7 +48,52 @@ const STATUS_LABELS = {
   trash: 'Trash'
 };
 
-export default function MarketingReports({ tasks = [], users = [], departments = [] }) {
+export default function MarketingReports({ tasks = [], videos = [], categories = [], users = [], departments = [] }) {
+  // Combine tasks and videos for a unified view
+  const unifiedTasks = useMemo(() => {
+    // 1. Process legacy tasks (MarketingTask)
+    const processedTasks = tasks.map(t => ({
+      ...t,
+      id: t.id || t._id,
+      source_type: 'marketing_task'
+    }));
+
+    // 2. Process new Video entities
+    const processedVideos = videos.map(v => {
+      const category = categories.find(c => c.id === v.category_id || c._id === v.category_id);
+
+      // Standardize status for the report labels
+      // Report statuses: editing, review, revision, compliance, compliance_revision, approved, published, tracking, closed, trash
+      // Video statuses: shoot, editing, review, revision, approval, posting, posted, trash
+      let standardizedStatus = v.status;
+      if (v.status === 'shoot') standardizedStatus = 'editing'; // Initial stage
+      if (v.status === 'approval') standardizedStatus = 'approved';
+      if (v.status === 'posting') standardizedStatus = 'approved';
+      if (v.status === 'posted') standardizedStatus = 'published';
+
+      return {
+        ...v,
+        id: v.id || v._id,
+        source_type: 'video',
+        campaign_name: v.title, // Use title as campaign name for videos
+        task_type: 'video',
+        status: standardizedStatus,
+        video_subcategory: category?.name?.toLowerCase().includes('awareness') ? 'awareness_video' :
+          category?.name?.toLowerCase().includes('campaign') ? 'campaign_video' :
+            category?.name?.toLowerCase().includes('egc') ? 'egc_videos' : 'awareness_video', // Default or guess
+        created_date: v.created_at || v.updated_at || new Date().toISOString(),
+        updated_date: v.updated_at || v.created_at || new Date().toISOString(),
+        assignee_email: v.assigned_editor, // Map editor as primary assignee for simplified reporting
+        reviewer_email: v.assigned_manager,
+        compliance_email: v.assigned_director,
+        publisher_email: v.assigned_manager,
+        analytics_email: v.assigned_director
+      };
+    });
+
+    return [...processedTasks, ...processedVideos];
+  }, [tasks, videos, categories]);
+
   const [reportType, setReportType] = useState('production');
   const [dateRange, setDateRange] = useState('month');
   const [customStartDate, setCustomStartDate] = useState('');
@@ -105,10 +150,11 @@ export default function MarketingReports({ tasks = [], users = [], departments =
   // Filter tasks by date and other criteria
   const filteredTasks = useMemo(() => {
     const range = getDateRange();
-    if (!range) return tasks;
+    if (!range) return unifiedTasks;
 
-    return tasks.filter(task => {
+    return unifiedTasks.filter(task => {
       // Date filter
+      if (!task.created_date) return false;
       const createdDate = parseISO(task.created_date);
       if (!isWithinInterval(createdDate, { start: range.start, end: range.end })) {
         return false;
@@ -144,25 +190,25 @@ export default function MarketingReports({ tasks = [], users = [], departments =
     campaign_video: 16,
     egc_videos: 12
   };
-  
+
   const videoActuals = useMemo(() => {
-    const filtered = filteredTasks.filter(t => 
+    const filtered = filteredTasks.filter(t =>
       t.task_type === 'video' && t.video_subcategory
     );
-    
+
     return {
       awareness_video: filtered.filter(t => t.video_subcategory === 'awareness_video').length,
       campaign_video: filtered.filter(t => t.video_subcategory === 'campaign_video').length,
       egc_videos: filtered.filter(t => t.video_subcategory === 'egc_videos').length
     };
   }, [filteredTasks]);
-  
+
   // Status counts for Performance Overview
   const statusCounts = useMemo(() => {
     const trashCount = filteredTasks.filter(t => t.status === 'trash').length;
     const approvedButNotPublished = filteredTasks.filter(t => t.status === 'approved').length;
     const published = filteredTasks.filter(t => t.status === 'published').length;
-    
+
     return {
       total: filteredTasks.length,
       editing: filteredTasks.filter(t => t.status === 'editing').length,
@@ -175,19 +221,19 @@ export default function MarketingReports({ tasks = [], users = [], departments =
 
   // Get unique collateral
   const collateral = useMemo(() => {
-    return [...new Set(tasks.map(t => t.campaign_name).filter(Boolean))].sort();
-  }, [tasks]);
+    return [...new Set(unifiedTasks.map(t => t.campaign_name).filter(Boolean))].sort();
+  }, [unifiedTasks]);
 
   // Get unique platforms
   const platforms = useMemo(() => {
     const platformSet = new Set();
-    tasks.forEach(t => {
+    unifiedTasks.forEach(t => {
       if (t.platforms && Array.isArray(t.platforms)) {
         t.platforms.forEach(p => platformSet.add(p));
       }
     });
     return Array.from(platformSet).sort();
-  }, [tasks]);
+  }, [unifiedTasks]);
 
   // Summary stats for other sections
   const summaryStats = useMemo(() => {
@@ -197,7 +243,7 @@ export default function MarketingReports({ tasks = [], users = [], departments =
     const inReview = filteredTasks.filter(t => t.status === 'review').length;
     const inCompliance = filteredTasks.filter(t => ['compliance', 'compliance_revision'].includes(t.status)).length;
     const readyToPublish = filteredTasks.filter(t => t.status === 'approved').length;
-    
+
     // Individual status counts
     const editing = filteredTasks.filter(t => t.status === 'editing').length;
     const revision = filteredTasks.filter(t => t.status === 'revision').length;
@@ -236,12 +282,14 @@ export default function MarketingReports({ tasks = [], users = [], departments =
       const compliance = users.find(u => u.email === task.compliance_email);
       const publisher = users.find(u => u.email === task.publisher_email);
       const analyst = users.find(u => u.email === task.analytics_email);
-      
+
       let timeTaken = null;
       if (task.status === 'closed' || task.status === 'published') {
-        const created = parseISO(task.created_date);
-        const updated = parseISO(task.updated_date);
-        timeTaken = differenceInDays(updated, created);
+        if (task.created_date && task.updated_date) {
+          const created = parseISO(task.created_date);
+          const updated = parseISO(task.updated_date);
+          timeTaken = differenceInDays(updated, created);
+        }
       }
 
       // Count unique team members
@@ -297,7 +345,7 @@ export default function MarketingReports({ tasks = [], users = [], departments =
         initMember(task.assignee_email);
         memberStats[task.assignee_email].asEditor++;
         memberStats[task.assignee_email].totalInvolved++;
-        
+
         if (task.task_type === 'video') memberStats[task.assignee_email].videos++;
         else memberStats[task.assignee_email].creatives++;
 
@@ -313,7 +361,7 @@ export default function MarketingReports({ tasks = [], users = [], departments =
         if (!task.assignee_email || task.reviewer_email !== task.assignee_email) {
           memberStats[task.reviewer_email].totalInvolved++;
         }
-        
+
         // Count revisions requested by this reviewer
         if (task.status === 'revision') {
           memberStats[task.reviewer_email].revisionsRequested++;
@@ -337,9 +385,9 @@ export default function MarketingReports({ tasks = [], users = [], departments =
       if (task.publisher_email) {
         initMember(task.publisher_email);
         memberStats[task.publisher_email].asPublisher++;
-        if (task.publisher_email !== task.assignee_email && 
-            task.publisher_email !== task.reviewer_email && 
-            task.publisher_email !== task.compliance_email) {
+        if (task.publisher_email !== task.assignee_email &&
+          task.publisher_email !== task.reviewer_email &&
+          task.publisher_email !== task.compliance_email) {
           memberStats[task.publisher_email].totalInvolved++;
         }
       }
@@ -348,10 +396,10 @@ export default function MarketingReports({ tasks = [], users = [], departments =
       if (task.analytics_email) {
         initMember(task.analytics_email);
         memberStats[task.analytics_email].asAnalyst++;
-        if (task.analytics_email !== task.assignee_email && 
-            task.analytics_email !== task.reviewer_email && 
-            task.analytics_email !== task.compliance_email &&
-            task.analytics_email !== task.publisher_email) {
+        if (task.analytics_email !== task.assignee_email &&
+          task.analytics_email !== task.reviewer_email &&
+          task.analytics_email !== task.compliance_email &&
+          task.analytics_email !== task.publisher_email) {
           memberStats[task.analytics_email].totalInvolved++;
         }
       }
@@ -399,7 +447,7 @@ export default function MarketingReports({ tasks = [], users = [], departments =
 
     filteredTasks.forEach(task => {
       const campaign = task.campaign_name || 'Unnamed Collateral';
-      
+
       if (!campaignStats[campaign]) {
         campaignStats[campaign] = {
           campaign,
@@ -433,8 +481,8 @@ export default function MarketingReports({ tasks = [], users = [], departments =
       }
 
       // Track all team members involved
-      [task.assignee_email, task.reviewer_email, task.compliance_email, 
-       task.publisher_email, task.analytics_email].forEach(email => {
+      [task.assignee_email, task.reviewer_email, task.compliance_email,
+      task.publisher_email, task.analytics_email].forEach(email => {
         if (email) campaignStats[campaign].allMembers.add(email);
       });
 
@@ -457,10 +505,10 @@ export default function MarketingReports({ tasks = [], users = [], departments =
       .filter(task => task.status !== 'closed') // Only active tasks
       .map(task => {
         const assignee = users.find(u => u.email === task.assignee_email);
-        const updatedDate = parseISO(task.updated_date);
+        const updatedDate = task.updated_date ? parseISO(task.updated_date) : new Date();
         const now = new Date();
         const daysAtStage = differenceInDays(now, updatedDate);
-        
+
         // Determine who owns this stage
         let currentOwner = task.assignee_email;
         if (task.status === 'review') currentOwner = task.reviewer_email;
@@ -522,7 +570,7 @@ export default function MarketingReports({ tasks = [], users = [], departments =
 
     // Modern gradient header with enhanced decorative elements
     const pageWidth = orientation === 'landscape' ? 297 : 210;
-    
+
     // Gradient background (simulated with multiple rectangles)
     doc.setFillColor(79, 70, 229);
     doc.rect(0, 0, pageWidth, 50, 'F');
@@ -530,13 +578,13 @@ export default function MarketingReports({ tasks = [], users = [], departments =
     doc.rect(0, 0, pageWidth, 35, 'F');
     doc.setFillColor(124, 58, 237);
     doc.rect(0, 35, pageWidth, 15, 'F');
-    
+
     // Decorative wave pattern
     doc.setFillColor(139, 92, 246);
     for (let i = 0; i < pageWidth; i += 8) {
       doc.circle(i, 48, 3, 'F');
     }
-    
+
     // Decorative circles - enhanced
     doc.setFillColor(255, 255, 255, 0.1);
     doc.circle(pageWidth - 30, 8, 15, 'F');
@@ -545,7 +593,7 @@ export default function MarketingReports({ tasks = [], users = [], departments =
     doc.circle(pageWidth - 20, 12, 6, 'F');
     doc.setFillColor(167, 139, 250);
     doc.circle(pageWidth - 12, 30, 4, 'F');
-    
+
     // Main title with shadow effect
     doc.setTextColor(30, 27, 75);
     doc.setFontSize(26);
@@ -553,13 +601,13 @@ export default function MarketingReports({ tasks = [], users = [], departments =
     doc.text('Marketing Reports', 14.5, 20.5);
     doc.setTextColor(255, 255, 255);
     doc.text('Marketing Reports', 14, 20);
-    
+
     // Subtitle
     doc.setFontSize(10);
     doc.setFont(undefined, 'normal');
     doc.setTextColor(224, 231, 255);
     doc.text('Content Production & Performance Analysis', 14, 28);
-    
+
     // Info boxes
     doc.setFontSize(8);
     doc.setTextColor(199, 210, 254);
@@ -580,7 +628,7 @@ export default function MarketingReports({ tasks = [], users = [], departments =
       filters.push(`Member: ${member?.full_name || selectedMember}`);
     }
     if (selectedStatus !== 'all') filters.push(`Status: ${STATUS_LABELS[selectedStatus] || selectedStatus}`);
-    
+
     if (filters.length > 0) {
       doc.setFillColor(254, 249, 195);
       doc.roundedRect(14, y - 4, pageWidth - 28, 8, 2, 2, 'F');
@@ -606,7 +654,7 @@ export default function MarketingReports({ tasks = [], users = [], departments =
     const cardWidth = 37;
     const cardHeight = 20;
     const gap = 2;
-    
+
     // Total Card
     doc.setFillColor(220, 222, 235);
     doc.roundedRect(14.8, y + 0.8, cardWidth, cardHeight, 3, 3, 'F');
@@ -623,7 +671,7 @@ export default function MarketingReports({ tasks = [], users = [], departments =
     doc.setFontSize(6);
     doc.setFont(undefined, 'normal');
     doc.text('(incl. Trash)', 16, y + 17);
-    
+
     // Ready Card
     doc.setFillColor(220, 222, 235);
     doc.roundedRect(14.8 + cardWidth + gap, y + 0.8, cardWidth, cardHeight, 3, 3, 'F');
@@ -640,7 +688,7 @@ export default function MarketingReports({ tasks = [], users = [], departments =
     doc.setFontSize(6);
     doc.setFont(undefined, 'normal');
     doc.text(`${statusCounts.readyUnpublished}/${statusCounts.readyPublished} Pub/Unpub`, 16 + cardWidth + gap, y + 17);
-    
+
     // Editing Card
     doc.setFillColor(220, 222, 235);
     doc.roundedRect(14.8 + (cardWidth + gap) * 2, y + 0.8, cardWidth, cardHeight, 3, 3, 'F');
@@ -657,7 +705,7 @@ export default function MarketingReports({ tasks = [], users = [], departments =
     doc.setFontSize(6);
     doc.setFont(undefined, 'normal');
     doc.text('In creation', 16 + (cardWidth + gap) * 2, y + 17);
-    
+
     // Review Card
     doc.setFillColor(220, 222, 235);
     doc.roundedRect(14.8 + (cardWidth + gap) * 3, y + 0.8, cardWidth, cardHeight, 3, 3, 'F');
@@ -674,7 +722,7 @@ export default function MarketingReports({ tasks = [], users = [], departments =
     doc.setFontSize(6);
     doc.setFont(undefined, 'normal');
     doc.text('Under review', 16 + (cardWidth + gap) * 3, y + 17);
-    
+
     // Trash Card
     doc.setFillColor(220, 222, 235);
     doc.roundedRect(14.8 + (cardWidth + gap) * 4, y + 0.8, cardWidth, cardHeight, 3, 3, 'F');
@@ -691,7 +739,7 @@ export default function MarketingReports({ tasks = [], users = [], departments =
     doc.setFontSize(6);
     doc.setFont(undefined, 'normal');
     doc.text('Discarded', 16 + (cardWidth + gap) * 4, y + 17);
-    
+
     y += cardHeight + 8;
 
     // Video Subcategory Performance Cards
@@ -699,7 +747,7 @@ export default function MarketingReports({ tasks = [], users = [], departments =
       // Calculate targets based on date range
       const range = getDateRange();
       const monthsInRange = range ? Math.max(1, Math.round((range.end - range.start) / (1000 * 60 * 60 * 24 * 30.44))) : 1;
-      
+
       const subcategoryTargets = {
         'awareness_video': { target: 32, label: 'Awareness Video' },
         'campaign_video': { target: 16, label: 'Campaign Video' },
@@ -709,8 +757,8 @@ export default function MarketingReports({ tasks = [], users = [], departments =
       // Calculate TOTAL videos created per subcategory (not just completed)
       const subcategoryStats = {};
       Object.keys(subcategoryTargets).forEach(subcat => {
-        const totalCreated = filteredTasks.filter(t => 
-          t.task_type === 'video' && 
+        const totalCreated = filteredTasks.filter(t =>
+          t.task_type === 'video' &&
           t.video_subcategory === subcat
         ).length;
         subcategoryStats[subcat] = totalCreated;
@@ -737,7 +785,7 @@ export default function MarketingReports({ tasks = [], users = [], departments =
         // Card shadow
         doc.setFillColor(220, 222, 235);
         doc.roundedRect(xPos + 0.8, y + 0.8, videoCardWidth, videoCardHeight, 3, 3, 'F');
-        
+
         // Card background with gradient simulation
         if (idx === 0) {
           doc.setFillColor(147, 51, 234); // Purple for Awareness
@@ -775,7 +823,7 @@ export default function MarketingReports({ tasks = [], users = [], departments =
       // Total Card shadow
       doc.setFillColor(220, 222, 235);
       doc.roundedRect(xPos + 0.8, y + 0.8, videoCardWidth, videoCardHeight, 3, 3, 'F');
-      
+
       // Total Card background - slate gray
       doc.setFillColor(100, 116, 139);
       doc.roundedRect(xPos, y, videoCardWidth, videoCardHeight, 3, 3, 'F');
@@ -810,11 +858,11 @@ export default function MarketingReports({ tasks = [], users = [], departments =
     doc.roundedRect(14.3, y - 3.3, tableWidth, 10, 2, 2, 'F');
     doc.setFillColor(99, 102, 241);
     doc.roundedRect(14, y - 4, tableWidth, 10, 2, 2, 'F');
-    
+
     doc.setTextColor(255, 255, 255);
     doc.setFontSize(8);
     doc.setFont(undefined, 'bold');
-    
+
     if (orientation === 'landscape' && selectedVideoSubcategory !== 'all') {
       // Landscape layout with video category column
       doc.text('COLLATERAL', 16, y);
@@ -840,7 +888,7 @@ export default function MarketingReports({ tasks = [], users = [], departments =
     // Group production data by video category if video type is selected
     const shouldGroupByCategory = selectedType === 'video' || selectedVideoSubcategory !== 'all';
     let groupedData = {};
-    
+
     if (shouldGroupByCategory) {
       productionData.forEach(task => {
         const category = task.video_subcategory || 'Other Videos';
@@ -857,10 +905,10 @@ export default function MarketingReports({ tasks = [], users = [], departments =
     doc.setFont(undefined, 'normal');
     doc.setFontSize(7);
     doc.setTextColor(51, 65, 85);
-    
+
     // Set page height threshold based on orientation
     const pageHeightThreshold = orientation === 'landscape' ? 185 : 270;
-    
+
     Object.entries(groupedData).forEach(([category, categoryTasks]) => {
       let categorySerialNumber = 0;
       // Add category heading if grouping by category
@@ -869,7 +917,7 @@ export default function MarketingReports({ tasks = [], users = [], departments =
           doc.addPage(orientation);
           y = 25;
         }
-        
+
         // Category Section Header
         doc.setFillColor(79, 70, 229);
         doc.roundedRect(14, y, tableWidth, 10, 2, 2, 'F');
@@ -880,28 +928,28 @@ export default function MarketingReports({ tasks = [], users = [], departments =
         doc.text(categoryLabel, 18, y + 7);
         doc.setFontSize(7);
         const completedCount = categoryTasks.filter(t => t.status === 'closed' || t.status === 'published').length;
-        
+
         // Calculate target based on video subcategory and date range
         const range = getDateRange();
         const monthsInRange = range ? Math.max(1, Math.round((range.end - range.start) / (1000 * 60 * 60 * 24 * 30.44))) : 1;
-        
+
         const monthlyTargets = {
           'awareness_video': 32,
           'campaign_video': 16,
           'egc_videos': 12
         };
-        
+
         const targetPerMonth = monthlyTargets[category] || 0;
         const totalTarget = targetPerMonth * monthsInRange;
-        
+
         const totalCreatedCount = categoryTasks.length;
-        const displayText = totalTarget > 0 
+        const displayText = totalTarget > 0
           ? `(${totalCreatedCount}/${totalTarget})`
           : `(${totalCreatedCount}/${categoryTasks.length})`;
-        
+
         doc.text(displayText, tableWidth - 30, y + 7);
         y += 16;
-        
+
         // Repeat table header after category heading
         doc.setFillColor(79, 70, 229);
         doc.roundedRect(14.3, y - 3.3, tableWidth, 10, 2, 2, 'F');
@@ -910,7 +958,7 @@ export default function MarketingReports({ tasks = [], users = [], departments =
         doc.setTextColor(255, 255, 255);
         doc.setFontSize(8);
         doc.setFont(undefined, 'bold');
-        
+
         if (orientation === 'landscape' && selectedVideoSubcategory !== 'all') {
           doc.text('S.NO', 16, y);
           doc.text('COLLATERAL', 30, y);
@@ -934,13 +982,13 @@ export default function MarketingReports({ tasks = [], users = [], departments =
         doc.setFontSize(7);
         doc.setTextColor(51, 65, 85);
       }
-      
+
       categoryTasks.forEach((task, idx) => {
         categorySerialNumber++;
         if (y > pageHeightThreshold) {
           doc.addPage(orientation);
           y = 25;
-          
+
           // Repeat modern header
           doc.setFillColor(79, 70, 229);
           doc.roundedRect(14.3, y - 3.3, tableWidth, 10, 2, 2, 'F');
@@ -949,7 +997,7 @@ export default function MarketingReports({ tasks = [], users = [], departments =
           doc.setTextColor(255, 255, 255);
           doc.setFontSize(8);
           doc.setFont(undefined, 'bold');
-          
+
           if (orientation === 'landscape' && selectedVideoSubcategory !== 'all') {
             doc.text('S.NO', 16, y);
             doc.text('COLLATERAL', 30, y);
@@ -983,14 +1031,14 @@ export default function MarketingReports({ tasks = [], users = [], departments =
           doc.setFillColor(255, 255, 255);
         }
         doc.roundedRect(14, y - 3.5, tableWidth, 7.5, 1.5, 1.5, 'F');
-        
+
         // Subtle left border accent
         doc.setFillColor(99, 102, 241);
         doc.roundedRect(14, y - 3.5, 1, 7.5, 0, 0, 'F');
-        
+
         const collateralName = (task.campaign_name || 'N/A').substring(0, orientation === 'landscape' ? 22 : 15);
         const taskType = (TYPE_LABELS[task.task_type] || task.task_type || 'N/A').substring(0, 10);
-        const videoCategory = task.task_type === 'video' && task.video_subcategory 
+        const videoCategory = task.task_type === 'video' && task.video_subcategory
           ? task.video_subcategory.replace('_', ' ').replace(/\b\w/g, l => l.toUpperCase()).substring(0, 15)
           : '-';
         const levelOfEditing = task.level_of_editing || '-';
@@ -998,10 +1046,10 @@ export default function MarketingReports({ tasks = [], users = [], departments =
         const reviewer = (task.reviewerName || '-').substring(0, 12);
         const publisher = (task.publisherName || '-').substring(0, 12);
         const statusLabel = (STATUS_LABELS[task.status] || task.status || 'N/A').substring(0, 10);
-        
+
         doc.setFont(undefined, 'normal');
         doc.setTextColor(51, 65, 85);
-        
+
         if (orientation === 'landscape' && selectedVideoSubcategory !== 'all') {
           // Landscape layout with serial number, video category, and editing level
           doc.setFont(undefined, 'bold');
@@ -1031,7 +1079,7 @@ export default function MarketingReports({ tasks = [], users = [], departments =
           doc.text(reviewer, 132, y);
           doc.text(publisher, 157, y);
         }
-        
+
         // Status with color coding
         if (task.status === 'closed' || task.status === 'published') {
           doc.setTextColor(16, 185, 129);
@@ -1046,10 +1094,10 @@ export default function MarketingReports({ tasks = [], users = [], departments =
         doc.text(statusLabel, orientation === 'landscape' ? 270 : 182, y);
         doc.setTextColor(51, 65, 85);
         doc.setFont(undefined, 'normal');
-        
+
         y += 7;
       });
-      
+
       // Add spacing between categories
       if (shouldGroupByCategory && Object.keys(groupedData).length > 1) {
         y += 5;
@@ -1060,12 +1108,12 @@ export default function MarketingReports({ tasks = [], users = [], departments =
     const pageCount = doc.internal.getNumberOfPages();
     for (let i = 1; i <= pageCount; i++) {
       doc.setPage(i);
-      
+
       // Footer gradient bar
       const footerY = orientation === 'landscape' ? 200 : 282;
       doc.setFillColor(238, 242, 255);
       doc.roundedRect(14, footerY - 2, pageWidth - 28, 10, 2, 2, 'F');
-      
+
       // Footer content
       doc.setFontSize(7);
       doc.setTextColor(79, 70, 229);
@@ -1113,18 +1161,18 @@ export default function MarketingReports({ tasks = [], users = [], departments =
               <>
                 <div className="space-y-2">
                   <label className="text-sm font-medium text-slate-700">Start Date</label>
-                  <Input 
-                    type="date" 
-                    value={customStartDate} 
+                  <Input
+                    type="date"
+                    value={customStartDate}
                     onChange={(e) => setCustomStartDate(e.target.value)}
                     className="bg-white"
                   />
                 </div>
                 <div className="space-y-2">
                   <label className="text-sm font-medium text-slate-700">End Date</label>
-                  <Input 
-                    type="date" 
-                    value={customEndDate} 
+                  <Input
+                    type="date"
+                    value={customEndDate}
                     onChange={(e) => setCustomEndDate(e.target.value)}
                     className="bg-white"
                   />
@@ -1975,7 +2023,7 @@ export default function MarketingReports({ tasks = [], users = [], departments =
                         <TableCell>
                           <div className="flex items-center gap-2">
                             <div className="w-16 bg-slate-200 rounded-full h-2">
-                              <div 
+                              <div
                                 className="bg-gradient-to-r from-emerald-500 to-green-500 h-2 rounded-full"
                                 style={{ width: `${campaign.completionRate}%` }}
                               />
