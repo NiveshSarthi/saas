@@ -12,7 +12,10 @@ import {
   Flag,
   Plus,
   X,
-  Loader2
+  Loader2,
+  Paperclip,
+  Video,
+  Tag
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -40,6 +43,9 @@ import AITaskSuggestions from '@/components/tasks/AITaskSuggestions';
 import AIAssigneeSuggestions from '@/components/tasks/AIAssigneeSuggestions';
 import AICompletionPredictor from '@/components/tasks/AICompletionPredictor';
 import UserMultiSelect from '@/components/common/UserMultiSelect';
+import CustomFieldsForm from '@/components/tasks/CustomFieldsForm';
+import FileUpload from '@/components/common/FileUpload';
+import { notifyMultipleAssignees, MODULES } from '@/components/utils/notificationService';
 
 export default function EditTask() {
   const navigate = useNavigate();
@@ -50,6 +56,7 @@ export default function EditTask() {
   const [tagInput, setTagInput] = useState('');
   const [startDateOpen, setStartDateOpen] = useState(false);
   const [dueDateOpen, setDueDateOpen] = useState(false);
+  const [taskCategory, setTaskCategory] = useState('normal');
 
   const { data: task, isLoading: taskLoading } = useQuery({
     queryKey: ['edit-task', taskId],
@@ -86,7 +93,14 @@ export default function EditTask() {
         recurrence_type: task.recurrence_type || null,
         recurrence_day_of_week: task.recurrence_day_of_week || null,
         recurrence_day_of_month: task.recurrence_day_of_month || null,
+        custom_fields: task.custom_fields || {},
+        attachments: task.attachments || [],
+        marketing_task_id: task.marketing_task_id || null,
       });
+
+      if (task.marketing_task_id) {
+        setTaskCategory('marketing');
+      }
     }
   }, [task]);
 
@@ -103,10 +117,10 @@ export default function EditTask() {
     },
   });
 
-  const usersFromEntity = teamData?.users || [];
-  const invitations = teamData?.invitations || [];
+  const usersFromEntity = teamData?.users || teamData?.data?.users || [];
+  const invitations = teamData?.invitations || teamData?.data?.invitations || [];
 
-  // Normalize user shape so downstream code can rely on `id`, `email`, `department_id`
+  // Normalize user shape
   const normalizedUsersFromEntity = (usersFromEntity || []).map(u => ({
     ...u,
     id: u.id || u._id || (u.email && String(u.email).toLowerCase()),
@@ -143,14 +157,9 @@ export default function EditTask() {
     queryFn: () => base44.entities.Group.list(),
   });
 
-  const { data: taskGroups = [] } = useQuery({
-    queryKey: ['task-groups', formData?.project_id],
-    queryFn: async () => {
-      if (!formData?.project_id) return [];
-      const groups = await base44.entities.TaskGroup.filter({ project_id: formData.project_id });
-      return groups;
-    },
-    enabled: !!formData?.project_id,
+  const { data: customFields = [] } = useQuery({
+    queryKey: ['custom-fields'],
+    queryFn: () => base44.entities.CustomField.list('order'),
   });
 
   const { data: projectTasks = [] } = useQuery({
@@ -158,6 +167,12 @@ export default function EditTask() {
     queryFn: () => base44.entities.Task.filter({ project_id: formData.project_id }, '-created_date', 20),
     enabled: !!formData?.project_id,
   });
+
+  const selectedProject = projects.find(p => p.id === formData?.project_id);
+  const projectDomain = selectedProject?.domain || 'generic';
+  const relevantCustomFields = customFields.filter(f =>
+    f.domain === 'all' || f.domain === projectDomain
+  );
 
   const [user, setUser] = useState(null);
   const queryClient = useQueryClient();
@@ -267,7 +282,7 @@ export default function EditTask() {
         qc.invalidateQueries({ queryKey: ['task', taskId] });
         qc.invalidateQueries({ queryKey: ['my-tasks'] });
         qc.invalidateQueries({ queryKey: ['project-tasks-for-ai', formData?.project_id] });
-      } catch (e) {}
+      } catch (e) { }
 
       navigate(createPageUrl(`TaskDetail?id=${task.id || task._id}`));
     },
@@ -279,15 +294,9 @@ export default function EditTask() {
       ...formData,
       estimated_hours: formData.estimated_hours ? parseFloat(formData.estimated_hours) : null,
       story_points: formData.story_points ? parseInt(formData.story_points) : null,
+      assignee_email: formData.assignees.length > 0 ? formData.assignees[0] : null,
     };
     updateTaskMutation.mutate(dataToSubmit);
-  };
-
-  const handleAddTag = () => {
-    if (tagInput.trim() && !formData.tags.includes(tagInput.trim())) {
-      setFormData(prev => ({ ...prev, tags: [...prev.tags, tagInput.trim()] }));
-      setTagInput('');
-    }
   };
 
   const handleBack = () => {
@@ -296,10 +305,6 @@ export default function EditTask() {
     } else {
       navigate('/');
     }
-  };
-
-  const handleRemoveTag = (tag) => {
-    setFormData(prev => ({ ...prev, tags: prev.tags.filter(t => t !== tag) }));
   };
 
   if (taskLoading || !formData) {
@@ -388,6 +393,18 @@ export default function EditTask() {
                 />
               </div>
 
+              {/* Attachments */}
+              <div className="space-y-3">
+                <div className="flex items-center gap-2">
+                  <div className="w-1 h-6 bg-gradient-to-b from-indigo-500 to-purple-600 rounded-full"></div>
+                  <Label className="text-base font-semibold text-slate-900">Attachments</Label>
+                </div>
+                <FileUpload
+                  files={formData.attachments}
+                  onFilesChange={(files) => setFormData(prev => ({ ...prev, attachments: files }))}
+                />
+              </div>
+
               {/* AI Task Suggestions */}
               {formData.project_id && user?.role === 'admin' && (
                 <AITaskSuggestions
@@ -401,8 +418,18 @@ export default function EditTask() {
                   existingTasks={projectTasks}
                 />
               )}
+            </div>
+          </div>
 
-              {/* Row: Project & Task Section */}
+          {/* Project & Classification Section */}
+          <div className="bg-white/80 backdrop-blur-sm rounded-3xl shadow-xl border border-slate-200/50 overflow-hidden">
+            <div className="bg-gradient-to-r from-blue-500 to-cyan-600 p-6 sm:p-8">
+              <h2 className="text-xl font-bold text-white mb-2">Project & Classification</h2>
+              <p className="text-blue-100 text-sm">Organize and categorize your task</p>
+            </div>
+
+            <div className="p-6 sm:p-8 space-y-6">
+              {/* Row: Project & Group */}
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                 <div className="space-y-2">
                   <Label className="text-sm font-medium">Project</Label>
@@ -416,7 +443,13 @@ export default function EditTask() {
                     <SelectContent>
                       {projects.map(project => (
                         <SelectItem key={project.id} value={project.id}>
-                          {project.name}
+                          <div className="flex items-center gap-2">
+                            <div
+                              className="w-2 h-2 rounded-full"
+                              style={{ backgroundColor: project.color || '#6366F1' }}
+                            />
+                            {project.name}
+                          </div>
                         </SelectItem>
                       ))}
                     </SelectContent>
@@ -540,6 +573,21 @@ export default function EditTask() {
                 </div>
               </div>
 
+              {/* Custom Fields */}
+              {relevantCustomFields.length > 0 && (
+                <div className="space-y-3">
+                  <Label className="text-base font-semibold text-slate-900 flex items-center gap-2">
+                    <div className="w-1 h-5 bg-gradient-to-b from-blue-500 to-cyan-600 rounded-full"></div>
+                    Custom Fields
+                  </Label>
+                  <CustomFieldsForm
+                    fields={relevantCustomFields}
+                    values={formData.custom_fields}
+                    onChange={(newFields) => setFormData(prev => ({ ...prev, custom_fields: newFields }))}
+                  />
+                </div>
+              )}
+
               {/* Blocked Reason */}
               {formData.status === 'blocked' && (
                 <div className="space-y-2">
@@ -551,7 +599,17 @@ export default function EditTask() {
                   />
                 </div>
               )}
+            </div>
+          </div>
 
+          {/* Team & Assignment Section */}
+          <div className="bg-white/80 backdrop-blur-sm rounded-3xl shadow-xl border border-slate-200/50 overflow-hidden">
+            <div className="bg-gradient-to-r from-emerald-500 to-teal-600 p-6 sm:p-8">
+              <h2 className="text-xl font-bold text-white mb-2">Team & Assignment</h2>
+              <p className="text-emerald-100 text-sm">Who will work on this task</p>
+            </div>
+
+            <div className="p-6 sm:p-8 space-y-6">
               {/* AI Assignee Suggestions */}
               {user?.role === 'admin' && (
                 <AIAssigneeSuggestions
@@ -614,7 +672,6 @@ export default function EditTask() {
                           setStartDateOpen(false);
                         }}
                         className=""
-                        classNames={{}}
                       />
                     </PopoverContent>
                   </Popover>
@@ -647,7 +704,6 @@ export default function EditTask() {
                           setDueDateOpen(false);
                         }}
                         className=""
-                        classNames={{}}
                       />
                     </PopoverContent>
                   </Popover>
