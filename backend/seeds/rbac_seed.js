@@ -12,7 +12,8 @@ export const MODULES = [
     'worklog', 'backlog', 'reports', 'files', 'users', 'groups',
     'finance_dashboard', 'receivables', 'payables', 'cash_flow',
     'financial_reports', 'marketing_expenses', 'salary_management',
-    'timesheet_approval', 'freelancer_reports'
+    'timesheet_approval', 'freelancer_reports',
+    'marketing_category', 'video_workflow'
 ];
 
 export const ACTIONS = ['create', 'read', 'update', 'delete', 'assign', 'manage_password'];
@@ -205,7 +206,7 @@ const DUMMY_USERS = [
         email: 'admin@sarthi.com',
         full_name: 'Admin User',
         role: 'admin',
-        role_id: 'admin',
+        role_id: 'super_admin',
         job_title: 'Administrator',
         is_active: true
     },
@@ -239,11 +240,8 @@ const DUMMY_USERS = [
         role: 'user',
         role_id: 'team_member', // Assuming custom role eventually, but uses team permissions + specific code checks
         job_title: 'Sales Manager', // Code checks this specific string
-<<<<<<< HEAD
         department_id: 'dept_sales',
         is_active: true
-=======
-        department_id: 'dept_sales'
     },
     {
         email: 'freelancer@sarthi.com',
@@ -259,7 +257,6 @@ const DUMMY_USERS = [
         role_id: 'hr',
         job_title: 'HR Manager',
         department_id: 'dept_hr'
->>>>>>> origin/main
     }
 ];
 
@@ -383,3 +380,26 @@ export const seedData = async () => {
         throw error;
     }
 };
+
+// Add standalone execution support
+if (process.argv[1] && (process.argv[1].endsWith('rbac_seed.js') || process.argv[1].endsWith('rbac_seed.mjs'))) {
+    const mongoUri = process.env.MONGODB_URI;
+    if (!mongoUri) {
+        console.error('MONGODB_URI not found in environment');
+        process.exit(1);
+    }
+
+    mongoose.connect(mongoUri)
+        .then(() => {
+            console.log('Connected to MongoDB for seeding...');
+            return seedData();
+        })
+        .then(() => {
+            console.log('Successfully updated Admin permissions');
+            process.exit(0);
+        })
+        .catch(err => {
+            console.error('Seeding error:', err);
+            process.exit(1);
+        });
+}

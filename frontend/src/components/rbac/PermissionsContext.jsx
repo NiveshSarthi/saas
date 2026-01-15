@@ -11,7 +11,7 @@ export const MODULES = [
   'finance_dashboard', 'receivables', 'payables', 'cash_flow',
   'financial_reports', 'marketing_expenses', 'salary_management',
   'timesheet_approval', 'freelancer_reports',
-  'marketing_category', 'video_workflow'  // Marketing Dashboard module
+  'marketing_category', 'video_workflow', 'admin'  // Added admin module
 ];
 
 
@@ -161,7 +161,7 @@ export function PermissionsProvider({ children }) {
       if (fetchedRole) {
         setRole(fetchedRole);
         setPermissions(fetchedRole.permissions || {});
-      } else if (userData.role === 'admin' || userData.role_id === 'admin') {
+      } else if (userData.role === 'admin' || userData.role_id === 'admin' || userData.role_id === 'super_admin') {
         // Fallback for admin users without role_id or if role lookup failed
         setRole({ name: 'Admin', permissions: DEFAULT_ROLES.admin.permissions });
         setPermissions(DEFAULT_ROLES.admin.permissions);
@@ -177,8 +177,11 @@ export function PermissionsProvider({ children }) {
   };
 
   const can = (module, action) => {
+    // Super admins can do everything
+    if (user?.role_id === 'super_admin') return true;
+
     if (!permissions || !permissions[module]) return false;
-    return permissions[module][action] === true;
+    return !!permissions[module][action];
   };
 
   const canAny = (module, actions) => {
