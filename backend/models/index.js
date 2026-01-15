@@ -536,3 +536,93 @@ const facebookPageConnectionSchema = new mongoose.Schema({
 });
 
 export const FacebookPageConnection = mongoose.model('FacebookPageConnection', facebookPageConnectionSchema);
+
+// =============================================
+// MARKETING DASHBOARD MODULE SCHEMAS
+// =============================================
+
+// Marketing Goal Schema - For calendar goal planning
+const marketingGoalSchema = new mongoose.Schema({
+    title: { type: String, required: true },
+    description: String,
+    goal_type: { type: String, enum: ['daily', 'weekly', 'biweekly', 'custom'], default: 'custom' },
+    target_date: Date,                    // For custom dates
+    recurrence_days: [Number],            // For weekly: [0,1,2...] (Sunday=0)
+    start_date: Date,
+    end_date: Date,                       // Optional end date for recurring goals
+    status: { type: String, enum: ['pending', 'done'], default: 'pending' },
+    color: { type: String, default: '#6366F1' },
+    created_by: String,
+    completed_at: Date,
+    completed_by: String,
+    created_at: { type: Date, default: Date.now }
+});
+
+// Marketing Category Schema - For video categorization
+const marketingCategorySchema = new mongoose.Schema({
+    name: { type: String, required: true },
+    color: { type: String, required: true },
+    description: String,
+    is_active: { type: Boolean, default: true },
+    created_by: String,
+    created_at: { type: Date, default: Date.now }
+});
+
+// Video Schema - For video workflow management
+const videoSchema = new mongoose.Schema({
+    title: { type: String, required: true },
+    description: { type: String, required: true },
+    category_id: { type: String, required: true },
+    status: {
+        type: String,
+        enum: ['shoot', 'editing', 'review', 'revision', 'approval', 'posting', 'posted', 'trash'],
+        default: 'shoot'
+    },
+    editing_level: { type: String, enum: ['B', 'A', 'A+'], required: true }, // B-Basic, A-Medium, A+-Highest
+    raw_file_url: String,
+    editing_url: String,
+    revision_urls: [{
+        url: String,
+        revision_number: Number,
+        added_at: { type: Date, default: Date.now },
+        added_by: String
+    }],
+    final_video_url: String,
+    assigned_director: { type: String, required: true },    // User email
+    assigned_cameraman: { type: String, required: true },   // User email
+    assigned_editor: { type: String, required: true },      // User email
+    assigned_manager: { type: String, required: true },     // User email
+    is_deleted: { type: Boolean, default: false },          // Soft delete
+    deleted_by: String,
+    deleted_at: Date,
+    created_by: { type: String, required: true },
+    created_at: { type: Date, default: Date.now },
+    updated_at: { type: Date, default: Date.now }
+});
+
+// Video Comment Schema - For video comments with @mentions
+const videoCommentSchema = new mongoose.Schema({
+    video_id: { type: String, required: true },
+    user_email: { type: String, required: true },
+    user_name: String,
+    content: { type: String, required: true },
+    mentions: [String],                                     // Array of mentioned user emails
+    created_at: { type: Date, default: Date.now },
+    updated_at: { type: Date, default: Date.now }
+});
+
+// Video Log Schema - For activity logging
+const videoLogSchema = new mongoose.Schema({
+    video_id: { type: String, required: true },
+    action: { type: String, required: true },               // e.g., 'created', 'status_changed', 'field_updated', 'comment_added'
+    user_email: { type: String, required: true },
+    user_name: String,
+    details: mongoose.Schema.Types.Mixed,                   // { field: 'status', old_value: 'shoot', new_value: 'editing' }
+    created_at: { type: Date, default: Date.now }
+});
+
+export const MarketingGoal = mongoose.model('MarketingGoal', marketingGoalSchema);
+export const MarketingCategory = mongoose.model('MarketingCategory', marketingCategorySchema);
+export const Video = mongoose.model('Video', videoSchema);
+export const VideoComment = mongoose.model('VideoComment', videoCommentSchema);
+export const VideoLog = mongoose.model('VideoLog', videoLogSchema);

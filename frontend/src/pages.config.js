@@ -27,6 +27,8 @@ import LeaveManagement from './pages/LeaveManagement';
 import LeaveSettings from './pages/LeaveSettings';
 import LogSalesActivity from './pages/LogSalesActivity';
 import Marketing from './pages/Marketing';
+import MarketingCalendarPage from './pages/MarketingCalendarPage';
+import MarketingCategories from './pages/MarketingCategories';
 import MarketingExpenses from './pages/MarketingExpenses';
 import MarketingKPITracking from './pages/MarketingKPITracking';
 import MarketingReports from './pages/MarketingReports';
@@ -105,6 +107,8 @@ export const PAGES = {
     "LeaveSettings": LeaveSettings,
     "LogSalesActivity": LogSalesActivity,
     "Marketing": Marketing,
+    "MarketingCalendarPage": MarketingCalendarPage,
+    "MarketingCategories": MarketingCategories,
     "MarketingExpenses": MarketingExpenses,
     "MarketingKPITracking": MarketingKPITracking,
     "MarketingReports": MarketingReports,

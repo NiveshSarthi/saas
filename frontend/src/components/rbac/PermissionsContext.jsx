@@ -10,8 +10,10 @@ export const MODULES = [
   'worklog', 'backlog', 'reports', 'files', 'users', 'groups',
   'finance_dashboard', 'receivables', 'payables', 'cash_flow',
   'financial_reports', 'marketing_expenses', 'salary_management',
-  'timesheet_approval', 'freelancer_reports'
+  'timesheet_approval', 'freelancer_reports',
+  'marketing_category', 'video_workflow'  // Marketing Dashboard module
 ];
+
 
 export const ACTIONS = ['create', 'read', 'update', 'delete', 'assign', 'manage_password'];
 

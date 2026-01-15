@@ -55,13 +55,14 @@ const domainIcons = {
 };
 
 export default function Sidebar({ projects = [], currentPage, user, collapsed, onToggle, departments = [] }) {
-  const { can } = usePermissions();
+  const { can, isAdmin: isAdminFunc } = usePermissions();
   const [projectsOpen, setProjectsOpen] = useState(true);
   const [adminOpen, setAdminOpen] = useState(true);
   const [tasksOpen, setTasksOpen] = useState(true);
   const [salesOpen, setSalesOpen] = useState(true);
   const [leadsOpen, setLeadsOpen] = useState(true);
   const [accountsOpen, setAccountsOpen] = useState(true);
+  const [marketingOpen, setMarketingOpen] = useState(true);
 
   // Check if user is in a sales department
   const salesDeptIds = Array.isArray(departments)
@@ -305,6 +306,63 @@ export default function Sidebar({ projects = [], currentPage, user, collapsed, o
                     <Users className="w-5 h-5 flex-shrink-0" />
                     <span className="font-medium">Leads</span>
                   </Link>
+                </CollapsibleContent>
+              </Collapsible>
+            </div>
+          )}
+
+          {/* Marketing Section */}
+          {!collapsed && (isMarketingUser || isITUser || isAdmin) && (
+            <div className="mt-6 px-3">
+              <Collapsible open={marketingOpen} onOpenChange={setMarketingOpen}>
+                <div className="flex items-center justify-between mb-2">
+                  <CollapsibleTrigger className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wider text-slate-500 hover:text-slate-300 w-full">
+                    {marketingOpen ? <ChevronDown className="w-3 h-3" /> : <ChevronRight className="w-3 h-3" />}
+                    Marketing
+                  </CollapsibleTrigger>
+                </div>
+                <CollapsibleContent className="space-y-1">
+                  <Link
+                    to={createPageUrl('Marketing')}
+                    onClick={() => window.innerWidth < 1024 && onToggle()}
+                    className={cn(
+                      "flex items-center gap-3 px-3 py-2.5 rounded-lg transition-all duration-200",
+                      currentPage === 'Marketing'
+                        ? "bg-indigo-600 text-white shadow-lg shadow-indigo-500/25"
+                        : "text-slate-400 hover:text-white hover:bg-slate-800"
+                    )}
+                  >
+                    <Video className="w-5 h-5 flex-shrink-0" />
+                    <span className="font-medium">Video Workflow</span>
+                  </Link>
+                  <Link
+                    to={createPageUrl('MarketingCalendarPage')}
+                    onClick={() => window.innerWidth < 1024 && onToggle()}
+                    className={cn(
+                      "flex items-center gap-3 px-3 py-2.5 rounded-lg transition-all duration-200",
+                      currentPage === 'MarketingCalendarPage'
+                        ? "bg-indigo-600 text-white shadow-lg shadow-indigo-500/25"
+                        : "text-slate-400 hover:text-white hover:bg-slate-800"
+                    )}
+                  >
+                    <Calendar className="w-5 h-5 flex-shrink-0" />
+                    <span className="font-medium">Marketing Calendar</span>
+                  </Link>
+                  {(can('marketing_category', 'read') || isAdmin) && (
+                    <Link
+                      to={createPageUrl('MarketingCategories')}
+                      onClick={() => window.innerWidth < 1024 && onToggle()}
+                      className={cn(
+                        "flex items-center gap-3 px-3 py-2.5 rounded-lg transition-all duration-200",
+                        currentPage === 'MarketingCategories'
+                          ? "bg-indigo-600 text-white shadow-lg shadow-indigo-500/25"
+                          : "text-slate-400 hover:text-white hover:bg-slate-800"
+                      )}
+                    >
+                      <Layers className="w-5 h-5 flex-shrink-0" />
+                      <span className="font-medium">Categories</span>
+                    </Link>
+                  )}
                 </CollapsibleContent>
               </Collapsible>
             </div>
