@@ -50,38 +50,26 @@ export default function SalaryPolicyManagement() {
   // Retrieve all users directly using Entity API for reliability
   // Retrieve all users using getDashboardUsers to ensure we get the full team list + invitations
   // consistently with other parts of the app.
-  const { data: allUsers = [] } = useQuery({
-    queryKey: ['all-users-policy-dashboard'],
-    queryFn: async () => {
-      const response = await base44.functions.invoke('getDashboardUsers');
-      const data = response.data || {};
-      const users = data.users || [];
-      const invitations = data.invitations || [];
-
-      // Combine users and accepted invitations
-      const validInvitations = invitations
-        .filter(inv => inv.status === 'accepted')
-        .filter(inv => !users.some(u => u.email?.toLowerCase() === inv.email?.toLowerCase()))
-        .map(inv => ({
-          id: inv.id,
-          email: inv.email,
-          full_name: inv.full_name || inv.email?.split('@')[0],
-          role: 'user'
-        }));
-
-      // Filter users similar to Attendance page to avoid system accounts if needed
-      // But primarily we want real users.
-      const realUsers = users.map(u => ({
-        id: u.id,
-        email: u.email,
-        full_name: u.full_name || u.email?.split('@')[0],
-        role: u.role
-      }));
-
-      return [...realUsers, ...validInvitations];
-    },
-    enabled: isAdmin,
+  // Copied from Attendance.jsx as requested
+  const { data: usersList = [] } = useQuery({
+    queryKey: ['all-users-list-policy'],
+    queryFn: () => base44.entities.User.list(),
+    enabled: !!user,
   });
+
+  const excludedUsers = ['Nivesh Sarthi', 'Rahul Kushwaha', 'Satpal', 'Tech NS', 'Sachin'];
+
+  const allUsers = usersList
+    .filter(u => u.active !== false && u.status !== 'inactive')
+    .filter(user => !excludedUsers.includes(user.full_name))
+    .map(u => ({
+      ...u,
+      id: u.id,
+      email: u.email,
+      full_name: u.full_name || u.email?.split('@')[0],
+      department_id: u.department_id,
+      role_id: u.role_id
+    }));
 
   const handleEdit = (policy) => {
     setEditingPolicy(policy);

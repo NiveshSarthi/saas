@@ -113,11 +113,11 @@ export default function SalaryManagement() {
         toast.info('Syncing WorkDay ledger...');
         // First sync WorkDay ledger
         const syncResponse = await base44.functions.invoke('syncWorkDayLedger', { month: selectedMonth });
-        
+
         toast.info('Calculating salaries...');
         // Then calculate salaries
         const calcResponse = await base44.functions.invoke('calculateMonthlySalary', { month: selectedMonth });
-        
+
         return calcResponse.data;
       } catch (error) {
         console.error('Sync error:', error);
@@ -143,7 +143,7 @@ export default function SalaryManagement() {
           approved_by: user?.email,
           approved_at: new Date().toISOString()
         });
-        
+
         const record = salaries.find(s => s.id === id);
         await base44.entities.SalaryAuditLog.create({
           entity_type: 'salary_record',
@@ -164,8 +164,8 @@ export default function SalaryManagement() {
 
   const generateSlipMutation = useMutation({
     mutationFn: async (recordId) => {
-      const response = await base44.functions.invoke('generateSalarySlip', { 
-        salary_record_id: recordId 
+      const response = await base44.functions.invoke('generateSalarySlip', {
+        salary_record_id: recordId
       });
       return response.data;
     },
@@ -191,8 +191,8 @@ export default function SalaryManagement() {
   });
 
   const handleSelectRecord = (recordId) => {
-    setSelectedRecords(prev => 
-      prev.includes(recordId) 
+    setSelectedRecords(prev =>
+      prev.includes(recordId)
         ? prev.filter(id => id !== recordId)
         : [...prev, recordId]
     );
@@ -244,7 +244,7 @@ export default function SalaryManagement() {
           <p className="text-slate-600 mt-1">Complete salary calculation with attendance integration</p>
         </div>
         <div className="flex gap-2">
-          <Button 
+          <Button
             onClick={() => setReportsDialogOpen(true)}
             variant="outline"
             className="gap-2"
@@ -252,7 +252,7 @@ export default function SalaryManagement() {
             <BarChart3 className="w-4 h-4" />
             Reports
           </Button>
-          <Button 
+          <Button
             onClick={() => syncMutation.mutate()}
             disabled={syncMutation.isPending}
             className="bg-indigo-600 hover:bg-indigo-700 gap-2"
@@ -330,10 +330,10 @@ export default function SalaryManagement() {
             </Badge>
           )}
         </div>
-        
+
         {selectedRecords.length > 0 && (
           <div className="flex gap-2">
-            <Button 
+            <Button
               variant="outline"
               onClick={() => setLockDialogOpen(true)}
               className="gap-2"
@@ -341,7 +341,7 @@ export default function SalaryManagement() {
               <Lock className="w-4 h-4" />
               Lock Selected
             </Button>
-            <Button 
+            <Button
               onClick={() => approveMutation.mutate(selectedRecords)}
               disabled={approveMutation.isLoading}
               className="bg-green-600 hover:bg-green-700 gap-2"
@@ -390,7 +390,7 @@ export default function SalaryManagement() {
               salaries.map((salary) => {
                 const empAdjustments = adjustments.filter(a => a.employee_email === salary.employee_email);
                 const totalAdjustments = empAdjustments.reduce((sum, a) => sum + (a.amount || 0), 0);
-                
+
                 return (
                   <TableRow key={salary.id}>
                     <TableCell>
@@ -411,8 +411,8 @@ export default function SalaryManagement() {
                         <div>P: {salary.present_days || 0} | A: {salary.absent_days || 0} | W: {salary.weekoff_days || 0}</div>
                         <div>PL: {salary.paid_leave_days || 0} | UL: {salary.unpaid_leave_days || 0}</div>
                         {salary.not_marked_days > 0 && (
-                          <div 
-                            className="text-orange-600 font-medium cursor-help" 
+                          <div
+                            className="text-orange-600 font-medium cursor-help"
                             title={salary.not_marked_dates ? `Dates: ${salary.not_marked_dates.join(', ')}` : 'Not marked days'}
                           >
                             Not Marked: {salary.not_marked_days}
@@ -452,11 +452,11 @@ export default function SalaryManagement() {
                             {totalAdjustments > 0 ? '+' : '-'}₹{Math.abs(totalAdjustments).toLocaleString()} (Adj)
                           </div>
                         )}
-                        {(salary.incentive || 0) === 0 && (salary.bonus || 0) === 0 && 
-                         (salary.overtime_amount || 0) === 0 && (salary.reimbursement || 0) === 0 && 
-                         (salary.allowances || 0) === 0 && totalAdjustments === 0 && (
-                          <div className="text-slate-400">-</div>
-                        )}
+                        {(salary.incentive || 0) === 0 && (salary.bonus || 0) === 0 &&
+                          (salary.overtime_amount || 0) === 0 && (salary.reimbursement || 0) === 0 &&
+                          (salary.allowances || 0) === 0 && totalAdjustments === 0 && (
+                            <div className="text-slate-400">-</div>
+                          )}
                       </div>
                     </TableCell>
                     <TableCell>
@@ -473,8 +473,8 @@ export default function SalaryManagement() {
                     </TableCell>
                     <TableCell>
                       <div className="flex gap-1">
-                        <Button 
-                          variant="ghost" 
+                        <Button
+                          variant="ghost"
                           size="sm"
                           onClick={() => {
                             setCurrentRecord(salary);
@@ -484,8 +484,8 @@ export default function SalaryManagement() {
                         >
                           <Plus className="w-4 h-4" />
                         </Button>
-                        <Button 
-                          variant="ghost" 
+                        <Button
+                          variant="ghost"
                           size="sm"
                           onClick={() => generateSlipMutation.mutate(salary.id)}
                           disabled={generateSlipMutation.isLoading}

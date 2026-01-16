@@ -11,7 +11,7 @@ import { toast } from 'sonner';
 
 export default function SalaryPolicyForm({ isOpen, onClose, policy, allUsers }) {
   const queryClient = useQueryClient();
-  
+
   const [formData, setFormData] = useState({
     user_email: '',
     salary_type: 'per_day',
@@ -180,7 +180,7 @@ export default function SalaryPolicyForm({ isOpen, onClose, policy, allUsers }) 
 
   const handleSubmit = (e) => {
     e.preventDefault();
-    
+
     if (!formData.user_email) {
       toast.error('Please select an employee');
       return;
@@ -244,7 +244,7 @@ export default function SalaryPolicyForm({ isOpen, onClose, policy, allUsers }) 
           {/* Earnings Section */}
           <div className="p-4 bg-green-50 rounded-lg space-y-3">
             <h3 className="font-semibold text-green-900">💰 Earnings (Monthly)</h3>
-            
+
             <div className="grid grid-cols-2 gap-3">
               <div>
                 <Label>Basic Salary (₹) *</Label>
@@ -309,7 +309,7 @@ export default function SalaryPolicyForm({ isOpen, onClose, policy, allUsers }) 
           {/* Employee Deductions Section */}
           <div className="p-4 bg-red-50 rounded-lg space-y-3">
             <h3 className="font-semibold text-red-900">📉 Employee Deductions</h3>
-            
+
             <div className="grid grid-cols-2 gap-3">
               <div>
                 <Label>PF (%) or Fixed (₹)</Label>
@@ -371,7 +371,7 @@ export default function SalaryPolicyForm({ isOpen, onClose, policy, allUsers }) 
           {/* Employer Contributions Section */}
           <div className="p-4 bg-blue-50 rounded-lg space-y-3">
             <h3 className="font-semibold text-blue-900">🏢 Employer Contributions</h3>
-            
+
             <div className="grid grid-cols-2 gap-3">
               <div>
                 <Label>Employer PF (%) or Fixed (₹)</Label>

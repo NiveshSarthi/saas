@@ -47,7 +47,11 @@ export default function LeaveManagementPage() {
 
   const { data: leaveTypes = [] } = useQuery({
     queryKey: ['leave-types'],
-    queryFn: () => base44.entities.LeaveType.filter({ is_active: true }),
+    queryFn: async () => {
+      // Fetch all types and filter client-side to ensure boolean checks work correctly
+      const types = await base44.entities.LeaveType.list();
+      return types.filter(t => t.is_active !== false); // rigorous check, allows true or undefined (if default is active)
+    },
   });
 
   const { data: myRequests = [] } = useQuery({
@@ -86,6 +90,21 @@ export default function LeaveManagementPage() {
     enabled: isAdmin,
     refetchInterval: 30000
   });
+
+  const { data: usersList = [] } = useQuery({
+    queryKey: ['all-users-list-leave'],
+    queryFn: () => base44.entities.User.list(),
+    enabled: isAdmin,
+  });
+
+  const allUsers = React.useMemo(() => {
+    return usersList
+      .filter(u => u.active !== false && u.status !== 'inactive')
+      .map(u => ({
+        ...u,
+        full_name: u.full_name || u.email?.split('@')[0],
+      }));
+  }, [usersList]);
 
   if (!user) {
     return (
@@ -218,6 +237,8 @@ export default function LeaveManagementPage() {
         leaveTypes={leaveTypes}
         balances={myBalances}
         currentUser={user}
+        isAdmin={isAdmin}
+        allUsers={isAdmin ? allUsers : []}
       />
     </div>
   );

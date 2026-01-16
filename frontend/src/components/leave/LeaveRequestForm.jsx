@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { base44 } from '@/api/base44Client';
-import { useMutation, useQueryClient } from '@tanstack/react-query';
+import { useMutation, useQueryClient, useQuery } from '@tanstack/react-query';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -11,7 +11,7 @@ import { toast } from 'sonner';
 import { differenceInDays, format, parseISO } from 'date-fns';
 import { AlertCircle } from 'lucide-react';
 
-export default function LeaveRequestForm({ isOpen, onClose, leaveTypes, balances, currentUser }) {
+export default function LeaveRequestForm({ isOpen, onClose, leaveTypes, balances, currentUser, isAdmin, allUsers = [] }) {
   const queryClient = useQueryClient();
   const [formData, setFormData] = useState({
     leave_type_id: '',
@@ -23,25 +23,60 @@ export default function LeaveRequestForm({ isOpen, onClose, leaveTypes, balances
   });
 
   const selectedLeaveType = leaveTypes.find(lt => lt.id === formData.leave_type_id);
-  const balance = balances.find(b => b.leave_type_id === formData.leave_type_id);
+  const [targetUserEmail, setTargetUserEmail] = useState(currentUser?.email);
+
+  // Reset target user when dialog opens
+  React.useEffect(() => {
+    if (isOpen) {
+      setTargetUserEmail(currentUser?.email);
+    }
+  }, [isOpen, currentUser]);
+
+  const targetUser = isAdmin && targetUserEmail
+    ? (allUsers.find(u => u.email === targetUserEmail) || currentUser)
+    : currentUser;
+
+  // Fetch balances for the target user (if different from current user OR just to be safe)
+  const { data: targetBalances = [] } = useQuery({
+    queryKey: ['leave-balances', targetUser?.email, new Date().getFullYear()],
+    queryFn: () => base44.entities.LeaveBalance.filter({
+      user_email: targetUser?.email,
+      year: new Date().getFullYear()
+    }),
+    enabled: !!targetUser?.email && isOpen
+  });
+
+  const activeBalances = (targetUser?.email === currentUser?.email && balances.length > 0)
+    ? balances
+    : targetBalances;
+
+
+  const balance = activeBalances.find(b => b.leave_type_id === formData.leave_type_id);
 
   const calculateDays = () => {
     if (!formData.start_date || !formData.end_date) return 0;
-    const start = parseISO(formData.start_date);
-    const end = parseISO(formData.end_date);
-    return differenceInDays(end, start) + 1;
+    try {
+      const start = parseISO(formData.start_date);
+      const end = parseISO(formData.end_date);
+      const days = differenceInDays(end, start) + 1;
+      return isNaN(days) ? 0 : days;
+    } catch (e) {
+      console.error('Date calculation error:', e);
+      return 0;
+    }
   };
 
   const totalDays = calculateDays();
 
   const createRequestMutation = useMutation({
     mutationFn: async (data) => {
+      console.log('Mutating with data:', data);
       // Create leave request
       const request = await base44.entities.LeaveRequest.create(data);
 
       // Get the latest balance (might have been just created)
       const latestBalances = await base44.entities.LeaveBalance.filter({
-        user_email: currentUser.email,
+        user_email: targetUser.email,
         leave_type_id: formData.leave_type_id,
         year: new Date().getFullYear()
       });
@@ -81,19 +116,23 @@ export default function LeaveRequestForm({ isOpen, onClose, leaveTypes, balances
       });
     },
     onError: (error) => {
+      console.error('Submission error:', error);
       toast.error('Failed to submit request: ' + error.message);
     }
   });
 
   const handleSubmit = async (e) => {
     e.preventDefault();
+    console.log('Submitting form...', { formData, totalDays });
 
     if (totalDays <= 0) {
+      console.error('Invalid total days:', totalDays);
       toast.error('Invalid date range');
       return;
     }
 
     if (!formData.leave_type_id) {
+      console.error('No leave type selected');
       toast.error('Please select a leave type');
       return;
     }
@@ -101,33 +140,37 @@ export default function LeaveRequestForm({ isOpen, onClose, leaveTypes, balances
     // Create balance if it doesn't exist
     let userBalance = balance;
     if (!userBalance && selectedLeaveType) {
+      console.log('Creating initial balance for type:', selectedLeaveType.name);
       try {
         userBalance = await base44.entities.LeaveBalance.create({
-          user_email: currentUser.email,
+          user_email: targetUser.email,
           leave_type_id: formData.leave_type_id,
           year: new Date().getFullYear(),
-          total_allocated: selectedLeaveType.annual_quota,
+          total_allocated: selectedLeaveType.days_allowed,
           used: 0,
           pending: 0,
-          available: selectedLeaveType.annual_quota,
+          available: selectedLeaveType.days_allowed,
           carried_forward: 0
         });
         queryClient.invalidateQueries(['my-leave-balances']);
       } catch (error) {
+        console.error('Failed to create balance:', error);
         toast.error('Failed to initialize leave balance');
         return;
       }
     }
 
     if (userBalance && userBalance.available < totalDays) {
+      console.error('Insufficient balance:', { available: userBalance.available, required: totalDays });
       toast.error('Insufficient leave balance');
       return;
     }
 
+    console.log('Proceeding to mutation...');
     createRequestMutation.mutate({
-      user_email: currentUser.email,
-      user_name: currentUser.full_name,
-      department_id: currentUser.department_id,
+      user_email: targetUser.email,
+      user_name: targetUser.full_name,
+      department_id: targetUser.department_id,
       leave_type_id: formData.leave_type_id,
       start_date: formData.start_date,
       end_date: formData.end_date,
@@ -147,6 +190,30 @@ export default function LeaveRequestForm({ isOpen, onClose, leaveTypes, balances
         </DialogHeader>
 
         <form onSubmit={handleSubmit} className="space-y-4">
+          {isAdmin && (
+            <div>
+              <Label>Employee</Label>
+              <Select
+                value={targetUserEmail}
+                onValueChange={setTargetUserEmail}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Select employee" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value={currentUser.email}>Me ({currentUser.full_name})</SelectItem>
+                  {allUsers
+                    .filter(u => u.email !== currentUser.email)
+                    .map(u => (
+                      <SelectItem key={u.id} value={u.email}>
+                        {u.full_name} ({u.email})
+                      </SelectItem>
+                    ))}
+                </SelectContent>
+              </Select>
+            </div>
+          )}
+
           <div>
             <Label>Leave Type *</Label>
             <Select
@@ -170,11 +237,14 @@ export default function LeaveRequestForm({ isOpen, onClose, leaveTypes, balances
             </Select>
           </div>
 
-          {balance && (
+          {(balance || selectedLeaveType) && (
             <div className="p-3 bg-indigo-50 rounded-lg border border-indigo-200">
               <p className="text-sm text-indigo-900">
-                Available: <span className="font-bold">{balance.available}</span> days |
-                Used: {balance.used} | Pending: {balance.pending}
+                Available: <span className="font-bold">
+                  {balance ? balance.available : selectedLeaveType?.days_allowed}
+                </span> days |
+                Used: {balance ? balance.used : 0} |
+                Pending: {balance ? balance.pending : 0}
               </p>
             </div>
           )}

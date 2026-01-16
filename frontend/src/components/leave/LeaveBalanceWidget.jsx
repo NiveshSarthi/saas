@@ -5,15 +5,15 @@ import { cn } from '@/lib/utils';
 import { Sparkles, Activity, Clock, Box } from 'lucide-react';
 
 export default function LeaveBalanceWidget({ balances, leaveTypes }) {
-  if (balances.length === 0) {
+  if (leaveTypes.length === 0) {
     return (
       <Card className="bg-white/50 border-dashed border-2 border-slate-200">
         <CardContent className="p-8 flex flex-col items-center justify-center text-center">
           <div className="w-12 h-12 rounded-full bg-slate-100 flex items-center justify-center mb-3">
             <Box className="w-6 h-6 text-slate-400" />
           </div>
-          <p className="text-slate-900 font-semibold text-lg">No Leave Balances</p>
-          <p className="text-slate-500 text-sm mt-1">Leave types and balances haven't been configured yet.</p>
+          <p className="text-slate-900 font-semibold text-lg">No Leave Types Configured</p>
+          <p className="text-slate-500 text-sm mt-1">Please configure leave types in settings.</p>
         </CardContent>
       </Card>
     );
@@ -21,10 +21,21 @@ export default function LeaveBalanceWidget({ balances, leaveTypes }) {
 
   return (
     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-      {balances.map((balance, index) => {
-        const leaveType = leaveTypes.find(lt => lt.id === balance.leave_type_id);
-        const usedPercentage = (balance.used / balance.total_allocated) * 100;
-        const availablePercentage = ((balance.total_allocated - balance.used) / balance.total_allocated) * 100;
+      {leaveTypes.map((leaveType) => {
+        // Find existing balance or use defaults
+        const existingBalance = balances.find(b => b.leave_type_id === leaveType.id);
+
+        const balance = existingBalance || {
+          id: `preview-${leaveType.id}`,
+          leave_type_id: leaveType.id,
+          total_allocated: leaveType.annual_quota,
+          used: 0,
+          pending: 0,
+          available: leaveType.annual_quota
+        };
+
+        const usedPercentage = balance.total_allocated > 0 ? (balance.used / balance.total_allocated) * 100 : 0;
+        const availablePercentage = balance.total_allocated > 0 ? ((balance.total_allocated - balance.used) / balance.total_allocated) * 100 : 0;
 
         // Dynamic colors based on leave type
         const colorMap = {
@@ -32,15 +43,15 @@ export default function LeaveBalanceWidget({ balances, leaveTypes }) {
           'Casual Leave': 'from-blue-500 to-indigo-600',
           'Privilege Leave': 'from-amber-500 to-orange-600',
           'Work From Home': 'from-emerald-500 to-teal-600',
+          'Loss of Pay': 'from-slate-500 to-slate-600',
           'default': 'from-violet-500 to-purple-600'
         };
 
-        const cardGradient = leaveType && colorMap[leaveType.name] ? colorMap[leaveType.name] : colorMap.default;
-        const bgColor = leaveType?.color || '#8B5CF6';
+        const cardGradient = colorMap[leaveType.name] ? colorMap[leaveType.name] : colorMap.default;
 
         return (
           <div
-            key={balance.id}
+            key={leaveType.id}
             className="group relative overflow-hidden rounded-3xl bg-white shadow-xl transition-all hover:scale-[1.02] hover:shadow-2xl border border-slate-100"
           >
             {/* Header Background */}
@@ -54,7 +65,7 @@ export default function LeaveBalanceWidget({ balances, leaveTypes }) {
                   </div>
                   <div>
                     <h3 className="font-bold text-slate-800 text-lg leading-tight">
-                      {leaveType?.name || 'Unknown'}
+                      {leaveType.name}
                     </h3>
                     <p className="text-xs text-slate-400 font-medium tracking-wide uppercase mt-0.5">
                       {new Date().getFullYear()} Allocation
