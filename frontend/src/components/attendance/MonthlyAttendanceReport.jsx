@@ -2,22 +2,22 @@ import React, { useMemo } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { 
-  Calendar, TrendingDown, Clock, Award, AlertCircle, 
+import {
+  Calendar, TrendingDown, Clock, Award, AlertCircle,
   DollarSign, Target, Activity, Zap, CheckCircle, Download
 } from 'lucide-react';
 import { format, startOfMonth, endOfMonth, eachDayOfInterval } from 'date-fns';
 import { Progress } from '@/components/ui/progress';
-import { 
-  BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, 
-  ResponsiveContainer, PieChart, Pie, Cell 
+import {
+  BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend,
+  ResponsiveContainer, PieChart, Pie, Cell
 } from 'recharts';
 import { base44 } from '@/api/base44Client';
 import { toast } from 'sonner';
 
-export default function MonthlyAttendanceReport({ 
-  records, 
-  allUsers,
+export default function MonthlyAttendanceReport({
+  records = [],
+  allUsers = [],
   selectedMonth,
   departments = [],
   approvedLeaves = [],
@@ -26,59 +26,68 @@ export default function MonthlyAttendanceReport({
   workDays = []
 }) {
   const metrics = useMemo(() => {
+    // Safety checks
+    const safeRecords = records || [];
+    const safeUsers = allUsers || [];
+    const safeLeaves = approvedLeaves || [];
+    const safeWorkDays = workDays || [];
+    const safeLeaveBalances = leaveBalances || [];
+    const safeLeaveTypes = leaveTypes || [];
+    const safeDepartments = departments || [];
+
     const monthStart = startOfMonth(selectedMonth);
     const monthEnd = endOfMonth(selectedMonth);
     const allDays = eachDayOfInterval({ start: monthStart, end: monthEnd });
     const workingDays = allDays.filter(day => day.getDay() !== 1).length; // Exclude Mondays
-    
+
     // Count holidays and comp offs
     const monthStr = format(selectedMonth, 'yyyy-MM');
-    const monthWorkDays = workDays.filter(wd => wd.date?.startsWith(monthStr));
+    const monthWorkDays = safeWorkDays.filter(wd => wd.date?.startsWith(monthStr));
     const holidays = monthWorkDays.filter(wd => wd.is_holiday).length;
-    const compOffs = records.filter(r => r.status === 'comp_off').length;
-    
+    const compOffs = safeRecords.filter(r => r.status === 'comp_off').length;
+
     // Group records by user
     const userStats = {};
-    allUsers.forEach(user => {
-      const userRecords = records.filter(r => r.user_email === user.email);
-      const present = userRecords.filter(r => 
+    safeUsers.forEach(user => {
+      const userRecords = safeRecords.filter(r => r.user_email === user.email);
+      const present = userRecords.filter(r =>
         ['present', 'checked_out', 'work_from_home'].includes(r.status)
       ).length;
       const absent = userRecords.filter(r => r.status === 'absent').length;
       const halfDay = userRecords.filter(r => r.status === 'half_day').length;
-      const userLeaves = approvedLeaves.filter(l => 
+      const userLeaves = safeLeaves.filter(l =>
         (l.employee_email === user.email || l.user_email === user.email)
       );
-      
+
       // Categorize leaves as paid/unpaid
       const paidLeave = userLeaves.filter(l => {
-        const leaveType = leaveTypes.find(lt => lt.name === l.leave_type);
+        const leaveType = safeLeaveTypes.find(lt => lt.name === l.leave_type);
         return leaveType?.is_paid !== false;
       }).length;
       const unpaidLeave = userLeaves.filter(l => {
-        const leaveType = leaveTypes.find(lt => lt.name === l.leave_type);
+        const leaveType = safeLeaveTypes.find(lt => lt.name === l.leave_type);
         return leaveType?.is_paid === false;
       }).length;
-      
+
       const totalHours = userRecords.reduce((sum, r) => sum + (r.total_hours || 0), 0);
       const avgHours = userRecords.length > 0 ? totalHours / userRecords.length : 0;
       const lateMarks = userRecords.filter(r => r.is_late).length;
-      const overtime = userRecords.reduce((sum, r) => 
+      const overtime = userRecords.reduce((sum, r) =>
         sum + Math.max(0, (r.total_hours || 0) - 9), 0
       );
-      
-      const attendanceRate = workingDays > 0 
+
+      const attendanceRate = workingDays > 0
         ? ((present / workingDays) * 100).toFixed(1)
         : 0;
-      
+
       const regularityScore = Math.max(0, 100 - (absent * 5) - (lateMarks * 2) - (halfDay * 3));
-      
+
       // Salary deduction days (unpaid leaves + absent beyond first + half days as 0.5)
       const salaryDeductionDays = unpaidLeave + Math.max(0, absent - 1) + (halfDay * 0.5);
-      
+
       // Leave balance
-      const userBalance = leaveBalances.find(lb => lb.user_email === user.email);
-      
+      const userBalance = safeLeaveBalances.find(lb => lb.user_email === user.email);
+
       userStats[user.email] = {
         name: user.full_name || user.email,
         present,
@@ -98,7 +107,7 @@ export default function MonthlyAttendanceReport({
     });
 
     // Aggregate metrics
-    const totalUsers = allUsers.length;
+    const totalUsers = safeUsers.length;
     const totalPresent = Object.values(userStats).reduce((sum, u) => sum + u.present, 0);
     const totalAbsent = Object.values(userStats).reduce((sum, u) => sum + u.absent, 0);
     const totalHalfDays = Object.values(userStats).reduce((sum, u) => sum + u.halfDay, 0);
@@ -109,29 +118,29 @@ export default function MonthlyAttendanceReport({
     const totalLateMarks = Object.values(userStats).reduce((sum, u) => sum + u.lateMarks, 0);
     const totalOvertime = Object.values(userStats).reduce((sum, u) => sum + u.overtime, 0);
     const totalSalaryDeductionDays = Object.values(userStats).reduce((sum, u) => sum + (u.salaryDeductionDays || 0), 0);
-    
+
     const avgAttendanceRate = totalUsers > 0
       ? (Object.values(userStats).reduce((sum, u) => sum + u.attendanceRate, 0) / totalUsers).toFixed(1)
       : 0;
-    
+
     const absenteeismRate = (workingDays * totalUsers) > 0
       ? ((totalAbsent / (workingDays * totalUsers)) * 100).toFixed(1)
       : 0;
-    
-    const avgWorkingHours = records.length > 0
-      ? (totalHours / records.length).toFixed(1)
+
+    const avgWorkingHours = safeRecords.length > 0
+      ? (totalHours / safeRecords.length).toFixed(1)
       : 0;
 
     // Department-wise absenteeism
     const deptAbsenteeism = {};
-    departments.forEach(dept => {
-      const deptUsers = allUsers.filter(u => u.department_id === dept.id);
-      const deptAbsent = deptUsers.reduce((sum, u) => 
+    safeDepartments.forEach(dept => {
+      const deptUsers = safeUsers.filter(u => u.department_id === dept.id);
+      const deptAbsent = deptUsers.reduce((sum, u) =>
         sum + (userStats[u.email]?.absent || 0), 0
       );
       const deptWorkingDays = workingDays * deptUsers.length;
       deptAbsenteeism[dept.name] = {
-        rate: deptWorkingDays > 0 
+        rate: deptWorkingDays > 0
           ? ((deptAbsent / deptWorkingDays) * 100).toFixed(1)
           : 0,
         count: deptAbsent
@@ -172,7 +181,7 @@ export default function MonthlyAttendanceReport({
       const response = await base44.functions.invoke('exportMonthlyAttendanceReport', {
         month: format(selectedMonth, 'yyyy-MM')
       });
-      
+
       const { pdf_base64, filename } = response.data;
       const byteCharacters = atob(pdf_base64);
       const byteNumbers = new Array(byteCharacters.length);
@@ -349,7 +358,7 @@ export default function MonthlyAttendanceReport({
                   cx="50%"
                   cy="50%"
                   labelLine={false}
-                  label={({name, percent}) => `${name}: ${(percent * 100).toFixed(0)}%`}
+                  label={({ name, percent }) => `${name}: ${(percent * 100).toFixed(0)}%`}
                   outerRadius={100}
                   fill="#8884d8"
                   dataKey="value"
@@ -374,21 +383,20 @@ export default function MonthlyAttendanceReport({
               {Object.entries(metrics.deptAbsenteeism)
                 .sort((a, b) => parseFloat(b[1].rate) - parseFloat(a[1].rate))
                 .map(([dept, data]) => (
-                <div key={dept} className="space-y-2">
-                  <div className="flex items-center justify-between">
-                    <span className="font-semibold text-slate-900">{dept}</span>
-                    <Badge className={`${
-                      parseFloat(data.rate) < 5 ? 'bg-green-500' :
-                      parseFloat(data.rate) < 10 ? 'bg-yellow-500' :
-                      'bg-red-500'
-                    } text-white font-bold`}>
-                      {data.rate}%
-                    </Badge>
+                  <div key={dept} className="space-y-2">
+                    <div className="flex items-center justify-between">
+                      <span className="font-semibold text-slate-900">{dept}</span>
+                      <Badge className={`${parseFloat(data.rate) < 5 ? 'bg-green-500' :
+                          parseFloat(data.rate) < 10 ? 'bg-yellow-500' :
+                            'bg-red-500'
+                        } text-white font-bold`}>
+                        {data.rate}%
+                      </Badge>
+                    </div>
+                    <Progress value={parseFloat(data.rate)} className="h-2" max={20} />
+                    <p className="text-xs text-slate-600">{data.count} absences</p>
                   </div>
-                  <Progress value={parseFloat(data.rate)} className="h-2" max={20} />
-                  <p className="text-xs text-slate-600">{data.count} absences</p>
-                </div>
-              ))}
+                ))}
             </div>
           </CardContent>
         </Card>

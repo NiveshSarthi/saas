@@ -17,12 +17,12 @@ const statusConfig = {
   weekoff: { label: 'WO', color: 'bg-orange-500 text-white' }
 };
 
-export default function AttendanceCalendar({ selectedMonth, records, onMarkAttendance, isAdmin, currentUserEmail, approvedLeaves = [] }) {
+export default function AttendanceCalendar({ selectedMonth, records, onMarkAttendance, isAdmin, currentUserEmail, approvedLeaves = [], holidays = [] }) {
   const monthStart = startOfMonth(selectedMonth);
   const monthEnd = endOfMonth(selectedMonth);
   const calendarStart = startOfWeek(monthStart);
   const calendarEnd = endOfWeek(monthEnd);
-  
+
   const calendarDays = eachDayOfInterval({ start: calendarStart, end: calendarEnd });
 
   const getRecordsForDay = (day) => {
@@ -47,6 +47,11 @@ export default function AttendanceCalendar({ selectedMonth, records, onMarkAtten
     // Check if there's a weekoff attendance record for this day
     const dayStr = format(day, 'yyyy-MM-dd');
     return records.some(record => record.date === dayStr && record.status === 'weekoff');
+  };
+
+  const getHoliday = (day) => {
+    const dayStr = format(day, 'yyyy-MM-dd');
+    return holidays.find(h => h.date === dayStr);
   };
 
   const getLeavesForDay = (day) => {
@@ -84,36 +89,45 @@ export default function AttendanceCalendar({ selectedMonth, records, onMarkAtten
           const isCurrentMonth = isSameMonth(day, selectedMonth);
           const isToday = isSameDay(day, new Date());
           const isWeekOffDay = isWeekOff(day);
+          const holiday = getHoliday(day);
 
           return (
             <div
               key={day.toString()}
               className={cn(
                 "min-h-[110px] p-3 rounded-2xl border-2 transition-all cursor-pointer transform hover:scale-105 hover:shadow-xl",
-                isCurrentMonth 
-                  ? "bg-white border-slate-200 hover:border-indigo-400 shadow-sm" 
+                isCurrentMonth
+                  ? "bg-white border-slate-200 hover:border-indigo-400 shadow-sm"
                   : "bg-slate-50/50 border-slate-100 hover:border-slate-300",
                 isToday && "border-indigo-600 bg-gradient-to-br from-indigo-50 to-purple-50 ring-2 ring-indigo-300 shadow-lg",
-                isWeekOffDay && "bg-orange-50 border-orange-300"
+                isWeekOffDay && "bg-orange-50 border-orange-300",
+                holiday && "bg-pink-50 border-pink-300"
               )}
               onClick={() => onMarkAttendance(day)}
             >
               <div className={cn(
                 "text-sm font-bold mb-2 flex items-center justify-center w-8 h-8 rounded-full",
-                isToday 
-                  ? "bg-gradient-to-br from-indigo-600 to-purple-600 text-white shadow-md" 
+                isToday
+                  ? "bg-gradient-to-br from-indigo-600 to-purple-600 text-white shadow-md"
                   : isWeekOffDay
-                  ? "bg-orange-500 text-white"
-                  : "text-slate-700"
+                    ? "bg-orange-500 text-white"
+                    : holiday
+                      ? "bg-pink-500 text-white"
+                      : "text-slate-700"
               )}>
                 {format(day, 'd')}
               </div>
               {isWeekOffDay && (
                 <div className="text-[10px] text-orange-600 font-bold text-center mb-1">WEEKOFF</div>
               )}
+              {holiday && (
+                <div className="text-[10px] text-pink-600 font-bold text-center mb-1 truncate px-1" title={holiday.name}>
+                  {holiday.name}
+                </div>
+              )}
 
               <div className="space-y-1.5">
-                {!isWeekOffDay && dayRecords.map(record => {
+                {!isWeekOffDay && !holiday && dayRecords.map(record => {
                   const config = statusConfig[record.status] || statusConfig.present;
                   return (
                     <div key={record.id} className="text-xs">

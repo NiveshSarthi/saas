@@ -95,7 +95,9 @@ class ApiClient {
      *   UserInvitation: EntityManager,
      *   AuditLog: EntityManager,
      *   Builder: EntityManager,
-     *   Role: EntityManager
+     *   Role: EntityManager,
+     *   AttendanceSettings: EntityManager,
+     *   WorkDay: EntityManager
      * }}
      */
     get entities() {

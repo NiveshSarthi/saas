@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { base44 } from '@/api/base44Client';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
-import { format } from 'date-fns';
+import { format, eachDayOfInterval } from 'date-fns';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -45,7 +45,62 @@ export default function PendingLeaveApprovals({ requests, leaveTypes, currentUse
             used: balance.used + request.total_days,
             pending: balance.pending - request.total_days
           });
+
+          // SYNC: Create Attendance records for each day of the leave
+          try {
+            const startDate = new Date(request.start_date);
+            const endDate = new Date(request.end_date);
+            const days = eachDayOfInterval({ start: startDate, end: endDate });
+
+            // Determine status based on leave type
+            const leaveType = leaveTypes.find(lt => lt.id === request.leave_type_id);
+            let attendanceStatus = 'leave';
+            if (leaveType) {
+              const nameLower = leaveType.name.toLowerCase();
+              if (nameLower.includes('sick')) attendanceStatus = 'sick_leave';
+              else if (nameLower.includes('casual')) attendanceStatus = 'casual_leave';
+              else if (nameLower.includes('wfh') || nameLower.includes('work from home')) attendanceStatus = 'work_from_home';
+            }
+
+            // Process each day
+            for (const day of days) {
+              // Skip Sundays (usually weekoff, logic could be more complex but this is a safe default)
+              if (day.getDay() === 0) continue;
+
+              const dateStr = format(day, 'yyyy-MM-dd');
+
+              // Check if record exists
+              const existing = await base44.entities.Attendance.filter({
+                user_email: request.user_email,
+                date: dateStr
+              });
+
+              if (existing.length > 0) {
+                // Update existing
+                await base44.entities.Attendance.update(existing[0].id, {
+                  status: attendanceStatus,
+                  remarks: `Leave Approved: ${leaveType?.name || 'Leave'}`
+                });
+              } else {
+                // Create new
+                await base44.entities.Attendance.create({
+                  user_email: request.user_email,
+                  date: dateStr,
+                  status: attendanceStatus,
+                  check_in_time: null,
+                  check_out_time: null,
+                  total_hours: 0,
+                  remarks: `Leave Approved: ${leaveType?.name || 'Leave'}`
+                });
+              }
+            }
+          } catch (syncError) {
+            console.error('Failed to sync attendance:', syncError);
+            toast.error('Leave approved but failed to sync attendance records');
+          }
+
         } else {
+          // Rejected - return pending to available
           await base44.entities.LeaveBalance.update(balance.id, {
             pending: balance.pending - request.total_days,
             available: balance.available + request.total_days
@@ -69,6 +124,7 @@ export default function PendingLeaveApprovals({ requests, leaveTypes, currentUse
       queryClient.invalidateQueries(['pending-leave-requests']);
       queryClient.invalidateQueries(['all-leave-requests']);
       queryClient.invalidateQueries(['approved-leaves']);
+      queryClient.invalidateQueries(['attendance']); // Invalidate attendance too
       toast.success(`Leave ${variables.status} successfully`);
       setSelectedRequest(null);
       setReviewComments('');

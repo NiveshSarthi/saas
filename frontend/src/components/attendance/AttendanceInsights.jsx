@@ -1,20 +1,20 @@
 import React from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
-import { 
-  CheckCircle2, 
-  AlertTriangle, 
+import {
+  CheckCircle2,
+  AlertTriangle,
   TrendingUp,
   Clock,
   Calendar
 } from 'lucide-react';
 import { format, differenceInDays, startOfMonth } from 'date-fns';
 
-export default function AttendanceInsights({ records, selectedMonth, todayRecord }) {
+export default function AttendanceInsights({ records = [], selectedMonth, todayRecord }) {
   const insights = [];
 
   // Late arrivals insight
-  const lateCount = records.filter(r => r.is_late).length;
+  const lateCount = (records || []).filter(r => r.is_late).length;
   if (lateCount > 0) {
     insights.push({
       type: 'warning',
@@ -40,10 +40,10 @@ export default function AttendanceInsights({ records, selectedMonth, todayRecord
   }
 
   // Perfect attendance streak
-  const perfectDays = records.filter(r => 
+  const perfectDays = records.filter(r =>
     (r.status === 'present' || r.status === 'checked_out') && !r.is_late
   ).length;
-  
+
   if (perfectDays >= 5) {
     insights.push({
       type: 'success',
@@ -59,7 +59,7 @@ export default function AttendanceInsights({ records, selectedMonth, todayRecord
   const avgHours = records
     .filter(r => r.total_hours)
     .reduce((sum, r) => sum + (r.total_hours || 0), 0) / (records.length || 1);
-  
+
   if (avgHours >= 8) {
     insights.push({
       type: 'success',
@@ -113,7 +113,7 @@ export default function AttendanceInsights({ records, selectedMonth, todayRecord
           {insights.map((insight, index) => {
             const Icon = insight.icon;
             return (
-              <div 
+              <div
                 key={index}
                 className={`flex items-start gap-3 p-3 rounded-lg ${insight.bgColor}`}
               >

@@ -20,35 +20,41 @@ import { DollarSign, Download, Loader2, AlertCircle } from 'lucide-react';
 import { toast } from 'sonner';
 import { jsPDF } from 'jspdf';
 
-export default function SalaryCalculationReport({ isOpen, onClose, selectedMonth, attendanceRecords, allUsers, approvedLeaves }) {
+export default function SalaryCalculationReport({
+  selectedMonth = new Date(),
+  attendanceRecords = [],
+  allUsers = [],
+  approvedLeaves = []
+}) {
   const [perDaySalary, setPerDaySalary] = useState({});
+  const safeMonth = selectedMonth instanceof Date && !isNaN(selectedMonth) ? selectedMonth : new Date();
 
   const { data: existingSalaries = [] } = useQuery({
-    queryKey: ['salary-records', format(selectedMonth, 'yyyy-MM')],
+    queryKey: ['salary-records', format(safeMonth, 'yyyy-MM')],
     queryFn: () => base44.entities.SalaryRecord.filter({
-      month: format(selectedMonth, 'yyyy-MM')
+      month: format(safeMonth, 'yyyy-MM')
     }),
-    enabled: isOpen,
+    enabled: true,
   });
 
-  const monthStart = startOfMonth(selectedMonth);
-  const monthEnd = endOfMonth(selectedMonth);
+  const monthStart = startOfMonth(safeMonth);
+  const monthEnd = endOfMonth(safeMonth);
   const allDaysInMonth = eachDayOfInterval({ start: monthStart, end: monthEnd });
   const totalWorkingDays = allDaysInMonth.length;
 
   const calculateSalaryForUser = (userEmail) => {
     const userRecords = attendanceRecords.filter(r => r.user_email === userEmail);
-    
+
     // Count present days (present, checked_out, work_from_home)
-    const presentDays = userRecords.filter(r => 
-      r.status === 'present' || 
-      r.status === 'checked_out' || 
+    const presentDays = userRecords.filter(r =>
+      r.status === 'present' ||
+      r.status === 'checked_out' ||
       r.status === 'work_from_home'
     ).length;
-    
+
     // Count absent days
     const absentDays = userRecords.filter(r => r.status === 'absent').length;
-    
+
     // Count approved leave days for this user
     let leaveDays = 0;
     approvedLeaves
@@ -56,22 +62,22 @@ export default function SalaryCalculationReport({ isOpen, onClose, selectedMonth
       .forEach(leave => {
         const leaveStart = new Date(leave.start_date);
         const leaveEnd = new Date(leave.end_date);
-        
+
         allDaysInMonth.forEach(day => {
           if (day >= leaveStart && day <= leaveEnd) {
             leaveDays++;
           }
         });
       });
-    
+
     const dailyRate = parseFloat(perDaySalary[userEmail] || 0);
-    
+
     // Calculate salary: (present days + leave days) * daily rate
     // Deduction: absent days * daily rate (automatic)
     const earnedSalary = (presentDays + leaveDays) * dailyRate;
     const deductions = absentDays * dailyRate;
     const netSalary = earnedSalary - deductions;
-    
+
     return {
       presentDays,
       absentDays,
@@ -88,7 +94,7 @@ export default function SalaryCalculationReport({ isOpen, onClose, selectedMonth
     const salaryData = allUsers.map(user => {
       const calc = calculateSalaryForUser(user.email);
       const existingSalary = existingSalaries.find(s => s.employee_email === user.email);
-      
+
       return {
         employee: user,
         calculation: calc,
@@ -104,33 +110,33 @@ export default function SalaryCalculationReport({ isOpen, onClose, selectedMonth
 
     // Generate PDF Report
     const doc = new jsPDF('landscape');
-    
+
     // Header
     doc.setFillColor(79, 70, 229);
     doc.rect(0, 0, 297, 40, 'F');
-    
+
     doc.setTextColor(255, 255, 255);
     doc.setFontSize(24);
     doc.setFont(undefined, 'bold');
     doc.text('SALARY CALCULATION REPORT', 148.5, 20, { align: 'center' });
-    
+
     doc.setFontSize(12);
     doc.setFont(undefined, 'normal');
     doc.text(format(selectedMonth, 'MMMM yyyy'), 148.5, 30, { align: 'center' });
-    
+
     // Summary stats
     doc.setTextColor(0, 0, 0);
     doc.setFontSize(10);
     let y = 50;
-    
+
     const totalPayable = salaryData.reduce((sum, d) => sum + d.calculation.netSalary, 0);
     const totalDeductions = salaryData.reduce((sum, d) => sum + d.calculation.deductions, 0);
-    
+
     doc.setFontSize(12);
     doc.setFont(undefined, 'bold');
     doc.text('Summary', 14, y);
     y += 8;
-    
+
     doc.setFontSize(10);
     doc.setFont(undefined, 'normal');
     doc.text(`Total Employees: ${salaryData.length}`, 14, y);
@@ -138,13 +144,13 @@ export default function SalaryCalculationReport({ isOpen, onClose, selectedMonth
     doc.text(`Total Payable: ₹${totalPayable.toLocaleString()}`, 150, y);
     doc.text(`Total Deductions: ₹${totalDeductions.toLocaleString()}`, 220, y);
     y += 15;
-    
+
     // Table header
     doc.setFillColor(241, 245, 249);
     doc.rect(14, y - 5, 270, 8, 'F');
     doc.setFont(undefined, 'bold');
     doc.setFontSize(9);
-    
+
     doc.text('Employee', 16, y);
     doc.text('Present', 70, y);
     doc.text('Absent', 90, y);
@@ -154,23 +160,23 @@ export default function SalaryCalculationReport({ isOpen, onClose, selectedMonth
     doc.text('Deduction', 190, y);
     doc.text('Net Salary', 225, y);
     doc.text('Attn %', 265, y);
-    
+
     y += 8;
     doc.setFont(undefined, 'normal');
     doc.setFontSize(8);
-    
+
     // Employee rows
     salaryData.forEach((data, index) => {
       if (y > 185) {
         doc.addPage('landscape');
         y = 20;
-        
+
         // Redraw header
         doc.setFillColor(241, 245, 249);
         doc.rect(14, y - 5, 270, 8, 'F');
         doc.setFont(undefined, 'bold');
         doc.setFontSize(9);
-        
+
         doc.text('Employee', 16, y);
         doc.text('Present', 70, y);
         doc.text('Absent', 90, y);
@@ -180,17 +186,17 @@ export default function SalaryCalculationReport({ isOpen, onClose, selectedMonth
         doc.text('Deduction', 190, y);
         doc.text('Net Salary', 225, y);
         doc.text('Attn %', 265, y);
-        
+
         y += 8;
         doc.setFont(undefined, 'normal');
         doc.setFontSize(8);
       }
-      
+
       if (index % 2 === 0) {
         doc.setFillColor(248, 250, 252);
         doc.rect(14, y - 5, 270, 7, 'F');
       }
-      
+
       doc.setTextColor(30, 41, 59);
       doc.text(data.employee.full_name.substring(0, 25), 16, y);
       doc.text(String(data.calculation.presentDays), 70, y);
@@ -199,7 +205,7 @@ export default function SalaryCalculationReport({ isOpen, onClose, selectedMonth
       doc.text(`₹${data.perDay}`, 130, y);
       doc.text(`₹${data.calculation.earnedSalary.toLocaleString()}`, 160, y);
       doc.text(`₹${data.calculation.deductions.toLocaleString()}`, 190, y);
-      
+
       // Color code net salary
       if (data.calculation.netSalary >= 0) {
         doc.setTextColor(34, 197, 94); // Green
@@ -207,7 +213,7 @@ export default function SalaryCalculationReport({ isOpen, onClose, selectedMonth
         doc.setTextColor(239, 68, 68); // Red
       }
       doc.text(`₹${data.calculation.netSalary.toLocaleString()}`, 225, y);
-      
+
       // Color code attendance
       const rate = parseFloat(data.calculation.attendanceRate);
       if (rate >= 90) {
@@ -218,17 +224,17 @@ export default function SalaryCalculationReport({ isOpen, onClose, selectedMonth
         doc.setTextColor(239, 68, 68);
       }
       doc.text(`${data.calculation.attendanceRate}%`, 265, y);
-      
+
       doc.setTextColor(0, 0, 0);
       y += 7;
     });
-    
+
     // Footer
     doc.setFontSize(8);
     doc.setTextColor(120, 120, 120);
     doc.text(`Generated: ${format(new Date(), 'dd MMM yyyy, hh:mm a')}`, 14, y + 10);
     doc.text('Salary Calculation System', 297 - 14, y + 10, { align: 'right' });
-    
+
     doc.save(`salary-report-${format(selectedMonth, 'yyyy-MM')}.pdf`);
     toast.success('Salary report generated successfully!');
   };
@@ -241,14 +247,26 @@ export default function SalaryCalculationReport({ isOpen, onClose, selectedMonth
   })).filter(d => d.perDay > 0);
 
   return (
-    <Dialog open={isOpen} onOpenChange={onClose}>
-      <DialogContent className="max-w-6xl max-h-[90vh] overflow-y-auto">
-        <DialogHeader>
-          <DialogTitle className="flex items-center gap-2 text-2xl">
+    <div className="space-y-6">
+      <Card className="border-0 shadow-none">
+        <div className="flex items-center justify-between mb-6">
+          <div className="flex items-center gap-2">
             <DollarSign className="w-6 h-6 text-green-600" />
-            Salary Calculation Report - {format(selectedMonth, 'MMMM yyyy')}
-          </DialogTitle>
-        </DialogHeader>
+            <h2 className="text-2xl font-bold text-slate-800">
+              Salary Calculation Report - {format(selectedMonth, 'MMMM yyyy')}
+            </h2>
+          </div>
+          <div className="flex gap-3">
+            <Button
+              onClick={handleGenerateReport}
+              disabled={salaryPreview.length === 0}
+              className="bg-green-600 hover:bg-green-700"
+            >
+              <Download className="w-4 h-4 mr-2" />
+              Generate PDF Report
+            </Button>
+          </div>
+        </div>
 
         <div className="space-y-6">
           {/* Info Card */}
@@ -272,16 +290,16 @@ export default function SalaryCalculationReport({ isOpen, onClose, selectedMonth
           {/* Salary Input Section */}
           <div>
             <h3 className="text-lg font-semibold mb-3">Set Daily Rates</h3>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 max-h-[300px] overflow-y-auto p-1">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 max-h-[300px] overflow-y-auto p-1 border rounded-lg bg-slate-50/50">
               {allUsers.map(user => (
-                <Card key={user.email}>
+                <Card key={user.email} className="bg-white">
                   <CardContent className="p-4">
                     <div className="space-y-3">
                       <div>
                         <Label className="text-sm font-semibold">{user.full_name}</Label>
                         <p className="text-xs text-slate-500">{user.email}</p>
                       </div>
-                      
+
                       <div>
                         <Label className="text-xs">Per Day Salary (₹)</Label>
                         <Input
@@ -345,11 +363,11 @@ export default function SalaryCalculationReport({ isOpen, onClose, selectedMonth
                           ₹{calc.netSalary.toLocaleString()}
                         </TableCell>
                         <TableCell className="text-center">
-                          <Badge 
+                          <Badge
                             className={
                               calc.attendanceRate >= 90 ? 'bg-green-100 text-green-700' :
-                              calc.attendanceRate >= 75 ? 'bg-yellow-100 text-yellow-700' :
-                              'bg-red-100 text-red-700'
+                                calc.attendanceRate >= 75 ? 'bg-yellow-100 text-yellow-700' :
+                                  'bg-red-100 text-red-700'
                             }
                           >
                             {calc.attendanceRate}%
@@ -384,23 +402,8 @@ export default function SalaryCalculationReport({ isOpen, onClose, selectedMonth
               </div>
             </div>
           )}
-
-          {/* Actions */}
-          <div className="flex justify-end gap-3 pt-4">
-            <Button variant="outline" onClick={onClose}>
-              Cancel
-            </Button>
-            <Button 
-              onClick={handleGenerateReport}
-              disabled={salaryPreview.length === 0}
-              className="bg-green-600 hover:bg-green-700"
-            >
-              <Download className="w-4 h-4 mr-2" />
-              Generate PDF Report
-            </Button>
-          </div>
         </div>
-      </DialogContent>
-    </Dialog>
+      </Card>
+    </div>
   );
 }

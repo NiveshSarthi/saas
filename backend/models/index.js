@@ -627,4 +627,33 @@ export const MarketingGoal = mongoose.model('MarketingGoal', marketingGoalSchema
 export const MarketingCategory = mongoose.model('MarketingCategory', marketingCategorySchema);
 export const Video = mongoose.model('Video', videoSchema);
 export const VideoComment = mongoose.model('VideoComment', videoCommentSchema);
+
 export const VideoLog = mongoose.model('VideoLog', videoLogSchema);
+
+const attendanceSettingsSchema = new mongoose.Schema({
+    work_start_time: { type: String, default: '09:00' },
+    late_threshold_minutes: { type: Number, default: 15 },
+    minimum_work_hours: { type: Number, default: 8 },
+    early_checkout_threshold_hours: { type: Number, default: 8 },
+    allow_multiple_checkins: { type: Boolean, default: false },
+    enable_geofencing: { type: Boolean, default: false },
+    office_latitude: Number,
+    office_longitude: Number,
+    geofence_radius_meters: { type: Number, default: 500 },
+    week_off_days: [Number], // 0=Sunday
+    require_checkout: { type: Boolean, default: true },
+    auto_checkout_time: { type: String, default: '23:59' },
+    updated_at: { type: Date, default: Date.now }
+});
+
+const workDaySchema = new mongoose.Schema({
+    date: { type: String, required: true }, // YYYY-MM-DD
+    is_holiday: { type: Boolean, default: false },
+    name: String,
+    description: String,
+    is_weekoff: { type: Boolean, default: false },
+    created_at: { type: Date, default: Date.now }
+});
+
+export const AttendanceSettings = mongoose.model('AttendanceSettings', attendanceSettingsSchema);
+export const WorkDay = mongoose.model('WorkDay', workDaySchema);

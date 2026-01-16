@@ -22,13 +22,21 @@ const statusOptions = [
   { value: 'holiday', label: 'Holiday' }
 ];
 
-export default function MarkAttendanceDialog({ isOpen, onClose, selectedDate, currentUser, isAdmin, allUsers }) {
+export default function MarkAttendanceDialog({
+  isOpen,
+  onClose,
+  selectedDate,
+  currentUser,
+  isAdmin,
+  allUsers,
+  existingRecord
+}) {
   const [formData, setFormData] = useState({
     user_email: currentUser?.email || '',
     date: selectedDate ? format(selectedDate, 'yyyy-MM-dd') : '',
     status: 'present',
-    check_in_time: '',
-    check_out_time: '',
+    check_in: '',
+    check_out: '',
     notes: ''
   });
 
@@ -44,17 +52,28 @@ export default function MarkAttendanceDialog({ isOpen, onClose, selectedDate, cu
   });
 
   useEffect(() => {
-    if (isOpen && currentUser?.email) {
-      setFormData({
-        user_email: currentUser?.email,
-        date: selectedDate ? format(selectedDate, 'yyyy-MM-dd') : format(new Date(), 'yyyy-MM-dd'),
-        status: 'present',
-        check_in_time: '',
-        check_out_time: '',
-        notes: ''
-      });
+    if (isOpen) {
+      if (existingRecord) {
+        setFormData({
+          user_email: existingRecord.user_email,
+          date: existingRecord.date,
+          status: existingRecord.status,
+          check_in: existingRecord.check_in ? (existingRecord.check_in.includes('T') ? format(new Date(existingRecord.check_in), 'HH:mm') : existingRecord.check_in) : '',
+          check_out: existingRecord.check_out ? (existingRecord.check_out.includes('T') ? format(new Date(existingRecord.check_out), 'HH:mm') : existingRecord.check_out) : '',
+          notes: existingRecord.notes || ''
+        });
+      } else {
+        setFormData({
+          user_email: currentUser?.email || '',
+          date: selectedDate ? format(selectedDate, 'yyyy-MM-dd') : format(new Date(), 'yyyy-MM-dd'),
+          status: 'present',
+          check_in: '',
+          check_out: '',
+          notes: ''
+        });
+      }
     }
-  }, [isOpen, selectedDate, currentUser]);
+  }, [isOpen, selectedDate, currentUser, existingRecord]);
 
   const getLocation = () => {
     return new Promise((resolve, reject) => {
@@ -90,12 +109,12 @@ export default function MarkAttendanceDialog({ isOpen, onClose, selectedDate, cu
   const markAttendanceMutation = useMutation({
     mutationFn: async (data) => {
       console.log('Mutation started with data:', data);
-      
+
       // Fetch location, IP, and device info first
       let location = null;
       let ip = null;
       let deviceInfo = null;
-      
+
       // Try to get location, but make it optional for admin users
       try {
         location = await getLocation();
@@ -110,7 +129,7 @@ export default function MarkAttendanceDialog({ isOpen, onClose, selectedDate, cu
           toast.warning('Attendance marked without location data');
         }
       }
-      
+
       // Get IP address
       try {
         const response = await fetch('https://api.ipify.org?format=json');
@@ -119,7 +138,7 @@ export default function MarkAttendanceDialog({ isOpen, onClose, selectedDate, cu
       } catch (e) {
         console.error('Failed to get IP:', e);
       }
-      
+
       // Get device info
       const ua = navigator.userAgent;
       let browser = "Unknown";
@@ -128,12 +147,12 @@ export default function MarkAttendanceDialog({ isOpen, onClose, selectedDate, cu
       else if (ua.includes("Safari")) browser = "Safari";
       else if (ua.includes("Edge")) browser = "Edge";
       deviceInfo = `${browser} - ${navigator.platform}`;
-      
+
       // Get user data from the allUsers prop (already fetched by parent)
       const userRecord = allUsers.find(u => u.email === data.user_email);
-      
+
       // Convert time strings to ISO timestamps
-      const attendanceData = { 
+      const attendanceData = {
         ...data,
         user_name: userRecord?.full_name || data.user_email,
         department_id: userRecord?.department_id || null,
@@ -143,49 +162,56 @@ export default function MarkAttendanceDialog({ isOpen, onClose, selectedDate, cu
         device_info: deviceInfo,
         source: 'web'
       };
-      
-      if (data.check_in_time && data.check_in_time.includes(':')) {
-        const [hours, minutes] = data.check_in_time.split(':');
+
+      if (data.check_in && data.check_in.includes(':')) {
+        const [hours, minutes] = data.check_in.split(':');
         const checkInDate = new Date(data.date);
         checkInDate.setHours(parseInt(hours), parseInt(minutes), 0, 0);
-        attendanceData.check_in_time = checkInDate.toISOString();
-        
+        attendanceData.check_in = checkInDate.toISOString();
+
         // Calculate is_late based on attendance settings
         if (attendanceSettings) {
           const workStartTime = attendanceSettings.work_start_time || '09:00';
           const lateThresholdMinutes = attendanceSettings.late_threshold_minutes || 1;
-          
+
           const [startHours, startMinutes] = workStartTime.split(':');
           const workStartDate = new Date(data.date);
           workStartDate.setHours(parseInt(startHours), parseInt(startMinutes), 0, 0);
-          
+
           // Add late threshold to work start time
           const lateThresholdDate = new Date(workStartDate.getTime() + lateThresholdMinutes * 60 * 1000);
-          
+
           // Check if check-in time is after the late threshold
           attendanceData.is_late = checkInDate > lateThresholdDate;
         } else {
           attendanceData.is_late = false;
         }
       }
-      
-      if (data.check_out_time && data.check_out_time.includes(':')) {
-        const [hours, minutes] = data.check_out_time.split(':');
+
+      if (data.check_out && data.check_out.includes(':')) {
+        const [hours, minutes] = data.check_out.split(':');
         const checkOutDate = new Date(data.date);
         checkOutDate.setHours(parseInt(hours), parseInt(minutes), 0, 0);
-        attendanceData.check_out_time = checkOutDate.toISOString();
+        attendanceData.check_out = checkOutDate.toISOString();
       }
 
       // Calculate total hours if both times are provided
-      if (attendanceData.check_in_time && attendanceData.check_out_time) {
-        const checkIn = new Date(attendanceData.check_in_time);
-        const checkOut = new Date(attendanceData.check_out_time);
+      if (attendanceData.check_in && attendanceData.check_out) {
+        const checkIn = new Date(attendanceData.check_in);
+        const checkOut = new Date(attendanceData.check_out);
         const diffMs = checkOut - checkIn;
         attendanceData.total_hours = Math.round((diffMs / (1000 * 60 * 60)) * 100) / 100;
       }
 
+      // Clean up fields that shouldn't be sent if empty
+      if (!attendanceData.check_in) delete attendanceData.check_in;
+      if (!attendanceData.check_out) delete attendanceData.check_out;
+      // Remove deprecated fields if they leaked in
+      delete attendanceData.check_in_time;
+      delete attendanceData.check_out_time;
+
       console.log('Checking for existing attendance record...');
-      const existing = await base44.entities.Attendance.filter({
+      const existing = existingRecord ? [existingRecord] : await base44.entities.Attendance.filter({
         user_email: data.user_email,
         date: data.date
       });
@@ -215,19 +241,19 @@ export default function MarkAttendanceDialog({ isOpen, onClose, selectedDate, cu
       queryClient.invalidateQueries({ queryKey: ['all-attendance-records'] });
       queryClient.invalidateQueries({ queryKey: ['today-all-attendance'] });
       queryClient.invalidateQueries({ queryKey: ['custom-range-attendance'] });
-      
+
       // Force refetch to ensure UI updates
       queryClient.refetchQueries({ queryKey: ['attendance'] });
       queryClient.refetchQueries({ queryKey: ['all-attendance-records'] });
-      
+
       toast.success('Attendance marked successfully');
       onClose();
       setFormData({
         user_email: currentUser?.email || '',
         date: '',
         status: 'present',
-        check_in_time: '',
-        check_out_time: '',
+        check_in: '',
+        check_out: '',
         notes: ''
       });
     },
@@ -240,36 +266,36 @@ export default function MarkAttendanceDialog({ isOpen, onClose, selectedDate, cu
   const handleSubmit = async (e) => {
     e?.preventDefault();
     e?.stopPropagation();
-    
+
     console.log('=== Form Submission Started ===');
     console.log('Current formData:', formData);
     console.log('Current user:', currentUser);
     console.log('Is admin:', isAdmin);
-    
+
     // Auto-fill user email if not set (for HR/admin marking their own)
     const finalFormData = {
       ...formData,
       user_email: formData.user_email || currentUser?.email || ''
     };
-    
+
     console.log('Final form data:', finalFormData);
-    
+
     // Validate required fields
     if (!finalFormData.user_email || finalFormData.user_email.trim() === '') {
       toast.error('Please select a user');
       console.error('❌ Validation failed: No user selected');
       return;
     }
-    
+
     if (!finalFormData.date || finalFormData.date.trim() === '') {
       toast.error('Please select a date');
       console.error('❌ Validation failed: No date selected');
       return;
     }
-    
+
     console.log('✅ Validation passed, submitting attendance...');
     console.log('Mutation pending status before:', markAttendanceMutation.isPending);
-    
+
     try {
       const result = await markAttendanceMutation.mutateAsync(finalFormData);
       console.log('✅ Mutation completed successfully:', result);
@@ -343,16 +369,16 @@ export default function MarkAttendanceDialog({ isOpen, onClose, selectedDate, cu
               <Label>Check In</Label>
               <Input
                 type="time"
-                value={formData.check_in_time}
-                onChange={(e) => setFormData({ ...formData, check_in_time: e.target.value })}
+                value={formData.check_in}
+                onChange={(e) => setFormData({ ...formData, check_in: e.target.value })}
               />
             </div>
             <div>
               <Label>Check Out</Label>
               <Input
                 type="time"
-                value={formData.check_out_time}
-                onChange={(e) => setFormData({ ...formData, check_out_time: e.target.value })}
+                value={formData.check_out}
+                onChange={(e) => setFormData({ ...formData, check_out: e.target.value })}
               />
             </div>
           </div>
