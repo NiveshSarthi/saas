@@ -32,12 +32,6 @@ import {
   ArrowDownRight,
   Info
 } from 'lucide-react';
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-} from '@/components/ui/dropdown-menu';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -71,9 +65,6 @@ export default function SalaryPage() {
   const [isCalculating, setIsCalculating] = useState(false);
   const [expandedRows, setExpandedRows] = useState({});
   const [viewMode, setViewMode] = useState('cards');
-  const [statusChangeDialogOpen, setStatusChangeDialogOpen] = useState(false);
-  const [changingStatusRecord, setChangingStatusRecord] = useState(null);
-  const [hideNoPolicyMembers, setHideNoPolicyMembers] = useState(false);
 
   const queryClient = useQueryClient();
 
@@ -120,13 +111,9 @@ export default function SalaryPage() {
   // Fetch real-time attendance data
   const { data: attendanceRecords = [] } = useQuery({
     queryKey: ['attendance-records-salary', selectedMonth],
-    queryFn: () => {
-      const [year, month] = selectedMonth.split('-');
-      const lastDay = new Date(parseInt(year), parseInt(month), 0).getDate();
-      return base44.entities.Attendance.filter({
-        date: { $gte: `${selectedMonth}-01`, $lte: `${selectedMonth}-${String(lastDay).padStart(2, '0')}` }
-      });
-    },
+    queryFn: () => base44.entities.Attendance.filter({
+      date: { $gte: `${selectedMonth}-01`, $lte: `${selectedMonth}-31` }
+    }),
     enabled: !!user,
     refetchInterval: 10000
   });
@@ -164,26 +151,26 @@ export default function SalaryPage() {
       const response = await base44.functions.invoke('getDashboardUsers');
       return response.data;
     },
-    enabled: (activeTab === 'policies' || advanceDialogOpen) && isHRMember,
   });
-
-  const usersFromEntity = teamData?.users || [];
-  const invitations = teamData?.invitations || [];
+  // Fetch users directly for better reliability
+  const { data: usersList = [] } = useQuery({
+    queryKey: ['all-users-list-salary'],
+    queryFn: () => base44.entities.User.list(),
+    enabled: !!user,
+  });
 
   const allUsers = React.useMemo(() => {
     const excludedUsers = ['Nivesh Sarthi', 'Rahul Kushwaha', 'Satpal', 'Tech NS', 'Sachin'];
-    return [
-      ...usersFromEntity,
-      ...invitations
-        .filter(inv => inv.status === 'accepted')
-        .filter(inv => !usersFromEntity.some(u => u.email?.toLowerCase() === inv.email?.toLowerCase()))
-        .map(inv => ({
-          id: inv.id,
-          email: inv.email,
-          full_name: inv.full_name || inv.email?.split('@')[0],
-        }))
-    ].filter(user => !excludedUsers.includes(user.full_name));
-  }, [usersFromEntity, invitations]);
+    return usersList
+      .filter(u => u.active !== false && u.status !== 'inactive')
+      .filter(user => !excludedUsers.includes(user.full_name))
+      .map(u => ({
+        ...u,
+        id: u.id,
+        email: u.email,
+        full_name: u.full_name || u.email?.split('@')[0],
+      }));
+  }, [usersList]);
 
   const { data: leaveTypes = [] } = useQuery({
     queryKey: ['leave-types'],
@@ -238,8 +225,8 @@ export default function SalaryPage() {
 
   const generateSlipMutation = useMutation({
     mutationFn: async (recordId) => {
-      const response = await base44.functions.invoke('generateSalarySlip', { 
-        salary_record_id: recordId 
+      const response = await base44.functions.invoke('generateSalarySlip', {
+        salary_record_id: recordId
       });
       return response.data;
     },
@@ -266,10 +253,10 @@ export default function SalaryPage() {
   const emailSlipMutation = useMutation({
     mutationFn: async (recordId) => {
       const salary = salaries.find(s => s.id === recordId);
-      await base44.functions.invoke('generateSalarySlip', { 
-        salary_record_id: recordId 
+      await base44.functions.invoke('generateSalarySlip', {
+        salary_record_id: recordId
       });
-      
+
       await base44.integrations.Core.SendEmail({
         to: salary.employee_email,
         subject: `Salary Slip - ${salary.month}`,
@@ -303,55 +290,58 @@ export default function SalaryPage() {
     }
   });
 
-  const changeStatusMutation = useMutation({
-    mutationFn: async ({ recordId, newStatus }) => {
-      await base44.entities.SalaryRecord.update(recordId, { status: newStatus });
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries(['salary-records']);
-      setStatusChangeDialogOpen(false);
-      setChangingStatusRecord(null);
-      toast.success('Status updated successfully');
-    }
-  });
-
   const exportCSVMutation = useMutation({
     mutationFn: async () => {
-      const response = await base44.functions.invoke('exportSalaryCSV', { 
-        month: selectedMonth,
-        filters: {
-          search: searchQuery,
-          status: statusFilter
-        }
+      const headers = [
+        'Employee Name', 'Email', 'Month', 'Total Days', 'Present', 'Absent (Unpaid)',
+        'Week Off', 'Paid Leave', 'Half Days', 'Not Marked',
+        'Base Salary', 'Adjustments', 'Gross', 'Deductions', 'Net Salary', 'Status'
+      ];
+
+      const rows = filteredSalaries.map(s => {
+        const calc = calculateEmployeeSalary(s.employee_email);
+        return [
+          s.employee_name, s.employee_email, s.month,
+          calc.totalDays, calc.effectivePresent, calc.unpaidAbsent,
+          calc.weekoff, calc.paidLeave, calc.halfDay, calc.notMarked,
+          calc.baseSalary, calc.adjustments, calc.gross,
+          calc.totalDeductions, calc.net, s.status
+        ];
       });
-      return response.data;
-    },
-    onSuccess: (csvText) => {
-      const blob = new Blob([csvText], { type: 'text/csv; charset=utf-8' });
+
+      const csvContent = [
+        headers.join(','),
+        ...rows.map(row => row.map(cell => `"${cell}"`).join(','))
+      ].join('\n');
+
+      const blob = new Blob([csvContent], { type: 'text/csv' });
       const url = window.URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = url;
-      a.download = `salary-report-${selectedMonth}.csv`;
+      a.download = `salary_${selectedMonth}.csv`;
       document.body.appendChild(a);
       a.click();
       document.body.removeChild(a);
       window.URL.revokeObjectURL(url);
-      toast.success('CSV exported successfully');
     },
-    onError: (error) => {
-      toast.error('Export failed: ' + error.message);
-    }
+    onSuccess: () => toast.success('CSV exported successfully')
   });
+
+  // Helper to get user name from email
+  const getUserName = React.useCallback((email) => {
+    const user = allUsers.find(u => u.email === email);
+    return user?.full_name || email;
+  }, [allUsers]);
 
   // Enhanced salary calculation from attendance
   const calculateEmployeeSalary = React.useCallback((employeeEmail) => {
     const policy = allPolicies.find(p => p.user_email === employeeEmail && p.is_active);
     const salary = salaries.find(s => s.employee_email === employeeEmail);
     const empAttendance = attendanceRecords.filter(a => a.user_email === employeeEmail);
-    
+
     const [year, month] = selectedMonth.split('-');
     const totalDays = new Date(parseInt(year), parseInt(month), 0).getDate();
-    
+
     // Count attendance types from actual records
     const present = empAttendance.filter(a => ['present', 'checked_out', 'work_from_home'].includes(a.status)).length;
     const absent = empAttendance.filter(a => a.status === 'absent').length;
@@ -360,61 +350,57 @@ export default function SalaryPage() {
     const weekoff = empAttendance.filter(a => a.status === 'weekoff').length;
     const holiday = empAttendance.filter(a => a.status === 'holiday').length;
     const late = empAttendance.filter(a => a.is_late).length;
-    
-    // First absent is paid, rest are unpaid (except for December 2025)
-    const isDecember2025 = selectedMonth === '2025-12';
-    const paidAbsent = isDecember2025 ? 0 : Math.min(absent, 1);
-    const unpaidAbsent = isDecember2025 ? absent : Math.max(0, absent - 1);
+
+    // First absent is paid, rest are unpaid
+    const paidAbsent = Math.min(absent, 1);
+    const unpaidAbsent = Math.max(0, absent - 1);
     const effectivePresent = present + paidAbsent;
-    
+
     // Calculate paid days
     const paidDays = present + weekoff + holiday + paidLeave + paidAbsent + (halfDay * 0.5);
-    
+
     // Not marked days
     const notMarked = totalDays - empAttendance.length;
-    
+
     if (!policy) {
       return {
         totalDays, present, absent, unpaidAbsent, effectivePresent, halfDay, paidLeave,
         weekoff, holiday, late, paidDays, notMarked,
         baseSalary: 0, adjustments: 0, gross: 0, totalDeductions: 0, net: 0,
-        earnedBasic: 0, earnedHra: 0, earnedDa: 0, earnedTa: 0, earnedCea: 0, earnedFi: 0, empIncentive: 0,
+        earnedBasic: 0, earnedHra: 0, earnedTa: 0, earnedCea: 0, earnedFi: 0, empIncentive: 0,
         empPF: 0, empESI: 0, lwf: 0, latePenalty: 0, absentDeduction: 0,
         attendancePercentage: 0, hasPolicy: false
       };
     }
-    
+
     // Calculate base salary components (pro-rated)
     const basicPerDay = (policy.basic_salary || 0) / totalDays;
     const hraPerDay = (policy.hra || 0) / totalDays;
-    const daPerDay = (policy.da || 0) / totalDays;
     const taPerDay = (policy.travelling_allowance || 0) / totalDays;
     const ceaPerDay = (policy.children_education_allowance || 0) / totalDays;
     const fiPerDay = (policy.fixed_incentive || 0) / totalDays;
-    
+
     const earnedBasic = Math.round(basicPerDay * paidDays);
     const earnedHra = Math.round(hraPerDay * paidDays);
-    const earnedDa = Math.round(daPerDay * paidDays);
     const earnedTa = Math.round(taPerDay * paidDays);
     const earnedCea = Math.round(ceaPerDay * paidDays);
     const earnedFi = Math.round(fiPerDay * paidDays);
     const empIncentive = policy.employer_incentive || 0;
-    
-    // CRITICAL: baseSalary MUST match CSV grossSalary (NO empIncentive here)
-    const baseSalary = earnedBasic + earnedHra + earnedDa + earnedTa + earnedCea + earnedFi;
 
-    // Policy Gross (Fixed - from salary policy, not attendance-based)
-    const policyGross = (policy.basic_salary || 0) + (policy.hra || 0) + (policy.da || 0) + 
-                        (policy.travelling_allowance || 0) + (policy.children_education_allowance || 0) + 
-                        (policy.fixed_incentive || 0);
+    const baseSalary = earnedBasic + earnedHra + earnedTa + earnedCea + earnedFi + empIncentive;
 
-    // Employer contributions for CTC-1 (based on policy gross, not earned)
-    const employerPF = (policy.employer_pf_percentage > 0) 
-      ? Math.round(policyGross * (policy.employer_pf_percentage / 100))
+    // CTC 1: Based on salary policy only (full month salary, not pro-rated, including employer contributions)
+    const fullMonthGross = (policy.basic_salary || 0) + (policy.hra || 0) +
+      (policy.travelling_allowance || 0) + (policy.children_education_allowance || 0) +
+      (policy.fixed_incentive || 0) + (policy.employer_incentive || 0);
+
+    // Employer contributions for CTC calculation
+    const employerPF = (policy.employer_pf_percentage > 0)
+      ? Math.round(fullMonthGross * (policy.employer_pf_percentage / 100))
       : (policy.employer_pf_fixed || 0);
 
     const employerESI = (policy.employer_esi_percentage > 0)
-      ? Math.round(policyGross * (policy.employer_esi_percentage / 100))
+      ? Math.round(fullMonthGross * (policy.employer_esi_percentage / 100))
       : (policy.employer_esi_fixed || 0);
 
     const employerLWF = policy.labour_welfare_employer || 0;
@@ -423,49 +409,26 @@ export default function SalaryPage() {
       ? Math.round((policy.basic_salary || 0) * (policy.ex_gratia_percentage / 100))
       : (policy.ex_gratia_fixed || 0);
 
-    const employerIncentive = policy.employer_incentive || 0;
-
-    // CTC-1: Policy-based only (constant every month, no attendance influence)
-    const monthlyCTC1 = policyGross + employerPF + employerESI + employerLWF + exGratia + employerIncentive;
+    const monthlyCTC1 = fullMonthGross + employerPF + employerESI + employerLWF + exGratia;
     const yearlyCTC1 = monthlyCTC1 * 12;
 
-    // Employee Contribution (Employer Cost for display)
-    const employeeContribution = employerPF + employerESI + employerLWF + exGratia + employerIncentive;
-
     // Adjustments from SalaryAdjustment entity
-    const employeeAdjustments = allAdjustments.filter(adj => 
+    const employeeAdjustments = allAdjustments.filter(adj =>
       adj.employee_email === employeeEmail && adj.status === 'approved'
     );
 
-    // Performance Allowance (Addition) = ALL addition-type adjustments
-    const performanceAllowance = employeeAdjustments
-      .filter(a => 
-        ['bonus', 'incentive', 'reimbursement', 'allowance', 'other'].includes(a.adjustment_type) &&
-        (a.amount || 0) > 0
-      )
-      .reduce((s, a) => s + (a.amount || 0), 0);
-
-    // Salary Advanced (Minus) = ALL deduction-type adjustments
-    const salaryAdvanced = employeeAdjustments
-      .filter(a => 
-        a.adjustment_type === 'advance_deduction' ||
-        a.adjustment_type === 'penalty' ||
-        (a.adjustment_type === 'other' && (a.amount || 0) < 0)
-      )
-      .reduce((s, a) => s + Math.abs(a.amount || 0), 0);
-
-    // CRITICAL: adjustmentTotal MUST match CSV logic exactly
-    const adjustmentTotal = employeeAdjustments.reduce((total, adj) => {
-      if (['bonus', 'incentive', 'reimbursement', 'allowance', 'other'].includes(adj.adjustment_type) && (adj.amount || 0) > 0) {
+    const adjustments = employeeAdjustments.reduce((total, adj) => {
+      if (['bonus', 'incentive', 'reimbursement', 'allowance'].includes(adj.adjustment_type)) {
         return total + (adj.amount || 0);
-      } return total;
+      } else {
+        return total - Math.abs(adj.amount || 0);
+      }
     }, 0);
 
-    // CRITICAL: gross MUST match CSV grossSalary calculation
-    const gross = baseSalary;
+    const gross = baseSalary + adjustments;
 
-    // CTC Final: CTC-1 + Performance Allowance (additions only, no deductions)
-    const monthlyCTC2 = monthlyCTC1 + performanceAllowance;
+    // CTC 2: Including adjustments
+    const monthlyCTC2 = monthlyCTC1 + adjustments;
     const yearlyCTC2 = monthlyCTC2 * 12;
 
     // Statutory deductions
@@ -473,47 +436,34 @@ export default function SalaryPage() {
       ? Math.round(earnedBasic * policy.employee_pf_percentage / 100)
       : (policy.employee_pf_fixed || 0) * (paidDays / totalDays);
     const empESI = policy.employee_esi_percentage > 0
-      ? Math.round(gross * policy.employee_esi_percentage / 100)
+      ? Math.round(baseSalary * policy.employee_esi_percentage / 100)
       : (policy.employee_esi_fixed || 0) * (paidDays / totalDays);
     const lwf = (policy.labour_welfare_employee || 0) * (paidDays / totalDays);
 
     // Other deductions
     const latePenalty = late * (policy.late_penalty_per_minute || 0) * 10;
-    // Absent Deduction: Display-only (audit purpose) - absence already handled via paidDays proration
-    const absentDeduction = unpaidAbsent > 0 ? Math.round((policyGross - gross)) : 0;
-    const advanceRecovery = salary?.advance_recovery || 0;
-    const otherDeductions = salary?.other_deductions || 0;
+    const absentDeduction = unpaidAbsent > 0 ? Math.round((earnedBasic + earnedHra + earnedTa + earnedCea + earnedFi) / paidDays * unpaidAbsent) : 0;
 
-    // CRITICAL: totalDeductions MUST match CSV (absence already deducted via paidDays proration, NOT included here)
-    const totalDeductions = empPF + empESI + lwf + latePenalty + salaryAdvanced + advanceRecovery + otherDeductions;
+    const totalDeductions = empPF + empESI + lwf + latePenalty + absentDeduction +
+      (salary?.advance_recovery || 0) + (salary?.other_deductions || 0);
 
-    // CRITICAL: Net Salary = Earned Gross + Adjustments - Total Deductions (SINGLE SOURCE OF TRUTH)
-    const net = gross + adjustmentTotal - totalDeductions;
-    
+    const net = gross - totalDeductions;
+
     // Attendance percentage
     const attendancePercentage = totalDays > 0 ? Math.round((paidDays / totalDays) * 100) : 0;
-    
-    // Validation: Ensure UI matches CSV logic
-    if (Math.abs(net - (gross + adjustmentTotal - totalDeductions)) > 1) {
-      console.error('Net Salary mismatch detected for', employeeEmail, {
-        calculated: net,
-        expected: gross + adjustmentTotal - totalDeductions
-      });
-    }
 
     return {
       totalDays, present, absent, unpaidAbsent, effectivePresent, halfDay, paidLeave,
       weekoff, holiday, late, paidDays, notMarked,
-      baseSalary, earnedBasic, earnedHra, earnedDa, earnedTa, earnedCea, earnedFi, empIncentive: employerIncentive,
-      adjustments: adjustmentTotal, performanceAllowance, salaryAdvanced, advanceRecovery, otherDeductions, gross, 
-      empPF, empESI, lwf, latePenalty, absentDeduction,
+      baseSalary, earnedBasic, earnedHra, earnedTa, earnedCea, earnedFi, empIncentive,
+      adjustments, gross, empPF, empESI, lwf, latePenalty, absentDeduction,
       totalDeductions, net, attendancePercentage, policy, hasPolicy: true,
-      employeeAdjustments, employeeContribution, policyGross, monthlyCTC1, yearlyCTC1, monthlyCTC2, yearlyCTC2
+      employeeAdjustments, monthlyCTC1, yearlyCTC1, monthlyCTC2, yearlyCTC2
     };
   }, [allPolicies, salaries, attendanceRecords, selectedMonth, allAdjustments]);
 
   const handleSelectRecord = (recordId) => {
-    setSelectedRecords(prev => 
+    setSelectedRecords(prev =>
       prev.includes(recordId) ? prev.filter(id => id !== recordId) : [...prev, recordId]
     );
   };
@@ -529,7 +479,7 @@ export default function SalaryPage() {
   // Filter salaries first (before using in totals)
   const filteredSalaries = useMemo(() => {
     return salaries.filter(salary => {
-      const matchesSearch = searchQuery === '' || 
+      const matchesSearch = searchQuery === '' ||
         salary.employee_name?.toLowerCase().includes(searchQuery.toLowerCase()) ||
         salary.employee_email?.toLowerCase().includes(searchQuery.toLowerCase());
       const matchesStatus = statusFilter === 'all' || salary.status === statusFilter;
@@ -573,148 +523,161 @@ export default function SalaryPage() {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-indigo-50 via-purple-50 to-pink-50">
-      {/* Enhanced Hero Header */}
-      <div className="relative overflow-hidden bg-gradient-to-r from-indigo-600 via-purple-600 to-pink-600">
-        <div className="absolute inset-0 bg-black/5" />
-        <div className="absolute inset-0 bg-[url('data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iNjAiIGhlaWdodD0iNjAiIHhtbG5zPSJodHRwOi8vd3d3LnczLm9yZy8yMDAwL3N2ZyI+PGRlZnM+PHBhdHRlcm4gaWQ9ImdyaWQiIHdpZHRoPSI2MCIgaGVpZ2h0PSI2MCIgcGF0dGVyblVuaXRzPSJ1c2VyU3BhY2VPblVzZSI+PHBhdGggZD0iTSAxMCAwIEwgMCAwIDAgMTAiIGZpbGw9Im5vbmUiIHN0cm9rZT0id2hpdGUiIHN0cm9rZS1vcGFjaXR5PSIwLjA4IiBzdHJva2Utd2lkdGg9IjEiLz48L3BhdHRlcm4+PC9kZWZzPjxyZWN0IHdpZHRoPSIxMDAlIiBoZWlnaHQ9IjEwMCUiIGZpbGw9InVybCgjZ3JpZCkiLz48L3N2Zz4=')] opacity-30" />
-        
-        <div className="relative max-w-[1800px] mx-auto px-6 lg:px-8 py-12">
-          {/* Header */}
-          <div className="flex items-center justify-between mb-8">
-            <div className="flex items-center gap-4">
-              <div className="p-5 bg-white/20 backdrop-blur-xl rounded-3xl shadow-2xl border border-white/30">
-                <DollarSign className="w-12 h-12 text-white" />
+    <div className="min-h-screen bg-[#0f172a] text-slate-200 font-sans selection:bg-purple-500/30">
+      {/* Background Ambience */}
+      <div className="fixed inset-0 z-0 pointer-events-none">
+        <div className="absolute top-[-10%] left-[-10%] w-[40%] h-[40%] bg-purple-900/20 rounded-full blur-[120px]" />
+        <div className="absolute bottom-[-10%] right-[-10%] w-[40%] h-[40%] bg-indigo-900/20 rounded-full blur-[120px]" />
+        <div className="absolute top-[20%] right-[10%] w-[20%] h-[30%] bg-pink-900/10 rounded-full blur-[100px]" />
+      </div>
+
+      {/* Main Content */}
+      <div className="relative z-10 max-w-[1600px] mx-auto px-6 lg:px-8 py-8">
+
+        {/* Header Section */}
+        <div className="flex flex-col lg:flex-row justify-between items-start lg:items-end gap-6 mb-10">
+          <div className="space-y-2">
+            <div className="flex items-center gap-3 mb-2">
+              <div className="p-3 bg-gradient-to-br from-indigo-500 to-purple-600 rounded-xl shadow-lg shadow-indigo-500/20">
+                <DollarSign className="w-8 h-8 text-white" />
               </div>
-              <div>
-                <h1 className="text-5xl font-black text-white drop-shadow-lg">Payroll Hub</h1>
-                <p className="text-white/90 text-lg mt-1 font-medium">Real-time salary powered by live attendance</p>
-              </div>
+              <h1 className="text-4xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-white via-slate-200 to-slate-400">
+                Payroll Hub
+              </h1>
             </div>
-            
-            {isCalculating && (
-              <div className="flex items-center gap-3 bg-white/20 backdrop-blur-xl px-6 py-3 rounded-2xl border border-white/30">
-                <RefreshCw className="w-5 h-5 text-white animate-spin" />
-                <span className="text-white font-semibold">Calculating...</span>
-              </div>
-            )}
+            <p className="text-slate-400 text-lg max-w-xl">
+              Manage salaries, track attendance, and process payments with real-time insights.
+            </p>
           </div>
 
-          {/* Enhanced Stats Grid */}
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-            <div className="group relative overflow-hidden bg-white/15 backdrop-blur-2xl rounded-3xl border-2 border-white/30 p-6 hover:bg-white/25 transition-all hover:scale-105 shadow-2xl">
-              <div className="absolute top-0 right-0 w-32 h-32 bg-gradient-to-br from-emerald-400/20 to-transparent rounded-full blur-3xl" />
-              <div className="relative">
-                <div className="flex items-center justify-between mb-3">
-                  <span className="text-white/80 text-sm font-bold uppercase tracking-wide">Gross Payroll</span>
-                  <TrendingUp className="w-6 h-6 text-emerald-300" />
-                </div>
-                <div className="flex items-baseline gap-2">
-                  <span className="text-4xl font-black text-white">₹{(totals.gross / 100000).toFixed(1)}</span>
-                  <span className="text-xl font-bold text-white/70">Lakhs</span>
-                </div>
-                <div className="mt-2 flex items-center gap-2">
-                  <div className="h-1 flex-1 bg-white/20 rounded-full overflow-hidden">
-                    <div className="h-full bg-emerald-400 rounded-full" style={{ width: '75%' }} />
-                  </div>
-                  <span className="text-xs text-white/70 font-semibold">{totals.employees} employees</span>
-                </div>
+          <div className="flex items-center gap-4">
+            {isCalculating && (
+              <div className="flex items-center gap-2 px-4 py-2 bg-indigo-500/10 border border-indigo-500/20 rounded-full animate-pulse">
+                <RefreshCw className="w-4 h-4 text-indigo-400 animate-spin" />
+                <span className="text-sm font-medium text-indigo-300">Syncing...</span>
+              </div>
+            )}
+            <div className="px-4 py-2 bg-slate-800/50 border border-slate-700/50 rounded-full flex items-center gap-2">
+              <div className={`w-2 h-2 rounded-full ${user ? 'bg-emerald-500' : 'bg-red-500'}`} />
+              <span className="text-sm font-medium text-slate-300">{user ? 'System Online' : 'Offline'}</span>
+            </div>
+          </div>
+        </div>
+
+        {/* Stats Grid */}
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-12">
+          {/* Gross Payroll */}
+          <div className="group relative overflow-hidden bg-slate-900/50 backdrop-blur-xl border border-slate-800 rounded-3xl p-6 hover:bg-slate-800/60 transition-all duration-300">
+            <div className="absolute top-0 right-0 p-4 opacity-5 group-hover:opacity-10 transition-opacity">
+              <DollarSign className="w-24 h-24 text-indigo-500" />
+            </div>
+            <div className="relative">
+              <p className="text-slate-400 font-medium mb-1">Gross Payroll</p>
+              <div className="flex items-baseline gap-1 mb-3">
+                <span className="text-3xl font-bold text-white">₹{(totals.gross / 100000).toFixed(2)}</span>
+                <span className="text-sm font-medium text-slate-500">Lakhs</span>
+              </div>
+              <div className="flex items-center gap-2 text-sm text-emerald-400">
+                <TrendingUp className="w-4 h-4" />
+                <span>+2.5% from last month</span>
               </div>
             </div>
+          </div>
 
-            <div className="group relative overflow-hidden bg-white/15 backdrop-blur-2xl rounded-3xl border-2 border-white/30 p-6 hover:bg-white/25 transition-all hover:scale-105 shadow-2xl">
-              <div className="absolute top-0 right-0 w-32 h-32 bg-gradient-to-br from-blue-400/20 to-transparent rounded-full blur-3xl" />
-              <div className="relative">
-                <div className="flex items-center justify-between mb-3">
-                  <span className="text-white/80 text-sm font-bold uppercase tracking-wide">Net Payable</span>
-                  <CheckCircle className="w-6 h-6 text-blue-300" />
-                </div>
-                <div className="flex items-baseline gap-2">
-                  <span className="text-4xl font-black text-white">₹{(totals.net / 100000).toFixed(1)}</span>
-                  <span className="text-xl font-bold text-white/70">Lakhs</span>
-                </div>
-                <div className="mt-2 text-sm text-white/80 font-medium">
-                  After ₹{(totals.deductions / 1000).toFixed(0)}K deductions
-                </div>
+          {/* Net Payable */}
+          <div className="group relative overflow-hidden bg-slate-900/50 backdrop-blur-xl border border-slate-800 rounded-3xl p-6 hover:bg-slate-800/60 transition-all duration-300">
+            <div className="absolute top-0 right-0 p-4 opacity-5 group-hover:opacity-10 transition-opacity">
+              <Wallet className="w-24 h-24 text-emerald-500" />
+            </div>
+            <div className="relative">
+              <p className="text-slate-400 font-medium mb-1">Net Payable</p>
+              <div className="flex items-baseline gap-1 mb-3">
+                <span className="text-3xl font-bold text-white">₹{(totals.net / 100000).toFixed(2)}</span>
+                <span className="text-sm font-medium text-slate-500">Lakhs</span>
+              </div>
+              <div className="w-full bg-slate-700/50 h-1.5 rounded-full overflow-hidden">
+                <div className="bg-emerald-500 h-full rounded-full" style={{ width: '85%' }} />
+              </div>
+              <p className="text-xs text-slate-500 mt-2">85% Processed</p>
+            </div>
+          </div>
+
+          {/* Average Attendance */}
+          <div className="group relative overflow-hidden bg-slate-900/50 backdrop-blur-xl border border-slate-800 rounded-3xl p-6 hover:bg-slate-800/60 transition-all duration-300">
+            <div className="absolute top-0 right-0 p-4 opacity-5 group-hover:opacity-10 transition-opacity">
+              <Users className="w-24 h-24 text-purple-500" />
+            </div>
+            <div className="relative">
+              <p className="text-slate-400 font-medium mb-1">Active Employees</p>
+              <div className="flex items-baseline gap-1 mb-3">
+                <span className="text-3xl font-bold text-white">{totals.employees}</span>
+                <span className="text-sm font-medium text-slate-500">Members</span>
+              </div>
+              <div className="flex gap-2 mt-2">
+                <Badge variant="outline" className="border-emerald-500/20 text-emerald-400 bg-emerald-500/10">
+                  {statusCounts.paid} Paid
+                </Badge>
+                <Badge variant="outline" className="border-amber-500/20 text-amber-400 bg-amber-500/10">
+                  {statusCounts.approved} Approved
+                </Badge>
               </div>
             </div>
+          </div>
 
-            <div className="group relative overflow-hidden bg-white/15 backdrop-blur-2xl rounded-3xl border-2 border-white/30 p-6 hover:bg-white/25 transition-all hover:scale-105 shadow-2xl">
-              <div className="absolute top-0 right-0 w-32 h-32 bg-gradient-to-br from-amber-400/20 to-transparent rounded-full blur-3xl" />
-              <div className="relative">
-                <div className="flex items-center justify-between mb-3">
-                  <span className="text-white/80 text-sm font-bold uppercase tracking-wide">Status Overview</span>
-                  <BarChart3 className="w-6 h-6 text-amber-300" />
-                </div>
-                <div className="grid grid-cols-2 gap-3">
-                  <div className="bg-white/10 rounded-xl p-2">
-                    <div className="text-2xl font-black text-white">{statusCounts.approved}</div>
-                    <div className="text-xs text-white/70 font-semibold">Approved</div>
-                  </div>
-                  <div className="bg-white/10 rounded-xl p-2">
-                    <div className="text-2xl font-black text-white">{statusCounts.paid}</div>
-                    <div className="text-xs text-white/70 font-semibold">Paid</div>
-                  </div>
-                </div>
-              </div>
+          {/* Pending Actions */}
+          <div className="group relative overflow-hidden bg-slate-900/50 backdrop-blur-xl border border-slate-800 rounded-3xl p-6 hover:bg-slate-800/60 transition-all duration-300">
+            <div className="absolute top-0 right-0 p-4 opacity-5 group-hover:opacity-10 transition-opacity">
+              <AlertCircle className="w-24 h-24 text-rose-500" />
             </div>
-
-            <div className="group relative overflow-hidden bg-white/15 backdrop-blur-2xl rounded-3xl border-2 border-white/30 p-6 hover:bg-white/25 transition-all hover:scale-105 shadow-2xl">
-              <div className="absolute top-0 right-0 w-32 h-32 bg-gradient-to-br from-rose-400/20 to-transparent rounded-full blur-3xl" />
-              <div className="relative">
-                <div className="flex items-center justify-between mb-3">
-                  <span className="text-white/80 text-sm font-bold uppercase tracking-wide">Pending Actions</span>
-                  <Clock className="w-6 h-6 text-rose-300" />
-                </div>
-                <div className="flex items-baseline gap-2 mb-3">
-                  <span className="text-4xl font-black text-white">{statusCounts.draft + statusCounts.locked}</span>
-                  <span className="text-xl font-bold text-white/70">items</span>
-                </div>
-                <div className="flex gap-2">
-                  <Badge className="bg-orange-500/30 text-white border-orange-300/50 font-semibold">
-                    {statusCounts.draft} Draft
-                  </Badge>
-                  <Badge className="bg-yellow-500/30 text-white border-yellow-300/50 font-semibold">
-                    {statusCounts.locked} Locked
-                  </Badge>
-                </div>
+            <div className="relative">
+              <p className="text-slate-400 font-medium mb-1">Pending Actions</p>
+              <div className="flex items-baseline gap-1 mb-3">
+                <span className="text-3xl font-bold text-white">{statusCounts.draft + statusCounts.locked}</span>
+                <span className="text-sm font-medium text-slate-500">Tasks</span>
+              </div>
+              <div className="flex gap-2 mt-2">
+                <Badge variant="outline" className="border-rose-500/20 text-rose-400 bg-rose-500/10">
+                  {statusCounts.draft} Draft
+                </Badge>
+                <Badge variant="outline" className="border-blue-500/20 text-blue-400 bg-blue-500/10">
+                  {statusCounts.locked} Locked
+                </Badge>
               </div>
             </div>
           </div>
         </div>
-      </div>
 
-      {/* Main Content */}
-      <div className="max-w-[1800px] mx-auto px-6 lg:px-8 py-8 -mt-6 relative z-10">
-        <Tabs value={activeTab} onValueChange={setActiveTab}>
-          <div className="bg-white/90 backdrop-blur-2xl rounded-3xl shadow-2xl border-2 border-white/50 p-2 mb-6">
-            <TabsList className="grid w-full grid-cols-2 gap-2 bg-transparent">
-              <TabsTrigger 
-                value="management" 
-                className="rounded-2xl data-[state=active]:bg-gradient-to-r data-[state=active]:from-indigo-600 data-[state=active]:to-purple-600 data-[state=active]:text-white data-[state=active]:shadow-xl transition-all py-4"
-              >
-                <Users className="w-5 h-5 mr-2" />
-                <span className="font-bold text-lg">Payroll Management</span>
-              </TabsTrigger>
-              <TabsTrigger 
-                value="policies" 
-                className="rounded-2xl data-[state=active]:bg-gradient-to-r data-[state=active]:from-indigo-600 data-[state=active]:to-purple-600 data-[state=active]:text-white data-[state=active]:shadow-xl transition-all py-4"
-              >
-                <Settings className="w-5 h-5 mr-2" />
-                <span className="font-bold text-lg">Salary Policies</span>
-              </TabsTrigger>
-            </TabsList>
-          </div>
+        <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-8">
+          <TabsList className="bg-slate-900/50 backdrop-blur-lg border border-slate-800 p-1 rounded-2xl inline-flex">
+            <TabsTrigger
+              value="management"
+              className="px-8 py-3 rounded-xl text-slate-400 data-[state=active]:bg-indigo-600 data-[state=active]:text-white data-[state=active]:shadow-lg active:scale-95 transition-all duration-200"
+            >
+              <div className="flex items-center gap-2">
+                <Users className="w-4 h-4" />
+                <span>Payroll Management</span>
+              </div>
+            </TabsTrigger>
+            <TabsTrigger
+              value="policies"
+              className="px-8 py-3 rounded-xl text-slate-400 data-[state=active]:bg-purple-600 data-[state=active]:text-white data-[state=active]:shadow-lg active:scale-95 transition-all duration-200"
+            >
+              <div className="flex items-center gap-2">
+                <Settings className="w-4 h-4" />
+                <span>Salary Policies</span>
+              </div>
+            </TabsTrigger>
+          </TabsList>
 
           {/* Payroll Management Tab */}
           <TabsContent value="management" className="space-y-6">
             {/* Enhanced Control Panel */}
-            <Card className="bg-white/90 backdrop-blur-2xl border-2 border-white/50 shadow-2xl">
+            <Card className="bg-slate-900/50 backdrop-blur-2xl border border-slate-800 shadow-2xl">
               <CardContent className="p-6">
                 <div className="flex flex-wrap items-center gap-4">
                   {/* Month Selector */}
-                  <div className="flex items-center gap-3 bg-gradient-to-r from-indigo-50 to-purple-50 rounded-2xl p-3 border-2 border-indigo-200">
-                    <Calendar className="w-5 h-5 text-indigo-600" />
+                  <div className="flex items-center gap-3 bg-slate-800/50 rounded-xl p-2 border border-slate-700">
+                    <Calendar className="w-5 h-5 text-indigo-400" />
                     <Input
                       type="month"
                       value={selectedMonth}
@@ -722,7 +685,7 @@ export default function SalaryPage() {
                         setSelectedMonth(e.target.value);
                         setSelectedRecords([]);
                       }}
-                      className="w-48 border-2 border-indigo-300 font-semibold"
+                      className="w-48 bg-transparent border-none text-white font-semibold focus-visible:ring-0"
                     />
                   </div>
 
@@ -733,17 +696,17 @@ export default function SalaryPage() {
                       placeholder="Search by name or email..."
                       value={searchQuery}
                       onChange={(e) => setSearchQuery(e.target.value)}
-                      className="pl-12 border-2 font-medium h-12 rounded-2xl"
+                      className="pl-12 bg-slate-800/50 border-slate-700 text-white placeholder:text-slate-500 font-medium h-12 rounded-xl focus-visible:ring-indigo-500"
                     />
                   </div>
 
                   {/* Status Filter */}
                   <Select value={statusFilter} onValueChange={setStatusFilter}>
-                    <SelectTrigger className="w-44 border-2 h-12 rounded-2xl font-semibold">
+                    <SelectTrigger className="w-44 bg-slate-800/50 border-slate-700 text-white h-12 rounded-xl font-semibold">
                       <Filter className="w-4 h-4 mr-2" />
                       <SelectValue />
                     </SelectTrigger>
-                    <SelectContent>
+                    <SelectContent className="bg-slate-900 border-slate-800 text-white">
                       <SelectItem value="all">All Status</SelectItem>
                       <SelectItem value="draft">Draft</SelectItem>
                       <SelectItem value="locked">Locked</SelectItem>
@@ -754,25 +717,15 @@ export default function SalaryPage() {
 
                   {/* View Mode */}
                   <Select value={viewMode} onValueChange={setViewMode}>
-                    <SelectTrigger className="w-36 border-2 h-12 rounded-2xl font-semibold">
+                    <SelectTrigger className="w-36 bg-slate-800/50 border-slate-700 text-white h-12 rounded-xl font-semibold">
                       <Eye className="w-4 h-4 mr-2" />
                       <SelectValue />
                     </SelectTrigger>
-                    <SelectContent>
+                    <SelectContent className="bg-slate-900 border-slate-800 text-white">
                       <SelectItem value="cards">Cards</SelectItem>
                       <SelectItem value="compact">Compact</SelectItem>
                     </SelectContent>
                   </Select>
-
-                  {/* Hide No Policy Toggle */}
-                  <Button
-                    variant={hideNoPolicyMembers ? "default" : "outline"}
-                    onClick={() => setHideNoPolicyMembers(!hideNoPolicyMembers)}
-                    className="gap-2 border-2 h-12 rounded-2xl font-semibold"
-                  >
-                    <Eye className="w-4 h-4" />
-                    {hideNoPolicyMembers ? 'Show All' : 'Hide No Policy'}
-                  </Button>
 
                   {/* Actions */}
                   <div className="flex gap-2 ml-auto">
@@ -781,8 +734,8 @@ export default function SalaryPage() {
                       onClick={async () => {
                         if (!confirm(`Clean up duplicate attendance records for ${selectedMonth}?`)) return;
                         try {
-                          const result = await base44.functions.invoke('cleanupDuplicateAttendance', { 
-                            month: selectedMonth 
+                          const result = await base44.functions.invoke('cleanupDuplicateAttendance', {
+                            month: selectedMonth
                           });
                           if (result.data.deleted > 0) {
                             await queryClient.refetchQueries(['attendance-records-salary']);
@@ -795,7 +748,7 @@ export default function SalaryPage() {
                           toast.error('Cleanup failed: ' + error.message);
                         }
                       }}
-                      className="gap-2 border-2 h-12 rounded-2xl font-semibold hover:bg-orange-50"
+                      className="gap-2 bg-slate-800/50 border-slate-700 text-slate-300 hover:bg-slate-800 h-12 rounded-xl font-semibold hover:text-orange-400 transition-colors"
                     >
                       <Trash2 className="w-4 h-4" />
                       Cleanup
@@ -804,53 +757,54 @@ export default function SalaryPage() {
                       variant="outline"
                       onClick={() => recalculateMutation.mutate()}
                       disabled={recalculateMutation.isPending || isCalculating}
-                      className="gap-2 border-2 h-12 rounded-2xl font-semibold hover:bg-indigo-50"
+                      className="gap-2 bg-slate-800/50 border-slate-700 text-slate-300 hover:bg-slate-800 h-12 rounded-xl font-semibold hover:text-indigo-400 transition-colors"
                     >
                       <RefreshCw className={`w-4 h-4 ${recalculateMutation.isPending ? 'animate-spin' : ''}`} />
                       Recalculate
                     </Button>
                     <Button
+                      variant="outline"
                       onClick={() => exportCSVMutation.mutate()}
-                      disabled={exportCSVMutation.isPending}
-                      className="gap-2 bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-700 hover:to-purple-700 h-12 rounded-2xl font-semibold shadow-lg"
+                      className="gap-2 bg-slate-800/50 border-slate-700 text-slate-300 hover:bg-slate-800 h-12 rounded-xl font-semibold hover:text-emerald-400 transition-colors"
                     >
                       <Download className="w-4 h-4" />
-                      {exportCSVMutation.isPending ? 'Exporting...' : 'Export CSV'}
+                      Export
                     </Button>
                   </div>
                 </div>
 
                 {/* Bulk Actions */}
                 {selectedRecords.length > 0 && (
-                  <div className="mt-4 flex items-center justify-between bg-gradient-to-r from-indigo-50 to-purple-50 rounded-2xl p-4 border-2 border-indigo-300">
+                  <div className="mt-4 flex items-center justify-between bg-indigo-900/20 rounded-xl p-4 border border-indigo-500/30">
                     <div className="flex items-center gap-3">
                       <Checkbox
                         checked={selectedRecords.length === filteredSalaries.length}
                         onCheckedChange={handleSelectAll}
+                        className="border-indigo-400/50 data-[state=checked]:bg-indigo-500 data-[state=checked]:border-indigo-500"
                       />
-                      <Badge className="bg-indigo-600 text-white text-base px-4 py-2 font-bold shadow-lg">
+                      <Badge className="bg-indigo-500 text-white text-base px-4 py-2 font-bold shadow-lg shadow-indigo-500/20">
                         {selectedRecords.length} Selected
                       </Badge>
                     </div>
                     <div className="flex gap-2">
-                      <Button 
+                      <Button
                         variant="outline"
                         onClick={() => setLockDialogOpen(true)}
-                        className="gap-2 border-2 font-semibold"
+                        className="gap-2 border-slate-700 bg-slate-800 text-slate-300 hover:bg-slate-700 font-semibold"
                       >
                         <Lock className="w-4 h-4" />
                         Lock
                       </Button>
-                      <Button 
+                      <Button
                         onClick={() => approveMutation.mutate(selectedRecords)}
-                        className="bg-blue-600 hover:bg-blue-700 gap-2 font-semibold shadow-lg"
+                        className="bg-blue-600 hover:bg-blue-700 text-white gap-2 font-semibold shadow-lg shadow-blue-500/20"
                       >
                         <CheckCircle className="w-4 h-4" />
                         Approve
                       </Button>
-                      <Button 
+                      <Button
                         onClick={() => markAsPaidMutation.mutate(selectedRecords)}
-                        className="bg-green-600 hover:bg-green-700 gap-2 font-semibold shadow-lg"
+                        className="bg-emerald-600 hover:bg-emerald-700 text-white gap-2 font-semibold shadow-lg shadow-emerald-500/20"
                       >
                         <DollarSign className="w-4 h-4" />
                         Mark Paid
@@ -864,16 +818,16 @@ export default function SalaryPage() {
             {/* Salary List */}
             {salariesLoading ? (
               <div className="text-center py-16">
-                <RefreshCw className="w-12 h-12 text-indigo-600 animate-spin mx-auto mb-4" />
-                <p className="text-slate-600 font-medium">Loading payroll data...</p>
+                <RefreshCw className="w-12 h-12 text-indigo-500 animate-spin mx-auto mb-4" />
+                <p className="text-slate-400 font-medium">Loading payroll data...</p>
               </div>
             ) : filteredSalaries.length === 0 ? (
-              <Card className="bg-white/90 backdrop-blur-2xl border-2 shadow-2xl">
+              <Card className="bg-slate-900/50 backdrop-blur-2xl border border-slate-800 shadow-2xl">
                 <CardContent className="p-16 text-center">
-                  <AlertCircle className="w-20 h-20 text-slate-300 mx-auto mb-6" />
-                  <h3 className="text-2xl font-bold text-slate-700 mb-2">No Records Found</h3>
+                  <AlertCircle className="w-20 h-20 text-slate-700 mx-auto mb-6" />
+                  <h3 className="text-2xl font-bold text-slate-300 mb-2">No Records Found</h3>
                   <p className="text-slate-500 font-medium">
-                    {salaries.length === 0 
+                    {salaries.length === 0
                       ? 'Click "Recalculate" to generate salary records from attendance data'
                       : 'No records match your search criteria'}
                   </p>
@@ -884,171 +838,149 @@ export default function SalaryPage() {
                 {filteredSalaries.map((salary) => {
                   const calc = calculateEmployeeSalary(salary.employee_email);
                   const isExpanded = expandedRows[salary.id];
-                  
+
                   if (!calc.hasPolicy) {
-                    if (hideNoPolicyMembers) return null;
                     return (
-                      <Card key={salary.id} className="bg-amber-50/80 backdrop-blur-xl border-2 border-amber-200 shadow-xl">
+                      <Card key={salary.id} className="bg-amber-900/20 backdrop-blur-xl border border-amber-500/20 shadow-xl">
                         <CardContent className="p-6">
                           <div className="flex items-center gap-4">
-                            <AlertCircle className="w-8 h-8 text-amber-600" />
+                            <AlertCircle className="w-8 h-8 text-amber-500" />
                             <div>
-                              <h3 className="font-bold text-lg text-slate-900">{salary.employee_name}</h3>
-                              <p className="text-amber-700 font-medium">No active salary policy found</p>
+                              <h3 className="font-bold text-lg text-slate-200">{salary.employee_name}</h3>
+                              <p className="text-amber-500 font-medium">No active salary policy found</p>
                             </div>
                           </div>
                         </CardContent>
                       </Card>
                     );
                   }
-                  
+
                   return (
-                    <Card key={salary.id} className="group bg-white/90 backdrop-blur-2xl border-2 border-white/50 shadow-2xl hover:shadow-3xl transition-all overflow-hidden">
-                      <div className="absolute top-0 right-0 w-64 h-64 bg-gradient-to-br from-indigo-100/30 via-purple-100/20 to-transparent rounded-full blur-3xl opacity-0 group-hover:opacity-100 transition-opacity" />
-                      
+                    <Card key={salary.id} className="group bg-slate-900/70 backdrop-blur-2xl border border-slate-800 shadow-2xl hover:shadow-indigo-500/10 transition-all duration-300 overflow-hidden">
+                      {/* Hover Gradient Effect */}
+                      <div className="absolute top-0 right-0 w-80 h-80 bg-indigo-500/10 rounded-full blur-[100px] opacity-0 group-hover:opacity-100 transition-opacity duration-500" />
+
                       <CardContent className="p-6 relative">
                         <div className="flex items-start gap-4">
                           <Checkbox
                             checked={selectedRecords.includes(salary.id)}
                             onCheckedChange={() => handleSelectRecord(salary.id)}
                             disabled={salary.locked}
-                            className="mt-2"
+                            className="mt-2 border-slate-600 data-[state=checked]:bg-indigo-500 data-[state=checked]:border-indigo-500"
                           />
-                          
+
                           <div className="flex-1">
                             {/* Employee Header */}
-                            <div className="flex items-center justify-between mb-6">
+                            <div className="flex items-center justify-between mb-8">
                               <div className="flex items-center gap-4">
-                                <div className="w-16 h-16 rounded-2xl bg-gradient-to-br from-indigo-500 to-purple-600 flex items-center justify-center text-white text-2xl font-bold shadow-xl">
+                                <div className="w-16 h-16 rounded-2xl bg-gradient-to-br from-indigo-500 to-purple-600 flex items-center justify-center text-white text-2xl font-bold shadow-lg shadow-indigo-500/20">
                                   {salary.employee_name?.charAt(0) || 'U'}
                                 </div>
                                 <div>
-                                  <h3 className="text-2xl font-black text-slate-900 mb-1">{salary.employee_name}</h3>
-                                  <p className="text-sm text-slate-600 font-medium">{salary.employee_email}</p>
+                                  <h3 className="text-2xl font-bold text-white mb-1 tracking-tight">{salary.employee_name}</h3>
+                                  <p className="text-sm text-slate-400 font-medium">{getUserName(salary.employee_email)}</p>
                                 </div>
-                                <Badge 
-                                  className={`cursor-pointer hover:opacity-80 transition-opacity ${
-                                    salary.status === 'paid' ? 'bg-green-500 text-white shadow-lg shadow-green-200' :
-                                    salary.status === 'approved' ? 'bg-blue-500 text-white shadow-lg shadow-blue-200' :
-                                    salary.status === 'locked' ? 'bg-orange-500 text-white shadow-lg shadow-orange-200' :
-                                    'bg-slate-400 text-white shadow-lg'
-                                  }`}
-                                  onClick={() => {
-                                    setChangingStatusRecord(salary);
-                                    setStatusChangeDialogOpen(true);
-                                  }}
-                                >
+                                <Badge className={
+                                  salary.status === 'paid' ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30' :
+                                    salary.status === 'approved' ? 'bg-blue-500/20 text-blue-400 border border-blue-500/30' :
+                                      salary.status === 'locked' ? 'bg-amber-500/20 text-amber-400 border border-amber-500/30' :
+                                        'bg-slate-700/50 text-slate-400 border border-slate-600'
+                                }>
                                   {salary.locked && <Lock className="w-3 h-3 mr-1" />}
                                   {salary.status?.toUpperCase()}
                                 </Badge>
                               </div>
 
                               <div className="text-right">
-                                <p className="text-sm font-bold text-slate-600 mb-1">NET SALARY</p>
-                                <p className="text-4xl font-black bg-gradient-to-r from-emerald-600 to-green-600 bg-clip-text text-transparent">
+                                <p className="text-xs font-bold text-slate-500 mb-1 uppercase tracking-wider">NET SALARY</p>
+                                <p className="text-5xl font-black text-transparent bg-clip-text bg-gradient-to-r from-emerald-400 to-teal-300">
                                   ₹{calc.net.toLocaleString()}
                                 </p>
-                                <div className="mt-3 space-y-2">
-                                  <div className="space-y-1">
-                                    <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wide">Policy Gross</p>
-                                    <div className="flex items-center justify-end gap-2 text-xs">
-                                      <span className="font-black text-blue-700">₹{calc.policyGross.toLocaleString()}</span>
-                                    </div>
+
+                                <div className="mt-4 flex items-center justify-end gap-3 text-sm">
+                                  <div className="text-right">
+                                    <p className="text-[10px] font-bold text-slate-500 uppercase">Monthly CTC</p>
+                                    <p className="font-bold text-indigo-400">₹{calc.monthlyCTC1.toLocaleString()}</p>
                                   </div>
-                                  <div className="space-y-1 pt-1 border-t">
-                                    <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wide">CTC-1 (Policy Based)</p>
-                                    <div className="flex items-center justify-end gap-2 text-xs">
-                                      <span className="text-slate-500 font-semibold">Monthly:</span>
-                                      <span className="font-black text-indigo-700">₹{calc.monthlyCTC1.toLocaleString()}</span>
-                                    </div>
-                                    <div className="flex items-center justify-end gap-2 text-xs">
-                                      <span className="text-slate-500 font-semibold">Yearly:</span>
-                                      <span className="font-black text-purple-700">₹{calc.yearlyCTC1.toLocaleString()}</span>
-                                    </div>
+                                  <div className="w-px h-8 bg-slate-700 mx-1" />
+                                  <div className="text-right">
+                                    <p className="text-[10px] font-bold text-slate-500 uppercase">Yearly CTC</p>
+                                    <p className="font-bold text-purple-400">₹{calc.yearlyCTC1.toLocaleString()}</p>
                                   </div>
-                                  <div className="space-y-1 pt-1 border-t">
-                                    <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wide">CTC Final (+ Performance)</p>
-                                    <div className="flex items-center justify-end gap-2 text-xs">
-                                      <span className="text-slate-500 font-semibold">Monthly:</span>
-                                      <span className="font-black text-emerald-700">₹{calc.monthlyCTC2.toLocaleString()}</span>
-                                    </div>
-                                    <div className="flex items-center justify-end gap-2 text-xs">
-                                      <span className="text-slate-500 font-semibold">Yearly:</span>
-                                      <span className="font-black text-teal-700">₹{calc.yearlyCTC2.toLocaleString()}</span>
-                                    </div>
-                                  </div>
-                                </div>
-                                <div className="mt-2 flex items-center justify-end gap-2">
-                                  <Progress value={calc.attendancePercentage} className="w-32 h-2" />
-                                  <span className="text-xs font-bold text-slate-600">{calc.attendancePercentage}%</span>
                                 </div>
                               </div>
                             </div>
 
                             {/* Attendance Metrics */}
-                            <div className="grid grid-cols-2 md:grid-cols-6 gap-3 mb-6">
-                              <div className="bg-gradient-to-br from-emerald-50 to-green-50 rounded-2xl p-4 border-2 border-emerald-200 shadow-lg">
-                                <p className="text-xs font-bold text-emerald-700 uppercase mb-1">Present</p>
-                                <p className="text-3xl font-black text-emerald-900">{calc.effectivePresent}</p>
+                            <div className="grid grid-cols-2 md:grid-cols-6 gap-3 mb-8">
+                              <div className="bg-slate-800/50 rounded-2xl p-4 border border-slate-700/50">
+                                <p className="text-[10px] font-bold text-emerald-500 uppercase mb-1">Present</p>
+                                <p className="text-2xl font-bold text-white">{calc.effectivePresent}</p>
                               </div>
-                              <div className="bg-gradient-to-br from-rose-50 to-red-50 rounded-2xl p-4 border-2 border-rose-200 shadow-lg">
-                                <p className="text-xs font-bold text-rose-700 uppercase mb-1">Unpaid Absent</p>
-                                <p className="text-3xl font-black text-rose-900">{calc.unpaidAbsent}</p>
+                              <div className="bg-slate-800/50 rounded-2xl p-4 border border-slate-700/50">
+                                <p className="text-[10px] font-bold text-rose-500 uppercase mb-1">Unpaid Absent</p>
+                                <p className="text-2xl font-bold text-white">{calc.unpaidAbsent}</p>
                               </div>
-                              <div className="bg-gradient-to-br from-amber-50 to-orange-50 rounded-2xl p-4 border-2 border-amber-200 shadow-lg">
-                                <p className="text-xs font-bold text-amber-700 uppercase mb-1">Week Off</p>
-                                <p className="text-3xl font-black text-amber-900">{calc.weekoff}</p>
+                              <div className="bg-slate-800/50 rounded-2xl p-4 border border-slate-700/50">
+                                <p className="text-[10px] font-bold text-amber-500 uppercase mb-1">Week Off</p>
+                                <p className="text-2xl font-bold text-white">{calc.weekoff}</p>
                               </div>
-                              <div className="bg-gradient-to-br from-violet-50 to-purple-50 rounded-2xl p-4 border-2 border-violet-200 shadow-lg">
-                                <p className="text-xs font-bold text-violet-700 uppercase mb-1">Paid Leave</p>
-                                <p className="text-3xl font-black text-violet-900">{calc.paidLeave}</p>
+                              <div className="bg-slate-800/50 rounded-2xl p-4 border border-slate-700/50">
+                                <p className="text-[10px] font-bold text-purple-500 uppercase mb-1">Paid Leave</p>
+                                <p className="text-2xl font-bold text-white">{calc.paidLeave}</p>
                               </div>
-                              <div className="bg-gradient-to-br from-sky-50 to-blue-50 rounded-2xl p-4 border-2 border-sky-200 shadow-lg">
-                                <p className="text-xs font-bold text-sky-700 uppercase mb-1">Half Day</p>
-                                <p className="text-3xl font-black text-sky-900">{calc.halfDay}</p>
+                              <div className="bg-slate-800/50 rounded-2xl p-4 border border-slate-700/50">
+                                <p className="text-[10px] font-bold text-sky-500 uppercase mb-1">Half Day</p>
+                                <p className="text-2xl font-bold text-white">{calc.halfDay}</p>
                               </div>
-                              <div className="bg-gradient-to-br from-slate-50 to-gray-50 rounded-2xl p-4 border-2 border-slate-300 shadow-lg">
-                                <p className="text-xs font-bold text-slate-700 uppercase mb-1">Not Marked</p>
-                                <p className="text-3xl font-black text-slate-900">{calc.notMarked}</p>
+                              <div className="bg-slate-800/50 rounded-2xl p-4 border border-slate-700/50">
+                                <p className="text-[10px] font-bold text-slate-500 uppercase mb-1">Not Marked</p>
+                                <p className="text-2xl font-bold text-white">{calc.notMarked}</p>
                               </div>
                             </div>
 
                             {/* Salary Breakdown */}
-                            <div className="grid grid-cols-3 gap-4 mb-6">
-                              <div className="relative overflow-hidden bg-gradient-to-br from-blue-500 to-indigo-600 rounded-2xl p-5 shadow-xl">
-                                <div className="absolute top-0 right-0 w-20 h-20 bg-white/10 rounded-full -mr-10 -mt-10" />
-                                <div className="relative">
-                                  <div className="flex items-center gap-2 mb-2">
-                                    <ArrowUpRight className="w-5 h-5 text-white" />
-                                    <p className="text-sm font-bold text-white/90 uppercase">Base Salary</p>
+                            <div className="grid grid-cols-3 gap-4 mb-8">
+                              <div className="relative overflow-hidden bg-slate-800/80 rounded-2xl p-5 border border-slate-700/50 group/card hover:bg-slate-800 transition-colors">
+                                <div className="flex items-center gap-2 mb-3">
+                                  <div className="p-2 bg-blue-500/20 rounded-lg">
+                                    <ArrowUpRight className="w-4 h-4 text-blue-400" />
                                   </div>
-                                  <p className="text-3xl font-black text-white">₹{calc.baseSalary.toLocaleString()}</p>
-                                  <p className="text-xs text-white/80 mt-2 font-semibold">{calc.paidDays.toFixed(1)} / {calc.totalDays} days</p>
+                                  <p className="text-sm font-bold text-slate-300 uppercase tracking-wide">Base Salary</p>
                                 </div>
+                                <p className="text-3xl font-bold text-white tracking-tight">₹{calc.baseSalary.toLocaleString()}</p>
+                                <div className="mt-3 w-full bg-slate-700/50 h-1 rounded-full overflow-hidden">
+                                  <div className="bg-blue-500 h-full rounded-full" style={{ width: `${(calc.paidDays / calc.totalDays) * 100}%` }} />
+                                </div>
+                                <p className="text-xs text-slate-500 mt-2 font-medium">{calc.paidDays} payable days</p>
                               </div>
 
-                              <div className="relative overflow-hidden bg-gradient-to-br from-amber-500 to-orange-600 rounded-2xl p-5 shadow-xl">
-                                <div className="absolute top-0 right-0 w-20 h-20 bg-white/10 rounded-full -mr-10 -mt-10" />
-                                <div className="relative">
-                                  <div className="flex items-center gap-2 mb-2">
-                                    <Zap className="w-5 h-5 text-white" />
-                                    <p className="text-sm font-bold text-white/90 uppercase">Adjustments</p>
+                              <div className="relative overflow-hidden bg-slate-800/80 rounded-2xl p-5 border border-slate-700/50 group/card hover:bg-slate-800 transition-colors">
+                                <div className="flex items-center gap-2 mb-3">
+                                  <div className="p-2 bg-amber-500/20 rounded-lg">
+                                    <Zap className="w-4 h-4 text-amber-400" />
                                   </div>
-                                  <p className="text-3xl font-black text-white">₹{calc.adjustments.toLocaleString()}</p>
-                                  <p className="text-xs text-white/80 mt-2 font-semibold">Bonus & Incentives</p>
+                                  <p className="text-sm font-bold text-slate-300 uppercase tracking-wide">Adjustments</p>
                                 </div>
+                                <p className="text-3xl font-bold text-white tracking-tight">₹{calc.adjustments.toLocaleString()}</p>
+                                <div className="mt-3 w-full bg-slate-700/50 h-1 rounded-full overflow-hidden">
+                                  <div className="bg-amber-500 h-full rounded-full" style={{ width: '100%' }} />
+                                </div>
+                                <p className="text-xs text-slate-500 mt-2 font-medium">Incentives & Bonus</p>
                               </div>
 
-                              <div className="relative overflow-hidden bg-gradient-to-br from-rose-500 to-red-600 rounded-2xl p-5 shadow-xl">
-                                <div className="absolute top-0 right-0 w-20 h-20 bg-white/10 rounded-full -mr-10 -mt-10" />
-                                <div className="relative">
-                                  <div className="flex items-center gap-2 mb-2">
-                                    <ArrowDownRight className="w-5 h-5 text-white" />
-                                    <p className="text-sm font-bold text-white/90 uppercase">Deductions</p>
+                              <div className="relative overflow-hidden bg-slate-800/80 rounded-2xl p-5 border border-slate-700/50 group/card hover:bg-slate-800 transition-colors">
+                                <div className="flex items-center gap-2 mb-3">
+                                  <div className="p-2 bg-rose-500/20 rounded-lg">
+                                    <ArrowDownRight className="w-4 h-4 text-rose-400" />
                                   </div>
-                                  <p className="text-3xl font-black text-white">₹{calc.totalDeductions.toLocaleString()}</p>
-                                  <p className="text-xs text-white/80 mt-2 font-semibold">PF, ESI, Penalties</p>
+                                  <p className="text-sm font-bold text-slate-300 uppercase tracking-wide">Deductions</p>
                                 </div>
+                                <p className="text-3xl font-bold text-white tracking-tight">₹{calc.totalDeductions.toLocaleString()}</p>
+                                <div className="mt-3 w-full bg-slate-700/50 h-1 rounded-full overflow-hidden">
+                                  <div className="bg-rose-500 h-full rounded-full" style={{ width: '100%' }} />
+                                </div>
+                                <p className="text-xs text-slate-500 mt-2 font-medium">PF, ESI & Penalties</p>
                               </div>
                             </div>
 
@@ -1056,71 +988,65 @@ export default function SalaryPage() {
                             <Button
                               variant="ghost"
                               onClick={() => setExpandedRows(prev => ({ ...prev, [salary.id]: !prev[salary.id] }))}
-                              className="w-full text-indigo-600 hover:bg-indigo-50 font-semibold rounded-2xl h-12 mb-4"
+                              className="w-full text-indigo-400 hover:text-indigo-300 hover:bg-indigo-900/20 font-semibold rounded-xl h-12 mb-4 transition-all"
                             >
                               {isExpanded ? (
                                 <>
                                   <ChevronUp className="w-5 h-5 mr-2" />
-                                  Hide Detailed Breakdown
+                                  Hide Details
                                 </>
                               ) : (
                                 <>
                                   <ChevronDown className="w-5 h-5 mr-2" />
-                                  View Detailed Breakdown
+                                  View Breakdown
                                 </>
                               )}
                             </Button>
 
                             {/* Expanded Details */}
                             {isExpanded && (
-                              <div className="space-y-4 p-6 bg-gradient-to-br from-slate-50 to-slate-100 rounded-2xl border-2 border-slate-200 mb-4">
+                              <div className="space-y-6 p-6 bg-slate-800/30 rounded-2xl border border-slate-700/50 mb-6 animate-in slide-in-from-top-4 duration-200">
                                 {/* Components */}
                                 <div>
-                                  <h4 className="font-black text-slate-900 mb-3 flex items-center gap-2 text-lg">
-                                    <BarChart3 className="w-5 h-5 text-indigo-600" />
-                                    Salary Components
+                                  <h4 className="font-bold text-slate-300 mb-4 flex items-center gap-2 text-sm uppercase tracking-wide">
+                                    <BarChart3 className="w-4 h-4 text-indigo-400" />
+                                    Detailed Components
                                   </h4>
-                                  <div className="grid grid-cols-2 gap-3">
+                                  <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
                                     {calc.earnedBasic > 0 && (
-                                      <div className="flex justify-between bg-white p-3 rounded-xl border-2 border-slate-200">
-                                        <span className="text-slate-700 font-semibold">Basic</span>
-                                        <span className="font-black text-slate-900">₹{calc.earnedBasic.toLocaleString()}</span>
+                                      <div className="flex justify-between items-center bg-slate-800 p-3 rounded-lg border border-slate-700">
+                                        <span className="text-slate-400 text-sm">Basic</span>
+                                        <span className="font-bold text-white">₹{calc.earnedBasic.toLocaleString()}</span>
                                       </div>
                                     )}
                                     {calc.earnedHra > 0 && (
-                                      <div className="flex justify-between bg-white p-3 rounded-xl border-2 border-slate-200">
-                                        <span className="text-slate-700 font-semibold">HRA</span>
-                                        <span className="font-black text-slate-900">₹{calc.earnedHra.toLocaleString()}</span>
-                                      </div>
-                                    )}
-                                    {calc.earnedDa > 0 && (
-                                      <div className="flex justify-between bg-white p-3 rounded-xl border-2 border-slate-200">
-                                        <span className="text-slate-700 font-semibold">DA</span>
-                                        <span className="font-black text-slate-900">₹{calc.earnedDa.toLocaleString()}</span>
+                                      <div className="flex justify-between items-center bg-slate-800 p-3 rounded-lg border border-slate-700">
+                                        <span className="text-slate-400 text-sm">HRA</span>
+                                        <span className="font-bold text-white">₹{calc.earnedHra.toLocaleString()}</span>
                                       </div>
                                     )}
                                     {calc.earnedTa > 0 && (
-                                      <div className="flex justify-between bg-white p-3 rounded-xl border-2 border-slate-200">
-                                        <span className="text-slate-700 font-semibold">Travel</span>
-                                        <span className="font-black text-slate-900">₹{calc.earnedTa.toLocaleString()}</span>
+                                      <div className="flex justify-between items-center bg-slate-800 p-3 rounded-lg border border-slate-700">
+                                        <span className="text-slate-400 text-sm">Travel</span>
+                                        <span className="font-bold text-white">₹{calc.earnedTa.toLocaleString()}</span>
                                       </div>
                                     )}
                                     {calc.earnedCea > 0 && (
-                                      <div className="flex justify-between bg-white p-3 rounded-xl border-2 border-slate-200">
-                                        <span className="text-slate-700 font-semibold">Child Edu</span>
-                                        <span className="font-black text-slate-900">₹{calc.earnedCea.toLocaleString()}</span>
+                                      <div className="flex justify-between items-center bg-slate-800 p-3 rounded-lg border border-slate-700">
+                                        <span className="text-slate-400 text-sm">Child Edu</span>
+                                        <span className="font-bold text-white">₹{calc.earnedCea.toLocaleString()}</span>
                                       </div>
                                     )}
                                     {calc.earnedFi > 0 && (
-                                      <div className="flex justify-between bg-white p-3 rounded-xl border-2 border-slate-200">
-                                        <span className="text-slate-700 font-semibold">Fixed Inc.</span>
-                                        <span className="font-black text-slate-900">₹{calc.earnedFi.toLocaleString()}</span>
+                                      <div className="flex justify-between items-center bg-slate-800 p-3 rounded-lg border border-slate-700">
+                                        <span className="text-slate-400 text-sm">Fixed Inc.</span>
+                                        <span className="font-bold text-white">₹{calc.earnedFi.toLocaleString()}</span>
                                       </div>
                                     )}
                                     {calc.empIncentive > 0 && (
-                                      <div className="flex justify-between bg-white p-3 rounded-xl border-2 border-slate-200">
-                                        <span className="text-slate-700 font-semibold">Employer Inc.</span>
-                                        <span className="font-black text-slate-900">₹{calc.empIncentive.toLocaleString()}</span>
+                                      <div className="flex justify-between items-center bg-slate-800 p-3 rounded-lg border border-slate-700">
+                                        <span className="text-slate-400 text-sm">Emp. Inc.</span>
+                                        <span className="font-bold text-white">₹{calc.empIncentive.toLocaleString()}</span>
                                       </div>
                                     )}
                                   </div>
@@ -1128,124 +1054,117 @@ export default function SalaryPage() {
 
                                 {/* Deductions */}
                                 <div>
-                                  <h4 className="font-black text-slate-900 mb-3 flex items-center gap-2 text-lg">
-                                    <TrendingDown className="w-5 h-5 text-red-600" />
-                                    Deductions
+                                  <h4 className="font-bold text-slate-300 mb-4 flex items-center gap-2 text-sm uppercase tracking-wide">
+                                    <TrendingDown className="w-4 h-4 text-rose-400" />
+                                    Applied Deductions
                                   </h4>
-                                  <div className="grid grid-cols-2 gap-3">
+                                  <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
                                     {calc.empPF > 0 && (
-                                      <div className="flex justify-between bg-white p-3 rounded-xl border-2 border-red-100">
-                                        <span className="text-slate-700 font-semibold">PF</span>
-                                        <span className="font-black text-red-600">-₹{Math.round(calc.empPF).toLocaleString()}</span>
+                                      <div className="flex justify-between items-center bg-slate-800 p-3 rounded-lg border border-rose-900/20">
+                                        <span className="text-slate-400 text-sm">PF</span>
+                                        <span className="font-bold text-rose-400">-₹{Math.round(calc.empPF).toLocaleString()}</span>
                                       </div>
                                     )}
                                     {calc.empESI > 0 && (
-                                      <div className="flex justify-between bg-white p-3 rounded-xl border-2 border-red-100">
-                                        <span className="text-slate-700 font-semibold">ESI</span>
-                                        <span className="font-black text-red-600">-₹{Math.round(calc.empESI).toLocaleString()}</span>
+                                      <div className="flex justify-between items-center bg-slate-800 p-3 rounded-lg border border-rose-900/20">
+                                        <span className="text-slate-400 text-sm">ESI</span>
+                                        <span className="font-bold text-rose-400">-₹{Math.round(calc.empESI).toLocaleString()}</span>
                                       </div>
                                     )}
                                     {calc.lwf > 0 && (
-                                      <div className="flex justify-between bg-white p-3 rounded-xl border-2 border-red-100">
-                                        <span className="text-slate-700 font-semibold">LWF</span>
-                                        <span className="font-black text-red-600">-₹{Math.round(calc.lwf).toLocaleString()}</span>
+                                      <div className="flex justify-between items-center bg-slate-800 p-3 rounded-lg border border-rose-900/20">
+                                        <span className="text-slate-400 text-sm">LWF</span>
+                                        <span className="font-bold text-rose-400">-₹{Math.round(calc.lwf).toLocaleString()}</span>
                                       </div>
                                     )}
                                     {calc.latePenalty > 0 && (
-                                      <div className="flex justify-between bg-white p-3 rounded-xl border-2 border-red-100">
-                                        <span className="text-slate-700 font-semibold">Late Penalty</span>
-                                        <span className="font-black text-red-600">-₹{Math.round(calc.latePenalty).toLocaleString()}</span>
+                                      <div className="flex justify-between items-center bg-slate-800 p-3 rounded-lg border border-rose-900/20">
+                                        <span className="text-slate-400 text-sm">Late Penalty</span>
+                                        <span className="font-bold text-rose-400">-₹{Math.round(calc.latePenalty).toLocaleString()}</span>
                                       </div>
                                     )}
                                     {calc.absentDeduction > 0 && (
-                                      <div className="flex justify-between bg-white p-3 rounded-xl border-2 border-red-100">
-                                        <span className="text-slate-700 font-semibold">Absent</span>
-                                        <span className="font-black text-red-600">-₹{calc.absentDeduction.toLocaleString()}</span>
+                                      <div className="flex justify-between items-center bg-slate-800 p-3 rounded-lg border border-rose-900/20">
+                                        <span className="text-slate-400 text-sm">Absent</span>
+                                        <span className="font-bold text-rose-400">-₹{calc.absentDeduction.toLocaleString()}</span>
                                       </div>
                                     )}
-                                    {calc.salaryAdvanced > 0 && (
-                                      <div className="flex justify-between bg-white p-3 rounded-xl border-2 border-red-100">
-                                        <span className="text-slate-700 font-semibold">Salary Advanced (Adjustments)</span>
-                                        <span className="font-black text-red-600">-₹{calc.salaryAdvanced.toLocaleString()}</span>
+                                    {salary?.advance_recovery > 0 && (
+                                      <div className="flex justify-between items-center bg-slate-800 p-3 rounded-lg border border-rose-900/20">
+                                        <span className="text-slate-400 text-sm">Adv. Recov</span>
+                                        <span className="font-bold text-rose-400">-₹{salary.advance_recovery.toLocaleString()}</span>
                                       </div>
                                     )}
-                                    {calc.advanceRecovery > 0 && (
-                                      <div className="flex justify-between bg-white p-3 rounded-xl border-2 border-red-100">
-                                        <span className="text-slate-700 font-semibold">Advance Recovery</span>
-                                        <span className="font-black text-red-600">-₹{calc.advanceRecovery.toLocaleString()}</span>
+                                    {salary?.other_deductions > 0 && (
+                                      <div className="flex justify-between items-center bg-slate-800 p-3 rounded-lg border border-rose-900/20">
+                                        <span className="text-slate-400 text-sm">Other</span>
+                                        <span className="font-bold text-rose-400">-₹{salary.other_deductions.toLocaleString()}</span>
                                       </div>
                                     )}
-                                    {calc.otherDeductions > 0 && (
-                                      <div className="flex justify-between bg-white p-3 rounded-xl border-2 border-red-100">
-                                        <span className="text-slate-700 font-semibold">Other Deductions</span>
-                                        <span className="font-black text-red-600">-₹{calc.otherDeductions.toLocaleString()}</span>
-                                      </div>
-                                    )}
-
                                   </div>
                                 </div>
                               </div>
                             )}
 
                             {/* Action Buttons */}
-                            <div className="flex flex-wrap gap-2">
-                              <Button 
+                            <div className="flex flex-wrap gap-2 pt-2">
+                              <Button
                                 variant="outline"
                                 size="sm"
                                 onClick={() => {
                                   setCurrentRecord(salary);
                                   setAdjustmentDialogOpen(true);
                                 }}
-                                className="gap-2 border-2 font-semibold rounded-xl hover:bg-indigo-50"
+                                className="bg-slate-800 border-slate-700 text-slate-300 hover:bg-slate-700 hover:text-white rounded-lg"
                               >
-                                <Plus className="w-4 h-4" />
+                                <Plus className="w-4 h-4 mr-2" />
                                 Adjustment
                               </Button>
-                              <Button 
+                              <Button
                                 variant="outline"
                                 size="sm"
                                 onClick={() => {
                                   setSelectedEmployee(salary.employee_email);
                                   setAdvanceDialogOpen(true);
                                 }}
-                                className="gap-2 border-2 font-semibold rounded-xl hover:bg-purple-50"
+                                className="bg-slate-800 border-slate-700 text-slate-300 hover:bg-slate-700 hover:text-white rounded-lg"
                               >
-                                <Wallet className="w-4 h-4" />
+                                <Wallet className="w-4 h-4 mr-2" />
                                 Advance
                               </Button>
-                              <Button 
+                              <Button
                                 variant="outline"
                                 size="sm"
                                 onClick={() => generateSlipMutation.mutate(salary.id)}
                                 disabled={generateSlipMutation.isPending}
-                                className="gap-2 border-2 font-semibold rounded-xl hover:bg-blue-50"
+                                className="bg-slate-800 border-slate-700 text-slate-300 hover:bg-slate-700 hover:text-white rounded-lg"
                               >
-                                <FileText className="w-4 h-4" />
+                                <FileText className="w-4 h-4 mr-2" />
                                 Slip
                               </Button>
-                              <Button 
+                              <Button
                                 variant="outline"
                                 size="sm"
                                 onClick={() => emailSlipMutation.mutate(salary.id)}
                                 disabled={emailSlipMutation.isPending}
-                                className="gap-2 border-2 font-semibold rounded-xl hover:bg-green-50"
+                                className="bg-slate-800 border-slate-700 text-slate-300 hover:bg-slate-700 hover:text-white rounded-lg"
                               >
-                                <Mail className="w-4 h-4" />
+                                <Mail className="w-4 h-4 mr-2" />
                                 Email
                               </Button>
-                              <Button 
+                              <Button
                                 variant="outline"
                                 size="sm"
                                 onClick={() => {
                                   setSelectedEmployee(salary.employee_email);
                                   setHistoryDialogOpen(true);
                                 }}
-                                className="gap-2 border-2 font-semibold rounded-xl hover:bg-amber-50"
+                                className="bg-slate-800 border-slate-700 text-slate-300 hover:bg-slate-700 hover:text-white rounded-lg"
                               >
-                                <History className="w-4 h-4" />
+                                <History className="w-4 h-4 mr-2" />
                                 History
                               </Button>
-                              <Button 
+                              <Button
                                 variant="outline"
                                 size="sm"
                                 onClick={() => {
@@ -1254,7 +1173,7 @@ export default function SalaryPage() {
                                   }
                                 }}
                                 disabled={salary.locked}
-                                className="gap-2 border-2 font-semibold rounded-xl text-red-600 hover:bg-red-50"
+                                className="bg-rose-500/10 border-rose-500/20 text-rose-400 hover:bg-rose-500/20 hover:text-rose-300 rounded-lg ml-auto"
                               >
                                 <Trash2 className="w-4 h-4" />
                               </Button>
@@ -1268,66 +1187,66 @@ export default function SalaryPage() {
               </div>
             ) : (
               // Compact View
-              <Card className="bg-white/90 backdrop-blur-2xl border-2 shadow-2xl">
+              <Card className="bg-slate-900/50 backdrop-blur-2xl border border-slate-800 shadow-2xl">
                 <CardContent className="p-6">
                   <div className="overflow-x-auto">
                     <table className="w-full">
                       <thead>
-                        <tr className="border-b-2 border-slate-200">
-                          <th className="text-left p-3 font-black text-slate-700">
-                            <Checkbox checked={selectedRecords.length === filteredSalaries.length} onCheckedChange={handleSelectAll} />
+                        <tr className="border-b border-slate-700">
+                          <th className="text-left p-3 font-bold text-slate-400">
+                            <Checkbox checked={selectedRecords.length === filteredSalaries.length} onCheckedChange={handleSelectAll} className="border-slate-600 data-[state=checked]:bg-indigo-500" />
                           </th>
-                          <th className="text-left p-3 font-black text-slate-700">Employee</th>
-                          <th className="text-center p-3 font-black text-slate-700">Attendance</th>
-                          <th className="text-right p-3 font-black text-slate-700">Base</th>
-                          <th className="text-right p-3 font-black text-slate-700">Adjustments</th>
-                          <th className="text-right p-3 font-black text-slate-700">Deductions</th>
-                          <th className="text-right p-3 font-black text-slate-700">Net</th>
-                          <th className="text-center p-3 font-black text-slate-700">Status</th>
-                          <th className="text-center p-3 font-black text-slate-700">Actions</th>
+                          <th className="text-left p-3 font-bold text-slate-400">Employee</th>
+                          <th className="text-center p-3 font-bold text-slate-400">Attendance</th>
+                          <th className="text-right p-3 font-bold text-slate-400">Base</th>
+                          <th className="text-right p-3 font-bold text-slate-400">Adjustments</th>
+                          <th className="text-right p-3 font-bold text-slate-400">Deductions</th>
+                          <th className="text-right p-3 font-bold text-slate-400">Net</th>
+                          <th className="text-center p-3 font-bold text-slate-400">Status</th>
+                          <th className="text-center p-3 font-bold text-slate-400">Actions</th>
                         </tr>
                       </thead>
                       <tbody>
                         {filteredSalaries.map((salary) => {
                           const calc = calculateEmployeeSalary(salary.employee_email);
-                          if (!calc.hasPolicy && hideNoPolicyMembers) return null;
                           return (
-                            <tr key={salary.id} className="border-b border-slate-100 hover:bg-slate-50 transition-colors">
+                            <tr key={salary.id} className="border-b border-slate-700/50 hover:bg-slate-800/50 transition-colors">
                               <td className="p-3">
                                 <Checkbox
                                   checked={selectedRecords.includes(salary.id)}
                                   onCheckedChange={() => handleSelectRecord(salary.id)}
                                   disabled={salary.locked}
+                                  className="border-slate-600 data-[state=checked]:bg-indigo-500"
                                 />
                               </td>
                               <td className="p-3">
-                                <div className="font-bold text-slate-900">{salary.employee_name}</div>
+                                <div className="font-bold text-white">{salary.employee_name}</div>
                                 <div className="text-xs text-slate-500">{salary.employee_email}</div>
                               </td>
                               <td className="p-3 text-center">
-                                <Badge className="bg-green-100 text-green-700 font-bold">{calc.effectivePresent}P</Badge>
-                                <Badge className="bg-red-100 text-red-700 font-bold ml-1">{calc.unpaidAbsent}A</Badge>
+                                <Badge className="bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 font-bold">{calc.effectivePresent}P</Badge>
+                                <Badge className="bg-rose-500/10 text-rose-400 border border-rose-500/20 font-bold ml-1">{calc.unpaidAbsent}A</Badge>
                               </td>
-                              <td className="p-3 text-right font-bold">₹{calc.baseSalary.toLocaleString()}</td>
-                              <td className="p-3 text-right font-bold text-amber-600">+₹{calc.adjustments.toLocaleString()}</td>
-                              <td className="p-3 text-right font-bold text-red-600">-₹{calc.totalDeductions.toLocaleString()}</td>
-                              <td className="p-3 text-right font-black text-green-600 text-lg">₹{calc.net.toLocaleString()}</td>
+                              <td className="p-3 text-right font-bold text-slate-300">₹{calc.baseSalary.toLocaleString()}</td>
+                              <td className="p-3 text-right font-bold text-amber-400">+₹{calc.adjustments.toLocaleString()}</td>
+                              <td className="p-3 text-right font-bold text-rose-400">-₹{calc.totalDeductions.toLocaleString()}</td>
+                              <td className="p-3 text-right font-black text-emerald-400 text-lg">₹{calc.net.toLocaleString()}</td>
                               <td className="p-3 text-center">
                                 <Badge className={
-                                  salary.status === 'paid' ? 'bg-green-500 text-white' :
-                                  salary.status === 'approved' ? 'bg-blue-500 text-white' :
-                                  salary.status === 'locked' ? 'bg-orange-500 text-white' :
-                                  'bg-slate-400 text-white'
+                                  salary.status === 'paid' ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30' :
+                                    salary.status === 'approved' ? 'bg-blue-500/20 text-blue-400 border border-blue-500/30' :
+                                      salary.status === 'locked' ? 'bg-amber-500/20 text-amber-400 border border-amber-500/30' :
+                                        'bg-slate-700/50 text-slate-400 border border-slate-600'
                                 }>
                                   {salary.status}
                                 </Badge>
                               </td>
                               <td className="p-3">
                                 <div className="flex gap-1 justify-center">
-                                  <Button size="sm" variant="ghost" onClick={() => { setCurrentRecord(salary); setAdjustmentDialogOpen(true); }}>
+                                  <Button size="sm" variant="ghost" onClick={() => { setCurrentRecord(salary); setAdjustmentDialogOpen(true); }} className="text-slate-400 hover:text-white hover:bg-slate-700">
                                     <Plus className="w-4 h-4" />
                                   </Button>
-                                  <Button size="sm" variant="ghost" onClick={() => generateSlipMutation.mutate(salary.id)}>
+                                  <Button size="sm" variant="ghost" onClick={() => generateSlipMutation.mutate(salary.id)} className="text-slate-400 hover:text-white hover:bg-slate-700">
                                     <FileText className="w-4 h-4" />
                                   </Button>
                                 </div>
@@ -1346,12 +1265,12 @@ export default function SalaryPage() {
           {/* Policies Tab */}
           <TabsContent value="policies" className="space-y-6">
             <div className="flex justify-end">
-              <Button 
+              <Button
                 onClick={() => {
                   setEditingPolicy(null);
                   setPolicyFormOpen(true);
                 }}
-                className="bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-700 hover:to-purple-700 gap-2 shadow-2xl h-12 px-6 rounded-2xl font-bold text-lg"
+                className="bg-indigo-600 hover:bg-indigo-700 text-white gap-2 shadow-lg shadow-indigo-500/20 h-12 px-6 rounded-xl font-bold text-lg"
               >
                 <Plus className="w-5 h-5" />
                 Create New Policy
@@ -1361,16 +1280,16 @@ export default function SalaryPage() {
             <div className="grid gap-6">
               {policiesLoading ? (
                 <div className="text-center py-16">
-                  <RefreshCw className="w-12 h-12 text-indigo-600 animate-spin mx-auto mb-4" />
-                  <p className="text-slate-600 font-medium">Loading policies...</p>
+                  <RefreshCw className="w-12 h-12 text-indigo-500 animate-spin mx-auto mb-4" />
+                  <p className="text-slate-400 font-medium">Loading policies...</p>
                 </div>
               ) : policies.length === 0 ? (
-                <Card className="bg-white/90 backdrop-blur-2xl border-2 shadow-2xl">
+                <Card className="bg-slate-900/50 backdrop-blur-2xl border border-slate-800 shadow-2xl">
                   <CardContent className="p-16 text-center">
-                    <Settings className="w-20 h-20 text-slate-300 mx-auto mb-6" />
-                    <h3 className="text-2xl font-bold text-slate-700 mb-2">No Policies Found</h3>
+                    <Settings className="w-20 h-20 text-slate-700 mx-auto mb-6" />
+                    <h3 className="text-2xl font-bold text-slate-300 mb-2">No Policies Found</h3>
                     <p className="text-slate-500 font-medium mb-6">Create your first salary policy to get started</p>
-                    <Button onClick={() => setPolicyFormOpen(true)} className="bg-gradient-to-r from-indigo-600 to-purple-600">
+                    <Button onClick={() => setPolicyFormOpen(true)} className="bg-indigo-600 hover:bg-indigo-700 text-white">
                       <Plus className="w-4 h-4 mr-2" />
                       Create Policy
                     </Button>
@@ -1379,57 +1298,57 @@ export default function SalaryPage() {
               ) : (
                 policies.map((policy) => {
                   const user = allUsers.find(u => u.email === policy.user_email);
-                  const monthlyGross = (policy.basic_salary || 0) + (policy.hra || 0) + (policy.da || 0) + 
-                                     (policy.travelling_allowance || 0) + (policy.children_education_allowance || 0) + 
-                                     (policy.fixed_incentive || 0);
-                  
+                  const monthlyGross = (policy.basic_salary || 0) + (policy.hra || 0) +
+                    (policy.travelling_allowance || 0) + (policy.children_education_allowance || 0) +
+                    (policy.fixed_incentive || 0);
+
                   return (
-                    <Card key={policy.id} className="bg-white/90 backdrop-blur-2xl border-2 shadow-2xl hover:shadow-3xl transition-all">
+                    <Card key={policy.id} className="group bg-slate-900/50 backdrop-blur-2xl border border-slate-800 shadow-2xl hover:bg-slate-800/50 transition-all duration-300">
                       <CardContent className="p-6">
                         <div className="flex items-start justify-between">
-                          <div className="flex items-center gap-4 flex-1">
-                            <div className="w-16 h-16 rounded-2xl bg-gradient-to-br from-indigo-500 to-purple-600 flex items-center justify-center text-white text-2xl font-bold shadow-xl">
+                          <div className="flex items-center gap-6 flex-1">
+                            <div className="w-16 h-16 rounded-2xl bg-gradient-to-br from-indigo-500 to-purple-600 flex items-center justify-center text-white text-2xl font-bold shadow-lg shadow-indigo-500/20">
                               {user?.full_name?.charAt(0) || 'U'}
                             </div>
                             <div className="flex-1">
                               <div className="flex items-center gap-3 mb-2">
-                                <h3 className="text-xl font-black text-slate-900">{user?.full_name || 'Unknown'}</h3>
-                                <Badge className={policy.is_active ? 'bg-green-500 text-white shadow-lg' : 'bg-slate-400 text-white'}>
+                                <h3 className="text-xl font-bold text-white">{user?.full_name || 'Unknown'}</h3>
+                                <Badge className={policy.is_active ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30' : 'bg-slate-700 text-slate-400 border border-slate-600'}>
                                   {policy.is_active ? 'Active' : 'Inactive'}
                                 </Badge>
                               </div>
-                              <p className="text-sm text-slate-600 font-medium">{policy.user_email}</p>
-                              
-                              <div className="grid grid-cols-3 gap-3 mt-4">
-                                <div className="bg-gradient-to-br from-blue-50 to-indigo-50 rounded-xl p-3 border-2 border-blue-200">
-                                  <p className="text-xs text-blue-700 font-bold uppercase">Monthly Gross</p>
-                                  <p className="text-xl font-black text-blue-900">₹{monthlyGross.toLocaleString()}</p>
+                              <p className="text-sm text-slate-400 font-medium">{policy.user_email}</p>
+
+                              <div className="grid grid-cols-3 gap-4 mt-6">
+                                <div className="bg-slate-800/50 rounded-xl p-3 border border-slate-700/50">
+                                  <p className="text-[10px] text-indigo-400 font-bold uppercase mb-1">Monthly Gross</p>
+                                  <p className="text-xl font-bold text-white">₹{monthlyGross.toLocaleString()}</p>
                                 </div>
-                                <div className="bg-gradient-to-br from-purple-50 to-pink-50 rounded-xl p-3 border-2 border-purple-200">
-                                  <p className="text-xs text-purple-700 font-bold uppercase">Type</p>
-                                  <p className="text-lg font-black text-purple-900">{policy.salary_type?.replace('_', ' ')}</p>
+                                <div className="bg-slate-800/50 rounded-xl p-3 border border-slate-700/50">
+                                  <p className="text-[10px] text-purple-400 font-bold uppercase mb-1">Type</p>
+                                  <p className="text-lg font-bold text-white capitalize">{policy.salary_type?.replace('_', ' ')}</p>
                                 </div>
-                                <div className="bg-gradient-to-br from-emerald-50 to-green-50 rounded-xl p-3 border-2 border-emerald-200">
-                                  <p className="text-xs text-emerald-700 font-bold uppercase">Status</p>
-                                  <p className="text-lg font-black text-emerald-900">{policy.is_active ? 'Active' : 'Inactive'}</p>
+                                <div className="bg-slate-800/50 rounded-xl p-3 border border-slate-700/50">
+                                  <p className="text-[10px] text-emerald-400 font-bold uppercase mb-1">Status</p>
+                                  <p className="text-lg font-bold text-white">{policy.is_active ? 'Active' : 'Inactive'}</p>
                                 </div>
                               </div>
                             </div>
                           </div>
 
                           <div className="flex gap-2">
-                            <Button 
+                            <Button
                               variant="outline"
                               size="sm"
                               onClick={() => {
                                 setEditingPolicy(policy);
                                 setPolicyFormOpen(true);
                               }}
-                              className="border-2 font-semibold rounded-xl"
+                              className="border-slate-700 bg-slate-800/50 text-slate-300 hover:bg-slate-800 hover:text-white rounded-xl"
                             >
                               Edit
                             </Button>
-                            <Button 
+                            <Button
                               variant="outline"
                               size="sm"
                               onClick={() => {
@@ -1437,7 +1356,7 @@ export default function SalaryPage() {
                                   deletePolicyMutation.mutate(policy.id);
                                 }
                               }}
-                              className="border-2 font-semibold rounded-xl text-red-600 hover:bg-red-50"
+                              className="border-rose-900/20 bg-rose-900/10 text-rose-400 hover:bg-rose-900/20 rounded-xl"
                             >
                               Delete
                             </Button>
@@ -1486,7 +1405,7 @@ export default function SalaryPage() {
         <DialogContent className="max-w-5xl max-h-[85vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle className="text-2xl font-black">Salary History</DialogTitle>
-            <DialogDescription>View past salary records for {selectedEmployee}</DialogDescription>
+            <DialogDescription>View past salary records for {getUserName(selectedEmployee)}</DialogDescription>
           </DialogHeader>
           <SalaryHistoryView employeeEmail={selectedEmployee} />
         </DialogContent>
@@ -1503,40 +1422,6 @@ export default function SalaryPage() {
         allUsers={allUsers}
         onAdvanceCreated={() => recalculateMutation.mutate()}
       />
-
-      <Dialog open={statusChangeDialogOpen} onOpenChange={setStatusChangeDialogOpen}>
-        <DialogContent className="max-w-md">
-          <DialogHeader>
-            <DialogTitle>Change Salary Status</DialogTitle>
-            <DialogDescription>
-              Update status for {changingStatusRecord?.employee_name}
-            </DialogDescription>
-          </DialogHeader>
-          <div className="space-y-4 pt-4">
-            <Select
-              value={changingStatusRecord?.status || 'draft'}
-              onValueChange={(newStatus) => {
-                if (changingStatusRecord) {
-                  changeStatusMutation.mutate({
-                    recordId: changingStatusRecord.id,
-                    newStatus
-                  });
-                }
-              }}
-            >
-              <SelectTrigger>
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="draft">Draft</SelectItem>
-                <SelectItem value="locked">Locked</SelectItem>
-                <SelectItem value="approved">Approved</SelectItem>
-                <SelectItem value="paid">Paid</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
-        </DialogContent>
-      </Dialog>
     </div>
   );
 }
@@ -1555,16 +1440,16 @@ function SalaryHistoryView({ employeeEmail }) {
   if (isLoading) {
     return (
       <div className="text-center py-12">
-        <RefreshCw className="w-12 h-12 text-indigo-600 animate-spin mx-auto mb-4" />
-        <p className="text-slate-600">Loading history...</p>
+        <RefreshCw className="w-12 h-12 text-indigo-500 animate-spin mx-auto mb-4" />
+        <p className="text-slate-400">Loading history...</p>
       </div>
     );
   }
-  
+
   if (history.length === 0) {
     return (
       <div className="text-center py-12">
-        <AlertCircle className="w-16 h-16 text-slate-300 mx-auto mb-4" />
+        <AlertCircle className="w-16 h-16 text-slate-700 mx-auto mb-4" />
         <p className="text-slate-500 font-medium">No salary history found</p>
       </div>
     );
@@ -1573,49 +1458,49 @@ function SalaryHistoryView({ employeeEmail }) {
   return (
     <div className="space-y-4">
       {history.map((record) => (
-        <Card key={record.id} className="bg-gradient-to-br from-white to-slate-50 border-2 shadow-lg hover:shadow-xl transition-all">
+        <Card key={record.id} className="bg-slate-900/50 border border-slate-800 shadow-lg hover:bg-slate-800/50 transition-all">
           <CardContent className="p-6">
             <div className="flex justify-between items-start mb-4">
               <div>
-                <h4 className="text-2xl font-black text-slate-900 mb-2">{record.month}</h4>
+                <h4 className="text-2xl font-bold text-white mb-2">{record.month}</h4>
                 <Badge className={
-                  record.status === 'paid' ? 'bg-green-500 text-white shadow-lg' :
-                  record.status === 'approved' ? 'bg-blue-500 text-white shadow-lg' :
-                  'bg-slate-400 text-white shadow-lg'
+                  record.status === 'paid' ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30' :
+                    record.status === 'approved' ? 'bg-blue-500/20 text-blue-400 border border-blue-500/30' :
+                      'bg-slate-700 text-slate-400 border border-slate-600'
                 }>
                   {record.status?.toUpperCase()}
                 </Badge>
               </div>
               <div className="text-right">
-                <p className="text-sm font-bold text-slate-600 mb-1">NET SALARY</p>
-                <p className="text-4xl font-black bg-gradient-to-r from-emerald-600 to-green-600 bg-clip-text text-transparent">
+                <p className="text-xs font-bold text-slate-500 mb-1 uppercase">NET SALARY</p>
+                <p className="text-4xl font-black text-transparent bg-clip-text bg-gradient-to-r from-emerald-400 to-teal-300">
                   ₹{(record.net_salary || 0).toLocaleString()}
                 </p>
               </div>
             </div>
-            
+
             <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-              <div className="bg-gradient-to-br from-blue-50 to-indigo-50 rounded-xl p-4 border-2 border-blue-200">
-                <p className="text-xs text-blue-700 font-bold uppercase">Gross</p>
-                <p className="text-2xl font-black text-blue-900">₹{(record.gross_salary || 0).toLocaleString()}</p>
+              <div className="bg-slate-800/50 rounded-xl p-4 border border-slate-700/50">
+                <p className="text-[10px] text-blue-400 font-bold uppercase">Gross</p>
+                <p className="text-2xl font-bold text-white">₹{(record.gross_salary || 0).toLocaleString()}</p>
               </div>
-              <div className="bg-gradient-to-br from-red-50 to-rose-50 rounded-xl p-4 border-2 border-red-200">
-                <p className="text-xs text-red-700 font-bold uppercase">Deductions</p>
-                <p className="text-2xl font-black text-red-900">₹{(record.total_deductions || 0).toLocaleString()}</p>
+              <div className="bg-slate-800/50 rounded-xl p-4 border border-slate-700/50">
+                <p className="text-[10px] text-rose-400 font-bold uppercase">Deductions</p>
+                <p className="text-2xl font-bold text-white">₹{(record.total_deductions || 0).toLocaleString()}</p>
               </div>
-              <div className="bg-gradient-to-br from-emerald-50 to-green-50 rounded-xl p-4 border-2 border-emerald-200">
-                <p className="text-xs text-emerald-700 font-bold uppercase">Present</p>
-                <p className="text-2xl font-black text-emerald-900">{record.present_days || 0}</p>
+              <div className="bg-slate-800/50 rounded-xl p-4 border border-slate-700/50">
+                <p className="text-[10px] text-emerald-400 font-bold uppercase">Present</p>
+                <p className="text-2xl font-bold text-white">{record.present_days || 0}</p>
               </div>
-              <div className="bg-gradient-to-br from-amber-50 to-orange-50 rounded-xl p-4 border-2 border-amber-200">
-                <p className="text-xs text-amber-700 font-bold uppercase">Absent</p>
-                <p className="text-2xl font-black text-amber-900">{record.absent_days || 0}</p>
+              <div className="bg-slate-800/50 rounded-xl p-4 border border-slate-700/50">
+                <p className="text-[10px] text-amber-400 font-bold uppercase">Absent</p>
+                <p className="text-2xl font-bold text-white">{record.absent_days || 0}</p>
               </div>
             </div>
 
             {record.payment_date && (
-              <div className="mt-4 flex items-center gap-2 text-sm text-slate-600">
-                <CheckCircle className="w-4 h-4 text-green-600" />
+              <div className="mt-4 flex items-center gap-2 text-sm text-slate-400">
+                <CheckCircle className="w-4 h-4 text-emerald-500" />
                 <span className="font-semibold">Paid on: {format(new Date(record.payment_date), 'dd MMM yyyy')}</span>
               </div>
             )}

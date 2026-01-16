@@ -54,7 +54,7 @@ import Receivables from './pages/Receivables';
 import Reports from './pages/Reports';
 import RoleManagement from './pages/RoleManagement';
 import Salary from './pages/Salary';
-import salaryTsx from './pages/Salary.tsx';
+
 import SalaryManagement from './pages/SalaryManagement';
 import SalaryPolicyManagement from './pages/SalaryPolicyManagement';
 import SalesActivity from './pages/SalesActivity';
@@ -134,7 +134,7 @@ export const PAGES = {
     "Reports": Reports,
     "RoleManagement": RoleManagement,
     "Salary": Salary,
-    "Salary.tsx": salaryTsx,
+
     "SalaryManagement": SalaryManagement,
     "SalaryPolicyManagement": SalaryPolicyManagement,
     "SalesActivity": SalesActivity,
