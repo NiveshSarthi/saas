@@ -97,7 +97,8 @@ class ApiClient {
      *   Builder: EntityManager,
      *   Role: EntityManager,
      *   AttendanceSettings: EntityManager,
-     *   WorkDay: EntityManager
+     *   WorkDay: EntityManager,
+     *   LeaveBalance: EntityManager
      * }}
      */
     get entities() {

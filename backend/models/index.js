@@ -437,6 +437,19 @@ const leaveTypeSchema = new mongoose.Schema({
     created_at: { type: Date, default: Date.now }
 });
 
+const leaveBalanceSchema = new mongoose.Schema({
+    user_email: String,
+    leave_type_id: String,
+    year: Number,
+    total_allocated: { type: Number, default: 0 },
+    used: { type: Number, default: 0 },
+    pending: { type: Number, default: 0 },
+    available: { type: Number, default: 0 },
+    carried_forward: { type: Number, default: 0 },
+    created_at: { type: Date, default: Date.now },
+    updated_at: { type: Date, default: Date.now }
+});
+
 const pettyCashDrawerSchema = new mongoose.Schema({
     name: String,
     balance: Number,
@@ -458,6 +471,7 @@ export const Builder = mongoose.model('Builder', builderSchema);
 export const AuditLog = mongoose.model('AuditLog', auditLogSchema);
 export const SalaryAuditLog = mongoose.model('SalaryAuditLog', salaryAuditLogSchema);
 export const LeaveType = mongoose.model('LeaveType', leaveTypeSchema);
+export const LeaveBalance = mongoose.model('LeaveBalance', leaveBalanceSchema);
 export const PettyCashDrawer = mongoose.model('PettyCashDrawer', pettyCashDrawerSchema);
 export const PettyCashBudget = mongoose.model('PettyCashBudget', pettyCashBudgetSchema);
 
