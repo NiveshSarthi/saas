@@ -62,25 +62,38 @@ export default function AttendanceRulesPage() {
   }
 
   return (
-    <div className="p-6 lg:p-8 max-w-6xl mx-auto">
-      <div className="mb-8">
-        <div className="flex items-center gap-4 mb-4">
-          <Link to={createPageUrl('Attendance')}>
-            <Button variant="ghost" size="icon">
-              <ArrowLeft className="w-5 h-5" />
-            </Button>
-          </Link>
-          <div>
-            <h1 className="text-3xl font-bold text-slate-900 flex items-center gap-3">
-              <Shield className="w-8 h-8 text-indigo-600" />
-              Attendance Rules & Settings
-            </h1>
-            <p className="text-slate-500 mt-1">Configure attendance policies and automation</p>
+    <div className="min-h-screen bg-[#F8F9FC]">
+      {/* Hero Section */}
+      <div className="relative overflow-hidden bg-gradient-to-br from-violet-600 via-indigo-600 to-purple-700 pb-32">
+        <div className="absolute inset-0 bg-[url('https://grainy-gradients.vercel.app/noise.svg')] opacity-20 brightness-100 mix-blend-soft-light"></div>
+        <div className="absolute top-0 left-0 w-full h-full bg-gradient-to-b from-transparent to-black/10"></div>
+
+        <div className="relative max-w-6xl mx-auto px-6 lg:px-8 pt-8">
+          <div className="flex items-center gap-4 mb-8">
+            <Link to={createPageUrl('Attendance')}>
+              <Button variant="ghost" size="icon" className="text-white hover:bg-white/20 rounded-full h-10 w-10 backdrop-blur-md">
+                <ArrowLeft className="w-6 h-6" />
+              </Button>
+            </Link>
+
+            <div className="flex items-center gap-4">
+              <div className="p-3 bg-white/10 backdrop-blur-xl rounded-2xl border border-white/20 shadow-2xl">
+                <Shield className="w-8 h-8 text-white" />
+              </div>
+              <div>
+                <h1 className="text-4xl font-black text-white tracking-tight">Attendance Rules</h1>
+                <p className="text-indigo-100 font-medium">Configure policies & automation</p>
+              </div>
+            </div>
           </div>
         </div>
       </div>
 
-      <AttendanceRulesManager />
+      <div className="max-w-6xl mx-auto px-6 lg:px-8 -mt-20 relative z-10 pb-12">
+        <div className="bg-white/80 backdrop-blur-md rounded-3xl shadow-xl border border-white/20 p-1">
+          <AttendanceRulesManager />
+        </div>
+      </div>
     </div>
   );
 }

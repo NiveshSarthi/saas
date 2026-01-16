@@ -12,18 +12,18 @@ import { cn } from '@/lib/utils';
 import { Clock, CheckCircle2, XCircle, AlertCircle, Filter, X } from 'lucide-react';
 
 const statusConfig = {
-  checked_in: { 
-    label: 'Checked In', 
+  checked_in: {
+    label: 'Checked In',
     color: 'bg-blue-100 text-blue-700 border-blue-200',
     icon: Clock
   },
-  checked_out: { 
-    label: 'Checked Out', 
+  checked_out: {
+    label: 'Checked Out',
     color: 'bg-green-100 text-green-700 border-green-200',
     icon: CheckCircle2
   },
-  not_checked_in: { 
-    label: 'Not Checked In', 
+  not_checked_in: {
+    label: 'Not Checked In',
     color: 'bg-slate-100 text-slate-600 border-slate-200',
     icon: XCircle
   },
@@ -36,7 +36,7 @@ const statusConfig = {
   casual_leave: { label: 'Casual Leave', color: 'bg-indigo-100 text-indigo-700 border-indigo-200', icon: AlertCircle }
 };
 
-export default function TeamAttendanceView({ allUsers, todayRecords }) {
+export default function TeamAttendanceView({ allUsers = [], todayRecords }) {
   const [selectedDate, setSelectedDate] = useState(format(new Date(), 'yyyy-MM-dd'));
   const [selectedUsers, setSelectedUsers] = useState([]);
   const [searchTerm, setSearchTerm] = useState('');
@@ -49,15 +49,15 @@ export default function TeamAttendanceView({ allUsers, todayRecords }) {
     },
   });
 
-  const teamAttendance = allUsers.map(user => {
+  const teamAttendance = (allUsers || []).map(user => {
     const record = dateRecords.find(r => r.user_email === user.email);
-    
+
     return {
       user,
       record,
       status: record?.status || 'not_checked_in',
-      checkInTime: record?.check_in_time,
-      checkOutTime: record?.check_out_time,
+      checkInTime: record?.check_in,
+      checkOutTime: record?.check_out,
       totalHours: record?.total_hours,
       isLate: record?.is_late,
       isEarlyCheckout: record?.is_early_checkout,
@@ -71,7 +71,7 @@ export default function TeamAttendanceView({ allUsers, todayRecords }) {
 
   // Filter by selected users
   if (selectedUsers.length > 0) {
-    filteredTeam = filteredTeam.filter(item => 
+    filteredTeam = filteredTeam.filter(item =>
       selectedUsers.includes(item.user.email)
     );
   }
@@ -89,16 +89,16 @@ export default function TeamAttendanceView({ allUsers, todayRecords }) {
   // Sort: Checked in first, then not checked in, then checked out
   const sortedTeam = [...filteredTeam].sort((a, b) => {
     // Prioritize by actual check-in status
-    const aCheckedIn = (a.status === 'checked_in' || (a.status === 'present' && a.record?.check_in_time && !a.record?.check_out_time));
-    const bCheckedIn = (b.status === 'checked_in' || (b.status === 'present' && b.record?.check_in_time && !b.record?.check_out_time));
-    const aCheckedOut = (a.status === 'checked_out' || (a.status === 'present' && a.record?.check_out_time));
-    const bCheckedOut = (b.status === 'checked_out' || (b.status === 'present' && b.record?.check_out_time));
-    
+    const aCheckedIn = (a.status === 'checked_in' || (a.status === 'present' && a.record?.check_in && !a.record?.check_out));
+    const bCheckedIn = (b.status === 'checked_in' || (b.status === 'present' && b.record?.check_in && !b.record?.check_out));
+    const aCheckedOut = (a.status === 'checked_out' || (a.status === 'present' && a.record?.check_out));
+    const bCheckedOut = (b.status === 'checked_out' || (b.status === 'present' && b.record?.check_out));
+
     if (aCheckedIn && !bCheckedIn) return -1;
     if (!aCheckedIn && bCheckedIn) return 1;
     if (aCheckedOut && !bCheckedOut) return 1;
     if (!aCheckedOut && bCheckedOut) return -1;
-    
+
     return 0;
   });
 
@@ -108,7 +108,7 @@ export default function TeamAttendanceView({ allUsers, todayRecords }) {
   };
 
   const handleUserToggle = (userEmail) => {
-    setSelectedUsers(prev => 
+    setSelectedUsers(prev =>
       prev.includes(userEmail)
         ? prev.filter(e => e !== userEmail)
         : [...prev, userEmail]
@@ -179,7 +179,7 @@ export default function TeamAttendanceView({ allUsers, todayRecords }) {
                     <input
                       type="checkbox"
                       checked={selectedUsers.includes(user.email)}
-                      onChange={() => {}}
+                      onChange={() => { }}
                       className="w-4 h-4"
                     />
                     <span className="text-sm">{user.full_name || user.email}</span>
@@ -198,8 +198,8 @@ export default function TeamAttendanceView({ allUsers, todayRecords }) {
               return (
                 <Badge key={email} variant="secondary" className="flex items-center gap-1">
                   {user?.full_name || email}
-                  <X 
-                    className="w-3 h-3 cursor-pointer" 
+                  <X
+                    className="w-3 h-3 cursor-pointer"
                     onClick={() => handleUserToggle(email)}
                   />
                 </Badge>
@@ -217,133 +217,133 @@ export default function TeamAttendanceView({ allUsers, todayRecords }) {
             <span className="truncate">Team Attendance ({format(new Date(selectedDate), 'MMM d, yyyy')})</span>
           </h3>
           <p className="text-xs sm:text-sm text-slate-500 mt-1 overflow-x-auto whitespace-nowrap scrollbar-thin">
-            Showing: {sortedTeam.length} of {teamAttendance.length} | 
-            Checked In: {sortedTeam.filter(t => (t.status === 'checked_in' || (t.status === 'present' && t.record?.check_in_time && !t.record?.check_out_time))).length} | 
-            Checked Out: {sortedTeam.filter(t => (t.status === 'checked_out' || (t.status === 'present' && t.record?.check_out_time))).length} | 
-            Not Checked In: {sortedTeam.filter(t => t.status === 'not_checked_in' || (t.status === 'present' && !t.record?.check_in_time)).length}
+            Showing: {sortedTeam.length} of {teamAttendance.length} |
+            Checked In: {sortedTeam.filter(t => (t.status === 'checked_in' || (t.status === 'present' && t.record?.check_in && !t.record?.check_out))).length} |
+            Checked Out: {sortedTeam.filter(t => (t.status === 'checked_out' || (t.status === 'present' && t.record?.check_out))).length} |
+            Not Checked In: {sortedTeam.filter(t => t.status === 'not_checked_in' || (t.status === 'present' && !t.record?.check_in)).length}
           </p>
         </div>
 
-      <div className="overflow-x-auto scrollbar-thin -webkit-overflow-scrolling-touch">
-        <Table className="min-w-[800px]">
-        <TableHeader>
-          <TableRow>
-            <TableHead className="w-[300px]">Employee</TableHead>
-            <TableHead>Status</TableHead>
-            <TableHead>Check In</TableHead>
-            <TableHead>Check Out</TableHead>
-            <TableHead>Hours</TableHead>
-            <TableHead>Flags</TableHead>
-            <TableHead>Location</TableHead>
-          </TableRow>
-        </TableHeader>
-        <TableBody>
-          {sortedTeam.map((item) => {
-            const config = statusConfig[item.status] || statusConfig.not_checked_in;
-            const StatusIcon = config.icon;
-
-            return (
-              <TableRow key={item.user.email} className={cn(
-                item.status === 'not_checked_in' && 'bg-slate-50/50'
-              )}>
-                <TableCell>
-                  <div className="flex items-center gap-3">
-                    <Avatar className="w-8 h-8">
-                      <AvatarFallback className="bg-indigo-100 text-indigo-700 text-xs">
-                        {getInitials(item.user.full_name || item.user.email)}
-                      </AvatarFallback>
-                    </Avatar>
-                    <div>
-                      <div className="font-medium text-sm">
-                        {item.user.full_name || item.user.email}
-                      </div>
-                      <div className="text-xs text-slate-500">
-                        {item.user.email}
-                      </div>
-                    </div>
-                  </div>
-                </TableCell>
-                <TableCell>
-                  <Badge className={cn("text-xs flex items-center gap-1 w-fit", 
-                    item.status === 'present' && item.record?.check_in_time && !item.record?.check_out_time 
-                      ? statusConfig.checked_in.color 
-                      : item.status === 'present' && item.record?.check_out_time 
-                      ? statusConfig.checked_out.color 
-                      : config.color
-                  )}>
-                    <StatusIcon className="w-3 h-3" />
-                    {item.status === 'present' && item.record?.check_in_time && !item.record?.check_out_time 
-                      ? 'Checked In' 
-                      : item.status === 'present' && item.record?.check_out_time 
-                      ? 'Checked Out' 
-                      : config.label}
-                  </Badge>
-                </TableCell>
-                <TableCell>
-                  {item.record?.check_in_time ? (
-                    <div className="font-medium text-sm">
-                      {item.record.check_in_time.includes('T') || item.record.check_in_time.includes('Z')
-                        ? format(new Date(item.record.check_in_time), 'HH:mm')
-                        : item.record.check_in_time.split(':').slice(0, 2).join(':')}
-                    </div>
-                  ) : (
-                    <span className="text-slate-400">-</span>
-                  )}
-                </TableCell>
-                <TableCell>
-                  {item.record?.check_out_time ? (
-                    <div className="font-medium text-sm">
-                      {item.record.check_out_time.includes('T') || item.record.check_out_time.includes('Z')
-                        ? format(new Date(item.record.check_out_time), 'HH:mm')
-                        : item.record.check_out_time.split(':').slice(0, 2).join(':')}
-                    </div>
-                  ) : (
-                    <span className="text-slate-400">-</span>
-                  )}
-                </TableCell>
-                <TableCell>
-                  {item.record?.total_hours ? (
-                    <span className="font-medium">{item.record.total_hours}h</span>
-                  ) : (
-                    <span className="text-slate-400">-</span>
-                  )}
-                </TableCell>
-                <TableCell>
-                  <div className="flex gap-1">
-                    {item.record?.is_late && (
-                      <Badge variant="destructive" className="text-[10px]">Late</Badge>
-                    )}
-                    {item.record?.is_early_checkout && (
-                      <Badge variant="warning" className="text-[10px]">Early</Badge>
-                    )}
-                    {!item.record?.is_late && !item.record?.is_early_checkout && item.status !== 'not_checked_in' && (
-                      <span className="text-slate-400 text-xs">-</span>
-                    )}
-                  </div>
-                </TableCell>
-                <TableCell>
-                  {item.record?.location ? (
-                    <span className="text-xs text-slate-600">
-                      ±{Math.round(item.record.location.accuracy || 0)}m
-                    </span>
-                  ) : (
-                    <span className="text-slate-400 text-xs">-</span>
-                  )}
-                </TableCell>
+        <div className="overflow-x-auto scrollbar-thin -webkit-overflow-scrolling-touch">
+          <Table className="min-w-[800px]">
+            <TableHeader>
+              <TableRow>
+                <TableHead className="w-[300px]">Employee</TableHead>
+                <TableHead>Status</TableHead>
+                <TableHead>Check In</TableHead>
+                <TableHead>Check Out</TableHead>
+                <TableHead>Hours</TableHead>
+                <TableHead>Flags</TableHead>
+                <TableHead>Location</TableHead>
               </TableRow>
-            );
-          })}
-          {sortedTeam.length === 0 && (
-            <TableRow>
-              <TableCell colSpan={7} className="text-center text-slate-500 py-8">
-                No team members found
-              </TableCell>
-            </TableRow>
-          )}
-        </TableBody>
-        </Table>
+            </TableHeader>
+            <TableBody>
+              {sortedTeam.map((item) => {
+                const config = statusConfig[item.status] || statusConfig.not_checked_in;
+                const StatusIcon = config.icon;
+
+                return (
+                  <TableRow key={item.user.email} className={cn(
+                    item.status === 'not_checked_in' && 'bg-slate-50/50'
+                  )}>
+                    <TableCell>
+                      <div className="flex items-center gap-3">
+                        <Avatar className="w-8 h-8">
+                          <AvatarFallback className="bg-indigo-100 text-indigo-700 text-xs">
+                            {getInitials(item.user.full_name || item.user.email)}
+                          </AvatarFallback>
+                        </Avatar>
+                        <div>
+                          <div className="font-medium text-sm">
+                            {item.user.full_name || item.user.email}
+                          </div>
+                          <div className="text-xs text-slate-500">
+                            {item.user.email}
+                          </div>
+                        </div>
+                      </div>
+                    </TableCell>
+                    <TableCell>
+                      <Badge className={cn("text-xs flex items-center gap-1 w-fit",
+                        item.status === 'present' && item.record?.check_in && !item.record?.check_out
+                          ? statusConfig.checked_in.color
+                          : item.status === 'present' && item.record?.check_out
+                            ? statusConfig.checked_out.color
+                            : config.color
+                      )}>
+                        <StatusIcon className="w-3 h-3" />
+                        {item.status === 'present' && item.record?.check_in && !item.record?.check_out
+                          ? 'Checked In'
+                          : item.status === 'present' && item.record?.check_out
+                            ? 'Checked Out'
+                            : config.label}
+                      </Badge>
+                    </TableCell>
+                    <TableCell>
+                      {item.record?.check_in ? (
+                        <div className="font-medium text-sm">
+                          {item.record.check_in.includes('T') || item.record.check_in.includes('Z')
+                            ? format(new Date(item.record.check_in), 'HH:mm')
+                            : item.record.check_in.split(':').slice(0, 2).join(':')}
+                        </div>
+                      ) : (
+                        <span className="text-slate-400">-</span>
+                      )}
+                    </TableCell>
+                    <TableCell>
+                      {item.record?.check_out ? (
+                        <div className="font-medium text-sm">
+                          {item.record.check_out.includes('T') || item.record.check_out.includes('Z')
+                            ? format(new Date(item.record.check_out), 'HH:mm')
+                            : item.record.check_out.split(':').slice(0, 2).join(':')}
+                        </div>
+                      ) : (
+                        <span className="text-slate-400">-</span>
+                      )}
+                    </TableCell>
+                    <TableCell>
+                      {item.record?.total_hours ? (
+                        <span className="font-medium">{item.record.total_hours}h</span>
+                      ) : (
+                        <span className="text-slate-400">-</span>
+                      )}
+                    </TableCell>
+                    <TableCell>
+                      <div className="flex gap-1">
+                        {item.record?.is_late && (
+                          <Badge variant="destructive" className="text-[10px]">Late</Badge>
+                        )}
+                        {item.record?.is_early_checkout && (
+                          <Badge variant="warning" className="text-[10px]">Early</Badge>
+                        )}
+                        {!item.record?.is_late && !item.record?.is_early_checkout && item.status !== 'not_checked_in' && (
+                          <span className="text-slate-400 text-xs">-</span>
+                        )}
+                      </div>
+                    </TableCell>
+                    <TableCell>
+                      {item.record?.location ? (
+                        <span className="text-xs text-slate-600">
+                          ±{Math.round(item.record.location.accuracy || 0)}m
+                        </span>
+                      ) : (
+                        <span className="text-slate-400 text-xs">-</span>
+                      )}
+                    </TableCell>
+                  </TableRow>
+                );
+              })}
+              {sortedTeam.length === 0 && (
+                <TableRow>
+                  <TableCell colSpan={7} className="text-center text-slate-500 py-8">
+                    No team members found
+                  </TableCell>
+                </TableRow>
+              )}
+            </TableBody>
+          </Table>
         </div>
-        </div>
+      </div>
     </div>
   );
 }

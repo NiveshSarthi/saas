@@ -10,10 +10,12 @@ import { format, startOfMonth, endOfMonth } from 'date-fns';
 import { DollarSign, Download, RefreshCw, Lock, Unlock, TrendingUp, AlertCircle } from 'lucide-react';
 import { toast } from 'sonner';
 
-export default function EnhancedSalaryReport({ isOpen, onClose, selectedMonth, allUsers }) {
+export default function EnhancedSalaryReport({ isOpen, onClose, selectedMonth = new Date(), allUsers = [] }) {
   const [syncing, setSyncing] = useState(false);
-  
-  const monthStr = format(selectedMonth, 'yyyy-MM');
+
+  // Safety check for date
+  const safeMonth = selectedMonth instanceof Date && !isNaN(selectedMonth) ? selectedMonth : new Date();
+  const monthStr = format(safeMonth, 'yyyy-MM');
 
   // Auto-sync on mount
   React.useEffect(() => {
@@ -45,13 +47,13 @@ export default function EnhancedSalaryReport({ isOpen, onClose, selectedMonth, a
   // Calculate summary per employee
   const employeeSummary = React.useMemo(() => {
     const summary = {};
-    
+
     workDays.forEach(wd => {
       if (!summary[wd.user_email]) {
         // Find user from allUsers to get proper name
         const user = allUsers.find(u => u.email === wd.user_email);
         const userName = user?.full_name || wd.user_name || wd.user_email;
-        
+
         summary[wd.user_email] = {
           user_email: wd.user_email,
           user_name: userName,
@@ -68,16 +70,16 @@ export default function EnhancedSalaryReport({ isOpen, onClose, selectedMonth, a
           per_day_rate: wd.salary_unit_value || 0
         };
       }
-      
+
       const emp = summary[wd.user_email];
       emp.total_days++;
       emp.total_hours += wd.work_hours || 0;
       emp.total_earned += wd.salary_earned || 0;
       emp.total_deducted += wd.salary_deducted || 0;
       emp.net_payable += wd.final_payable || 0;
-      
+
       if (wd.late_minutes > 0) emp.late_count++;
-      
+
       if (wd.leave_status === 'approved') {
         emp.leave_days++;
       } else if (wd.attendance_status === 'present' || wd.attendance_status === 'holiday' || wd.attendance_status === 'weekoff') {
@@ -89,7 +91,7 @@ export default function EnhancedSalaryReport({ isOpen, onClose, selectedMonth, a
         emp.present_days += 0.5; // Half days count as 0.5 present
       }
     });
-    
+
     return Object.values(summary);
   }, [workDays, allUsers]);
 
@@ -97,7 +99,7 @@ export default function EnhancedSalaryReport({ isOpen, onClose, selectedMonth, a
 
   const handleGeneratePDF = () => {
     const doc = new jsPDF();
-    
+
     // Header
     doc.setFillColor(79, 70, 229);
     doc.rect(0, 0, 210, 40, 'F');
@@ -107,22 +109,22 @@ export default function EnhancedSalaryReport({ isOpen, onClose, selectedMonth, a
     doc.text('SALARY REPORT', 105, 20, { align: 'center' });
     doc.setFontSize(14);
     doc.text(format(selectedMonth, 'MMMM yyyy'), 105, 30, { align: 'center' });
-    
+
     // Summary
     doc.setTextColor(0, 0, 0);
     doc.setFontSize(12);
     doc.setFont(undefined, 'bold');
     doc.text('Summary', 14, 50);
-    
+
     const totalPayable = employeeSummary.reduce((sum, e) => sum + e.net_payable, 0);
     const totalDeducted = employeeSummary.reduce((sum, e) => sum + e.total_deducted, 0);
-    
+
     doc.setFont(undefined, 'normal');
     doc.setFontSize(10);
     doc.text(`Total Employees: ${employeeSummary.length}`, 14, 58);
     doc.text(`Total Payable: ₹${totalPayable.toFixed(2)}`, 14, 64);
     doc.text(`Total Deductions: ₹${totalDeducted.toFixed(2)}`, 14, 70);
-    
+
     // Table
     let y = 85;
     doc.setFont(undefined, 'bold');
@@ -132,26 +134,26 @@ export default function EnhancedSalaryReport({ isOpen, onClose, selectedMonth, a
     doc.text('Leave', 130, y);
     doc.text('Earned', 155, y);
     doc.text('Net', 180, y);
-    
+
     y += 7;
     doc.setFont(undefined, 'normal');
-    
+
     employeeSummary.forEach(emp => {
       if (y > 280) {
         doc.addPage();
         y = 20;
       }
-      
+
       doc.text(emp.user_name.substring(0, 20), 14, y);
       doc.text(String(emp.present_days), 80, y);
       doc.text(String(emp.absent_days), 105, y);
       doc.text(String(emp.leave_days), 130, y);
       doc.text(`₹${emp.total_earned.toFixed(0)}`, 155, y);
       doc.text(`₹${emp.net_payable.toFixed(0)}`, 180, y);
-      
+
       y += 7;
     });
-    
+
     doc.save(`salary-report-${monthStr}.pdf`);
     toast.success('PDF generated');
   };

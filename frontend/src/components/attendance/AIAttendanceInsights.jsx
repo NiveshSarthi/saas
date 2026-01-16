@@ -4,12 +4,12 @@ import { useQuery } from '@tanstack/react-query';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { 
-  Brain, 
-  TrendingUp, 
-  AlertTriangle, 
-  Users, 
-  Clock, 
+import {
+  Brain,
+  TrendingUp,
+  AlertTriangle,
+  Users,
+  Clock,
   Calendar,
   Sparkles,
   RefreshCw,
@@ -18,25 +18,28 @@ import {
 } from 'lucide-react';
 import { format, startOfMonth, endOfMonth } from 'date-fns';
 
-export default function AIAttendanceInsights({ records, selectedMonth, allUsers, isAdmin }) {
+export default function AIAttendanceInsights({ records = [], selectedMonth = new Date(), allUsers = [], isAdmin }) {
   const [analyzing, setAnalyzing] = useState(false);
 
+  // Ensure we have a valid date object
+  const safeMonth = selectedMonth instanceof Date && !isNaN(selectedMonth) ? selectedMonth : new Date();
+
   const { data: insights, refetch, isLoading } = useQuery({
-    queryKey: ['ai-attendance-insights', format(selectedMonth, 'yyyy-MM')],
+    queryKey: ['ai-attendance-insights', format(safeMonth, 'yyyy-MM')],
     queryFn: async () => {
       setAnalyzing(true);
       try {
         // Prepare data for analysis
-        const monthStart = format(startOfMonth(selectedMonth), 'yyyy-MM-dd');
-        const monthEnd = format(endOfMonth(selectedMonth), 'yyyy-MM-dd');
-        
+        const monthStart = format(startOfMonth(safeMonth), 'yyyy-MM-dd');
+        const monthEnd = format(endOfMonth(safeMonth), 'yyyy-MM-dd');
+
         // Calculate statistics
         const totalRecords = records.length;
         const lateArrivals = records.filter(r => r.is_late).length;
         const earlyCheckouts = records.filter(r => r.is_early_checkout).length;
         const absentCount = records.filter(r => r.status === 'absent').length;
         const leaveCount = records.filter(r => r.status === 'leave' || r.status === 'sick_leave' || r.status === 'casual_leave').length;
-        
+
         // User-level analysis
         const userStats = {};
         records.forEach(record => {
@@ -53,10 +56,10 @@ export default function AIAttendanceInsights({ records, selectedMonth, allUsers,
               leaveDays: 0
             };
           }
-          
+
           const user = userStats[record.user_email];
           user.totalDays++;
-          
+
           if (record.status === 'present' || record.status === 'checked_out') {
             user.presentDays++;
           }
@@ -78,16 +81,16 @@ export default function AIAttendanceInsights({ records, selectedMonth, allUsers,
         });
 
         const userArray = Object.values(userStats);
-        
+
         // Identify concerning patterns
         const frequentLateArrivers = userArray
           .filter(u => u.lateDays >= 3)
           .map(u => ({ name: u.name, lateDays: u.lateDays }));
-        
+
         const frequentAbsentees = userArray
           .filter(u => u.absentDays >= 2)
           .map(u => ({ name: u.name, absentDays: u.absentDays }));
-        
+
         const lowWorkHours = userArray
           .filter(u => u.presentDays > 0 && (u.totalHours / u.presentDays) < 7)
           .map(u => ({ name: u.name, avgHours: (u.totalHours / u.presentDays).toFixed(1) }));
