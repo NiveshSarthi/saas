@@ -8,25 +8,28 @@ import { base44 } from '@/api/base44Client';
 import { toast } from 'sonner';
 import { format } from 'date-fns';
 
-export default function BulkMarkWeekoffDialog({ isOpen, onClose, allUsers, selectedMonth }) {
+export default function BulkMarkWeekoffDialog({ isOpen, onClose, allUsers = [], selectedMonth = new Date() }) {
   const [selectedDates, setSelectedDates] = useState([]);
   const [selectedUser, setSelectedUser] = useState('all');
   const queryClient = useQueryClient();
 
+  // Safety check for date
+  const safeMonth = selectedMonth instanceof Date && !isNaN(selectedMonth) ? selectedMonth : new Date();
+
   const markWeekoffMutation = useMutation({
     mutationFn: async ({ dates, userEmail }) => {
-      const users = userEmail === 'all' ? allUsers.map(u => u.email) : [userEmail];
-      
+      const users = userEmail === 'all' ? (allUsers || []).map(u => u.email) : [userEmail];
+
       for (const user of users) {
         for (const date of dates) {
           const dateStr = format(date, 'yyyy-MM-dd');
-          
+
           // Check if record exists
           const existing = await base44.entities.Attendance.filter({
             user_email: user,
             date: dateStr
           });
-          
+
           if (existing.length > 0) {
             // Update existing
             await base44.entities.Attendance.update(existing[0].id, {
@@ -63,7 +66,7 @@ export default function BulkMarkWeekoffDialog({ isOpen, onClose, allUsers, selec
       toast.error('Please select at least one date');
       return;
     }
-    
+
     markWeekoffMutation.mutate({
       dates: selectedDates,
       userEmail: selectedUser
@@ -76,7 +79,7 @@ export default function BulkMarkWeekoffDialog({ isOpen, onClose, allUsers, selec
         <DialogHeader>
           <DialogTitle>Mark Weekoffs Manually</DialogTitle>
         </DialogHeader>
-        
+
         <div className="space-y-6">
           <div>
             <label className="text-sm font-semibold text-slate-700 mb-2 block">
@@ -88,7 +91,7 @@ export default function BulkMarkWeekoffDialog({ isOpen, onClose, allUsers, selec
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="all">All Employees</SelectItem>
-                {allUsers.map(u => (
+                {(allUsers || []).map(u => (
                   <SelectItem key={u.email} value={u.email}>
                     {u.full_name || u.email}
                   </SelectItem>
@@ -105,7 +108,7 @@ export default function BulkMarkWeekoffDialog({ isOpen, onClose, allUsers, selec
               mode="multiple"
               selected={selectedDates}
               onSelect={setSelectedDates}
-              month={selectedMonth}
+              month={safeMonth}
               className="rounded-md border"
             />
             {selectedDates.length > 0 && (
@@ -119,7 +122,7 @@ export default function BulkMarkWeekoffDialog({ isOpen, onClose, allUsers, selec
             <Button variant="outline" onClick={onClose}>
               Cancel
             </Button>
-            <Button 
+            <Button
               onClick={handleMarkWeekoff}
               disabled={markWeekoffMutation.isPending}
               className="bg-orange-600 hover:bg-orange-700"

@@ -2,8 +2,8 @@ import React, { useMemo } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { 
-  Users, UserCheck, UserX, Clock, Coffee, AlertTriangle, 
+import {
+  Users, UserCheck, UserX, Clock, Coffee, AlertTriangle,
   Home, Calendar, TrendingUp, Timer, Award, Target, Download
 } from 'lucide-react';
 import { format } from 'date-fns';
@@ -11,67 +11,76 @@ import { Progress } from '@/components/ui/progress';
 import { base44 } from '@/api/base44Client';
 import { toast } from 'sonner';
 
-export default function DailyAttendanceReport({ 
-  records, 
-  allUsers, 
-  selectedDate,
+export default function DailyAttendanceReport({
+  records = [],
+  allUsers = [],
+  selectedDate = new Date(),
   departments = []
 }) {
   const metrics = useMemo(() => {
-    const total = allUsers.length;
-    const present = records.filter(r => 
+    // Safety check just in case arrays are null/undefined despite defaults
+    const safeRecords = records || [];
+    const safeUsers = allUsers || [];
+    const safeDepts = departments || [];
+
+    const total = safeUsers.length;
+    const present = safeRecords.filter(r =>
       ['present', 'checked_out', 'work_from_home'].includes(r.status)
     ).length;
-    const absent = records.filter(r => r.status === 'absent').length;
-    const onLeave = records.filter(r => 
+    const absent = safeRecords.filter(r => r.status === 'absent').length;
+    const onLeave = safeRecords.filter(r =>
       ['leave', 'sick_leave', 'casual_leave'].includes(r.status)
     ).length;
-    const late = records.filter(r => r.is_late).length;
-    const earlyCheckout = records.filter(r => r.is_early_checkout).length;
-    const wfh = records.filter(r => r.status === 'work_from_home').length;
-    const halfDay = records.filter(r => r.status === 'half_day').length;
-    const overtime = records.filter(r => (r.total_hours || 0) > 9).reduce((sum, r) => 
+    const late = safeRecords.filter(r => r.is_late).length;
+    const earlyCheckout = safeRecords.filter(r => r.is_early_checkout).length;
+    const wfh = safeRecords.filter(r => r.status === 'work_from_home').length;
+    const halfDay = safeRecords.filter(r => r.status === 'half_day').length;
+    const overtime = safeRecords.filter(r => (r.total_hours || 0) > 9).reduce((sum, r) =>
       sum + Math.max(0, (r.total_hours || 0) - 9), 0
     ).toFixed(1);
-    const missingPunches = records.filter(r => 
-      r.status === 'checked_in' || !r.check_out_time
+    const missingPunches = safeRecords.filter(r =>
+      r.status === 'checked_in' || !r.check_out
     ).length;
-    
-    const avgHours = records.length > 0 
-      ? (records.reduce((sum, r) => sum + (r.total_hours || 0), 0) / records.length).toFixed(1)
+
+    const avgHours = safeRecords.length > 0
+      ? (safeRecords.reduce((sum, r) => sum + (r.total_hours || 0), 0) / safeRecords.length).toFixed(1)
       : 0;
-    
+
     const attendanceRate = total > 0 ? ((present / total) * 100).toFixed(1) : 0;
     const punctualityRate = present > 0 ? (((present - late) / present) * 100).toFixed(1) : 0;
 
     // Department-wise
     const deptStats = {};
-    departments.forEach(dept => {
-      const deptUsers = allUsers.filter(u => u.department_id === dept.id);
-      const deptRecords = records.filter(r => 
+    safeDepts.forEach(dept => {
+      const deptUsers = safeUsers.filter(u => u.department_id === dept.id);
+      const deptRecords = safeRecords.filter(r =>
         deptUsers.some(u => u.email === r.user_email)
       );
-      const deptPresent = deptRecords.filter(r => 
-        ['present', 'checked_out', 'work_from_home'].includes(r.status)
+      const deptPresent = deptRecords.filter(r =>
+        ['present', 'checked_out'].includes(r.status)
       ).length;
-      
+
       deptStats[dept.name] = {
         total: deptUsers.length,
         present: deptPresent,
-        percentage: deptUsers.length > 0 
+        percentage: deptUsers.length > 0
           ? ((deptPresent / deptUsers.length) * 100).toFixed(1)
           : 0
       };
     });
 
     // Late arrivals list
-    const lateArrivals = records
+    const lateArrivals = safeRecords
       .filter(r => r.is_late)
       .map(r => {
-        const user = allUsers.find(u => u.email === r.user_email);
+        const user = safeUsers.find(u => u.email === r.user_email);
         return {
           name: user?.full_name || r.user_email,
-          checkIn: r.check_in_time,
+          checkIn: r.check_in ? (
+            (r.check_in.includes('T') || r.check_in.includes('Z'))
+              ? format(new Date(r.check_in), 'hh:mm a')
+              : r.check_in
+          ) : '-',
           delay: r.late_minutes || 0
         };
       })
@@ -79,8 +88,8 @@ export default function DailyAttendanceReport({
       .slice(0, 10);
 
     return {
-      total, present, absent, onLeave, late, earlyCheckout, wfh, 
-      halfDay, overtime, missingPunches, avgHours, attendanceRate, 
+      total, present, absent, onLeave, late, earlyCheckout, wfh,
+      halfDay, overtime, missingPunches, avgHours, attendanceRate,
       punctualityRate, deptStats, lateArrivals
     };
   }, [records, allUsers, departments]);
@@ -91,7 +100,7 @@ export default function DailyAttendanceReport({
       const response = await base44.functions.invoke('exportDailyAttendanceReport', {
         date: format(selectedDate, 'yyyy-MM-dd')
       });
-      
+
       const { pdf_base64, filename } = response.data;
       const byteCharacters = atob(pdf_base64);
       const byteNumbers = new Array(byteCharacters.length);
@@ -115,66 +124,66 @@ export default function DailyAttendanceReport({
   };
 
   const statusCards = [
-    { 
-      label: 'Total Employees', 
-      value: metrics.total, 
-      icon: Users, 
+    {
+      label: 'Total Employees',
+      value: metrics.total,
+      icon: Users,
       color: 'from-blue-500 to-indigo-600',
       bgColor: 'bg-blue-50',
       textColor: 'text-blue-700'
     },
-    { 
-      label: 'Present', 
-      value: metrics.present, 
-      icon: UserCheck, 
+    {
+      label: 'Present',
+      value: metrics.present,
+      icon: UserCheck,
       color: 'from-green-500 to-emerald-600',
       bgColor: 'bg-green-50',
       textColor: 'text-green-700'
     },
-    { 
-      label: 'Absent', 
-      value: metrics.absent, 
-      icon: UserX, 
+    {
+      label: 'Absent',
+      value: metrics.absent,
+      icon: UserX,
       color: 'from-red-500 to-rose-600',
       bgColor: 'bg-red-50',
       textColor: 'text-red-700'
     },
-    { 
-      label: 'On Leave', 
-      value: metrics.onLeave, 
-      icon: Calendar, 
+    {
+      label: 'On Leave',
+      value: metrics.onLeave,
+      icon: Calendar,
       color: 'from-purple-500 to-violet-600',
       bgColor: 'bg-purple-50',
       textColor: 'text-purple-700'
     },
-    { 
-      label: 'Late Arrivals', 
-      value: metrics.late, 
-      icon: AlertTriangle, 
+    {
+      label: 'Late Arrivals',
+      value: metrics.late,
+      icon: AlertTriangle,
       color: 'from-orange-500 to-amber-600',
       bgColor: 'bg-orange-50',
       textColor: 'text-orange-700'
     },
-    { 
-      label: 'Early Checkouts', 
-      value: metrics.earlyCheckout, 
-      icon: Clock, 
+    {
+      label: 'Early Checkouts',
+      value: metrics.earlyCheckout,
+      icon: Clock,
       color: 'from-yellow-500 to-amber-600',
       bgColor: 'bg-yellow-50',
       textColor: 'text-yellow-700'
     },
-    { 
-      label: 'Work From Home', 
-      value: metrics.wfh, 
-      icon: Home, 
+    {
+      label: 'Work From Home',
+      value: metrics.wfh,
+      icon: Home,
       color: 'from-cyan-500 to-blue-600',
       bgColor: 'bg-cyan-50',
       textColor: 'text-cyan-700'
     },
-    { 
-      label: 'Half Day', 
-      value: metrics.halfDay, 
-      icon: Coffee, 
+    {
+      label: 'Half Day',
+      value: metrics.halfDay,
+      icon: Coffee,
       color: 'from-pink-500 to-rose-600',
       bgColor: 'bg-pink-50',
       textColor: 'text-pink-700'
@@ -291,17 +300,16 @@ export default function DailyAttendanceReport({
                       <span className="text-sm text-slate-600">
                         {stats.present} / {stats.total}
                       </span>
-                      <Badge className={`${
-                        stats.percentage >= 90 ? 'bg-green-500' :
+                      <Badge className={`${stats.percentage >= 90 ? 'bg-green-500' :
                         stats.percentage >= 75 ? 'bg-yellow-500' :
-                        'bg-red-500'
-                      } text-white font-bold`}>
+                          'bg-red-500'
+                        } text-white font-bold`}>
                         {stats.percentage}%
                       </Badge>
                     </div>
                   </div>
-                  <Progress 
-                    value={parseFloat(stats.percentage)} 
+                  <Progress
+                    value={parseFloat(stats.percentage)}
                     className="h-2"
                   />
                 </div>

@@ -3,33 +3,37 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { UserCheck, UserX, Clock, TrendingUp } from 'lucide-react';
 import { startOfMonth, endOfMonth, eachDayOfInterval } from 'date-fns';
 
-export default function AttendanceStats({ records, selectedMonth, isAdmin, allUsers, selectedUser, approvedLeaves = [] }) {
+export default function AttendanceStats({ records = [], selectedMonth, isAdmin, allUsers, selectedUser, approvedLeaves = [] }) {
+  if (!selectedMonth) return null;
+
   const monthStart = startOfMonth(selectedMonth);
   const monthEnd = endOfMonth(selectedMonth);
   const allDaysInMonth = eachDayOfInterval({ start: monthStart, end: monthEnd });
-  
+
   // Count leave days from approved leave requests
   let leaveDaysCount = 0;
-  approvedLeaves.forEach(leave => {
+  (approvedLeaves || []).forEach(leave => {
+    if (!leave || !leave.start_date || !leave.end_date) return;
+
     const leaveStart = new Date(leave.start_date);
     const leaveEnd = new Date(leave.end_date);
-    
+
     allDaysInMonth.forEach(day => {
       if (day >= leaveStart && day <= leaveEnd) {
         leaveDaysCount++;
       }
     });
   });
-  
-  const presentDays = records.filter(r => 
-    r.status === 'present' || 
-    r.status === 'checked_out' || 
+
+  const presentDays = (records || []).filter(r =>
+    r.status === 'present' ||
+    r.status === 'checked_out' ||
     r.status === 'checked_in' ||
     r.status === 'work_from_home'
   ).length;
-  const absentDays = records.filter(r => r.status === 'absent').length;
+  const absentDays = (records || []).filter(r => r.status === 'absent').length;
   const leaveDays = leaveDaysCount;
-  
+
   const totalDays = presentDays + absentDays + leaveDays;
   const attendanceRate = totalDays > 0 ? ((presentDays / totalDays) * 100).toFixed(1) : 0;
 

@@ -34,7 +34,7 @@ export default function CheckInOutWidget({ user, todayRecord, onUpdate }) {
     else if (ua.includes("Chrome")) browser = "Chrome";
     else if (ua.includes("Safari")) browser = "Safari";
     else if (ua.includes("Edge")) browser = "Edge";
-    
+
     return `${browser} - ${navigator.platform}`;
   };
 
@@ -84,22 +84,22 @@ export default function CheckInOutWidget({ user, todayRecord, onUpdate }) {
 
   const calculateDistance = (lat1, lon1, lat2, lon2) => {
     const R = 6371e3;
-    const φ1 = lat1 * Math.PI/180;
-    const φ2 = lat2 * Math.PI/180;
-    const Δφ = (lat2-lat1) * Math.PI/180;
-    const Δλ = (lon2-lon1) * Math.PI/180;
+    const φ1 = lat1 * Math.PI / 180;
+    const φ2 = lat2 * Math.PI / 180;
+    const Δφ = (lat2 - lat1) * Math.PI / 180;
+    const Δλ = (lon2 - lon1) * Math.PI / 180;
 
-    const a = Math.sin(Δφ/2) * Math.sin(Δφ/2) +
-            Math.cos(φ1) * Math.cos(φ2) *
-            Math.sin(Δλ/2) * Math.sin(Δλ/2);
-    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+    const a = Math.sin(Δφ / 2) * Math.sin(Δφ / 2) +
+      Math.cos(φ1) * Math.cos(φ2) *
+      Math.sin(Δλ / 2) * Math.sin(Δλ / 2);
+    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
 
     return R * c;
   };
 
   const isWorkDay = (date, settings) => {
     if (!settings) return true;
-    
+
     const dayOfWeek = date.getDay();
     if (settings.week_off_days && settings.week_off_days.includes(dayOfWeek)) {
       return false;
@@ -115,34 +115,34 @@ export default function CheckInOutWidget({ user, todayRecord, onUpdate }) {
 
   const isLateCheckIn = (checkInTime, settings) => {
     if (!settings || !settings.work_start_time) return false;
-    
+
     const [hours, minutes] = settings.work_start_time.split(':').map(Number);
     const workStartTime = new Date(checkInTime);
     workStartTime.setHours(hours, minutes, 0, 0);
-    
+
     const lateThreshold = settings.late_threshold_minutes || 1;
     const lateTime = new Date(workStartTime.getTime() + lateThreshold * 60000);
-    
+
     return checkInTime > lateTime;
   };
 
   const checkInMutation = useMutation({
     mutationFn: async () => {
       const now = new Date();
-      
+
       if (settings && !isWorkDay(now, settings)) {
         throw new Error('Today is a week-off or holiday. Attendance not required.');
       }
 
-      if (todayRecord && todayRecord.check_in_time && settings && !settings.allow_multiple_checkins) {
+      if (todayRecord && todayRecord.check_in && settings && !settings.allow_multiple_checkins) {
         throw new Error('You have already checked in today');
       }
 
       const today = format(now, 'yyyy-MM-dd');
-      
+
       let location = null;
       let ip = null;
-      
+
       try {
         location = await getLocation();
         if (!location || !location.latitude || !location.longitude) {
@@ -153,7 +153,7 @@ export default function CheckInOutWidget({ user, todayRecord, onUpdate }) {
         toast.error(error.message);
         throw error;
       }
-      
+
       ip = await getIPAddress();
 
       if (settings && settings.enable_geofencing) {
@@ -177,7 +177,7 @@ export default function CheckInOutWidget({ user, todayRecord, onUpdate }) {
         department_id: user.department_id,
         role_id: user.role_id,
         date: today,
-        check_in_time: now.toISOString(),
+        check_in: now.toISOString(),
         status: 'checked_in',
         source: 'web',
         ip_address: ip,
@@ -214,21 +214,29 @@ export default function CheckInOutWidget({ user, todayRecord, onUpdate }) {
 
   const checkOutMutation = useMutation({
     mutationFn: async () => {
-      if (!todayRecord || !todayRecord.check_in_time) {
+      // Allow checkout if record exists and status implies we are checked in, even if time is missing due to a glitch
+      if (!todayRecord) {
         throw new Error('Please check in first');
       }
 
       const now = new Date();
-      const checkInTime = new Date(todayRecord.check_in_time);
-      const diffMs = now - checkInTime;
-      const totalHours = Math.round((diffMs / (1000 * 60 * 60)) * 100) / 100;
+      let totalHours = 0;
 
-      const isEarlyCheckout = settings && settings.early_checkout_threshold_hours 
-        ? totalHours < settings.early_checkout_threshold_hours 
+      // Only calculate duration if we have a valid check-in time
+      if (todayRecord.check_in) {
+        const checkInTime = new Date(todayRecord.check_in);
+        if (!isNaN(checkInTime.getTime())) {
+          const diffMs = now - checkInTime;
+          totalHours = Math.round((diffMs / (1000 * 60 * 60)) * 100) / 100;
+        }
+      }
+
+      const isEarlyCheckout = settings && settings.early_checkout_threshold_hours
+        ? totalHours < settings.early_checkout_threshold_hours
         : false;
 
       await base44.entities.Attendance.update(todayRecord.id, {
-        check_out_time: now.toISOString(),
+        check_out: now.toISOString(),
         total_hours: totalHours,
         status: 'present',
         is_early_checkout: isEarlyCheckout
@@ -273,141 +281,121 @@ export default function CheckInOutWidget({ user, todayRecord, onUpdate }) {
   };
 
   const canCheckIn = !todayRecord || todayRecord.status === 'not_checked_in' || (settings && settings.allow_multiple_checkins);
-  const canCheckOut = todayRecord && (todayRecord.status === 'checked_in' && !todayRecord.check_out_time);
+  const canCheckOut = todayRecord && (todayRecord.status === 'checked_in' && !todayRecord.check_out);
   const isWeekOff = settings && !isWorkDay(new Date(), settings);
 
   return (
-    <Card className="border-0 shadow-none bg-transparent">
-      <CardHeader className="pb-4">
-        <CardTitle className="flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <div className="p-3 bg-gradient-to-br from-indigo-500 to-purple-600 rounded-2xl shadow-lg">
-              <Clock className="w-6 h-6 text-white" />
-            </div>
-            <div>
-              <span className="text-2xl font-bold bg-gradient-to-r from-indigo-600 to-purple-600 bg-clip-text text-transparent">Today's Attendance</span>
-              <p className="text-sm text-slate-500 mt-0.5">Track your presence</p>
-            </div>
-          </div>
-          {getStatusBadge()}
-        </CardTitle>
-      </CardHeader>
-      <CardContent className="space-y-6">
-        
-        {isWeekOff && (
-          <div className="flex items-center gap-2 p-3 bg-amber-50 border border-amber-200 rounded-lg">
-            <AlertTriangle className="w-5 h-5 text-amber-600" />
-            <span className="text-sm text-amber-800 font-medium">
-              Today is a week-off/holiday. Attendance not required.
-            </span>
-          </div>
-        )}
+    <Card className="border-0 shadow-lg bg-gradient-to-r from-indigo-600 to-purple-700 text-white overflow-hidden relative">
+      <div className="absolute inset-0 bg-[url('data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iNjAiIGhlaWdodD0iNjAiIHhtbG5zPSJodHRwOi8vd3d3LnczLm9yZy8yMDAwL3N2ZyI+PGRlZnM+PHBhdHRlcm4gaWQ9ImdyaWQiIHdpZHRoPSI2MCIgaGVpZ2h0PSI2MCIgcGF0dGVyblVuaXRzPSJ1c2VyU3BhY2VPblVzZSI+PHBhdGggZD0iTSAxMCAwIEwgMCAwIDAgMTAiIGZpbGw9Im5vbmUiIHN0cm9rZT0id2hpdGUiIHN0cm9rZS1vcGFjaXR5PSIwLjEiIHN0cm9rZS13aWR0aD0iMSIvPjwvcGF0dGVybj48L2RlZnM+PHJlY3Qgd2lkdGg9IjEwMCUiIGhlaWdodD0iMTAwJSIgZmlsbD0idXJsKCNncmlkKSIvPjwvc3ZnPg==')] opacity-10"></div>
 
-        {/* Current Date & Time - Hero Style */}
-        <div className="text-center p-8 bg-gradient-to-br from-indigo-500 to-purple-600 rounded-3xl shadow-2xl relative overflow-hidden">
-          <div className="absolute inset-0 bg-[url('data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iNjAiIGhlaWdodD0iNjAiIHhtbG5zPSJodHRwOi8vd3d3LnczLm9yZy8yMDAwL3N2ZyI+PGRlZnM+PHBhdHRlcm4gaWQ9ImdyaWQiIHdpZHRoPSI2MCIgaGVpZ2h0PSI2MCIgcGF0dGVyblVuaXRzPSJ1c2VyU3BhY2VPblVzZSI+PHBhdGggZD0iTSAxMCAwIEwgMCAwIDAgMTAiIGZpbGw9Im5vbmUiIHN0cm9rZT0id2hpdGUiIHN0cm9rZS1vcGFjaXR5PSIwLjEiIHN0cm9rZS13aWR0aD0iMSIvPjwvcGF0dGVybj48L2RlZnM+PHJlY3Qgd2lkdGg9IjEwMCUiIGhlaWdodD0iMTAwJSIgZmlsbD0idXJsKCNncmlkKSIvPjwvc3ZnPg==')] opacity-20"></div>
-          <div className="relative">
-            <div className="text-sm text-white/80 mb-2 font-medium">
+      <div className="relative p-6 lg:p-8 flex flex-col lg:flex-row items-center justify-between gap-8">
+
+        {/* Left: Clock & Date */}
+        <div className="flex items-center gap-6">
+          <div className="p-4 bg-white/10 backdrop-blur-md rounded-2xl border border-white/20 shadow-xl">
+            <Clock className="w-10 h-10 text-white" />
+          </div>
+          <div>
+            <div className="text-sm font-medium text-indigo-100">
               {format(currentTime, 'EEEE, MMMM d, yyyy')}
             </div>
-            <div className="text-5xl font-bold text-white mb-1 tracking-tight">
+            <div className="text-5xl font-bold tracking-tight">
               {format(currentTime, 'hh:mm:ss')}
+              <span className="text-2xl font-medium ml-2 text-indigo-200">{format(currentTime, 'a')}</span>
             </div>
-            <div className="text-lg text-white/90 font-semibold">
-              {format(currentTime, 'a')}
+            <div className="flex items-center gap-2 mt-2">
+              <Badge className={cn("bg-white/20 hover:bg-white/30 text-white border-0", !todayRecord && "animate-pulse")}>
+                {todayRecord ? (todayRecord.status === 'checked_in' ? 'Running' : 'Completed') : 'Not Started'}
+              </Badge>
+              {todayRecord?.location && (
+                <span className="text-xs text-indigo-200 flex items-center gap-1">
+                  <MapPin className="w-3 h-3" /> Location Active
+                </span>
+              )}
             </div>
           </div>
         </div>
 
-        {/* Check-in/out Times - Modern Cards */}
+        {/* Middle: Stats (Only if checked in) */}
         {todayRecord && (
-          <div className="grid grid-cols-2 gap-4">
-            <div className="p-4 bg-gradient-to-br from-green-50 to-emerald-50 rounded-2xl border border-green-200 shadow-sm">
-              <div className="flex items-center gap-2 mb-2">
-                <LogIn className="w-4 h-4 text-green-600" />
-                <div className="text-xs font-semibold text-green-700">Check In</div>
-              </div>
-              <div className="text-xl font-bold text-green-900">
-                {todayRecord.check_in_time ? (
-                  todayRecord.check_in_time.includes('T') || todayRecord.check_in_time.includes('Z')
-                    ? format(new Date(todayRecord.check_in_time), 'hh:mm a')
-                    : todayRecord.check_in_time
-                ) : '-'}
-              </div>
-              {todayRecord.is_late && (
-                <Badge variant="destructive" className="mt-2 text-[10px]">⚠️ Late</Badge>
-              )}
+          <div className="flex flex-wrap items-center gap-4 lg:gap-8 lg:border-l lg:border-white/10 lg:pl-8 w-full lg:w-auto justify-center lg:justify-start bg-indigo-800/20 lg:bg-transparent p-4 lg:p-0 rounded-xl lg:rounded-none">
+            <div className="text-center lg:text-left">
+              <p className="text-xs text-indigo-200 uppercase font-semibold">Check In</p>
+              <p className="text-xl lg:text-2xl font-bold">
+                {(() => {
+                  if (!todayRecord.check_in) return '-';
+                  const d = new Date(todayRecord.check_in);
+                  return !isNaN(d.getTime()) ? format(d, 'hh:mm a') : 'Invalid Time';
+                })()}
+              </p>
             </div>
-            <div className="p-4 bg-gradient-to-br from-red-50 to-orange-50 rounded-2xl border border-red-200 shadow-sm">
-              <div className="flex items-center gap-2 mb-2">
-                <LogOut className="w-4 h-4 text-red-600" />
-                <div className="text-xs font-semibold text-red-700">Check Out</div>
-              </div>
-              <div className="text-xl font-bold text-red-900">
-                {todayRecord.check_out_time ? (
-                  todayRecord.check_out_time.includes('T') || todayRecord.check_out_time.includes('Z')
-                    ? format(new Date(todayRecord.check_out_time), 'hh:mm a')
-                    : todayRecord.check_out_time
-                ) : '-'}
-              </div>
-              {todayRecord.is_early_checkout && (
-                <Badge variant="warning" className="mt-2 text-[10px]">⚡ Early</Badge>
-              )}
+            <div className="w-px h-8 bg-white/20 lg:hidden"></div>
+            <div className="text-center lg:text-left">
+              <p className="text-xs text-indigo-200 uppercase font-semibold">Check Out</p>
+              <p className="text-xl lg:text-2xl font-bold">
+                {(() => {
+                  if (!todayRecord.check_out) return '-';
+                  const d = new Date(todayRecord.check_out);
+                  return !isNaN(d.getTime()) ? format(d, 'hh:mm a') : '-';
+                })()}
+              </p>
             </div>
-          </div>
-        )}
-
-        {/* Total Hours - Highlight Card */}
-        {todayRecord?.total_hours && (
-          <div className="p-6 bg-gradient-to-br from-amber-50 to-yellow-50 rounded-2xl border-2 border-amber-200 shadow-lg relative overflow-hidden">
-            <div className="absolute top-0 right-0 w-24 h-24 bg-amber-200/30 rounded-full -mr-12 -mt-12"></div>
-            <div className="relative">
-              <div className="flex items-center gap-2 mb-2">
-                <Clock className="w-5 h-5 text-amber-600" />
-                <div className="text-sm font-semibold text-amber-700">Total Working Hours</div>
-              </div>
-              <div className="text-4xl font-bold text-amber-900">
-                {todayRecord.total_hours}<span className="text-2xl">h</span>
-              </div>
+            <div className="w-px h-8 bg-white/20 lg:hidden"></div>
+            <div className="text-center lg:text-left">
+              <p className="text-xs text-indigo-200 uppercase font-semibold">Duration</p>
+              <p className="text-xl lg:text-2xl font-bold">
+                {(() => {
+                  const hours = todayRecord.total_hours || 0;
+                  const h = Math.floor(hours);
+                  const m = Math.round((hours - h) * 60);
+                  if (h === 0 && m === 0) return '0h';
+                  return `${h}h ${m}m`;
+                })()}
+              </p>
             </div>
           </div>
         )}
 
-        {/* Action Buttons - Modern Style */}
-        <div className="flex gap-4">
+        {/* Right: Actions */}
+        <div className="flex items-center gap-4 w-full lg:w-auto">
+          {isWeekOff && (
+            <Badge variant="outline" className="text-amber-300 border-amber-300/50 bg-amber-900/20 mr-2">
+              Holiday
+            </Badge>
+          )}
+
           <Button
+            size="lg"
             onClick={() => checkInMutation.mutate()}
             disabled={!canCheckIn || checkInMutation.isPending || gettingLocation}
             className={cn(
-              "flex-1 h-14 rounded-2xl font-semibold shadow-lg transition-all",
-              canCheckIn && "bg-gradient-to-r from-green-500 to-emerald-600 hover:from-green-600 hover:to-emerald-700 hover:shadow-xl hover:scale-105"
+              "flex-1 lg:flex-none h-14 px-8 rounded-xl font-bold text-lg shadow-lg transition-all",
+              canCheckIn
+                ? "bg-white text-indigo-600 hover:bg-indigo-50"
+                : "bg-indigo-900/50 text-indigo-400 cursor-not-allowed"
             )}
           >
-            <LogIn className="w-5 h-5 mr-2" />
-            {gettingLocation ? 'Getting Location...' : 'Check In'}
+            <LogIn className="w-5 h-5 mr-3" />
+            {gettingLocation ? 'Locating...' : 'Check In'}
           </Button>
 
           <Button
+            size="lg"
             onClick={() => checkOutMutation.mutate()}
             disabled={!canCheckOut || checkOutMutation.isPending}
             className={cn(
-              "flex-1 h-14 rounded-2xl font-semibold shadow-lg transition-all",
-              canCheckOut && "bg-gradient-to-r from-red-500 to-orange-600 hover:from-red-600 hover:to-orange-700 hover:shadow-xl hover:scale-105"
+              "flex-1 lg:flex-none h-14 px-8 rounded-xl font-bold text-lg shadow-lg transition-all",
+              canCheckOut
+                ? "bg-orange-500 hover:bg-orange-600 text-white border-2 border-transparent"
+                : "bg-indigo-900/50 text-indigo-400 border-2 border-transparent cursor-not-allowed"
             )}
           >
-            <LogOut className="w-5 h-5 mr-2" />
+            <LogOut className="w-5 h-5 mr-3" />
             Check Out
           </Button>
         </div>
 
-        {/* Location Info */}
-        {todayRecord?.location && (
-          <div className="flex items-center gap-2 text-xs text-slate-500 p-2 bg-white rounded border">
-            <MapPin className="w-3 h-3" />
-            Location tracked (±{Math.round(todayRecord.location.accuracy)}m)
-          </div>
-        )}
-      </CardContent>
+      </div>
     </Card>
   );
 }
