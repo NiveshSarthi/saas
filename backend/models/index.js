@@ -194,8 +194,11 @@ const leadSchema = new mongoose.Schema({
     builder_id: String,
     notes: String,
     fb_lead_id: String,
+
     fb_form_id: String,
+    fb_page_id: String,
     fb_created_time: Date,
+    raw_facebook_data: mongoose.Schema.Types.Mixed, // Store complete field_data from Facebook
     activity_log: [mongoose.Schema.Types.Mixed],
     last_activity_date: Date,
     created_by: String,

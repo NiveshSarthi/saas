@@ -142,10 +142,10 @@ export default function LeadManagement() {
     queryKey: ['leads-management'],
     queryFn: () => base44.entities.Lead.list('-created_date', 5000),
     enabled: !!user,
-    staleTime: 30 * 60 * 1000, // 30 minutes
-    gcTime: 60 * 60 * 1000, // 1 hour
-    retry: false,
-    refetchOnWindowFocus: false,
+    staleTime: 5000,
+    gcTime: 60 * 60 * 1000,
+    refetchInterval: 10000, // Poll every 10 seconds for real-time updates
+    refetchOnWindowFocus: true,
     refetchOnMount: false,
     refetchOnReconnect: false,
   });
@@ -308,8 +308,9 @@ export default function LeadManagement() {
   // Extract form name from notes
   const extractFormName = (notes) => {
     if (!notes) return '-';
-    const match = notes.match(/Form Name: ([^\n]+)/);
-    return match ? match[1] : '-';
+    // Match "Form Name:" (legacy) or "Form:" (new)
+    const match = notes.match(/(?:Form Name|Form): ([^\n]+)/);
+    return match ? match[1].trim() : '-';
   };
 
   // Get unique form names for filter
@@ -391,7 +392,7 @@ export default function LeadManagement() {
 
     // Filter by Facebook page/form
     const matchesPageFilter = selectedPage === 'all' ||
-      (lead.lead_source === 'facebook' && lead.notes?.includes(`Page ID: ${selectedPage}`));
+      (lead.lead_source === 'facebook' && (lead.fb_page_id === selectedPage || lead.notes?.includes(`Page ID: ${selectedPage}`)));
 
     const matchesFormFilter = selectedForm === 'all' ||
       (lead.lead_source === 'facebook' && lead.fb_form_id === selectedForm);
