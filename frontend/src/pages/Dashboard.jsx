@@ -97,12 +97,18 @@ export default function Dashboard() {
     // Get Syndicate project ID
     const syndicateProject = projects.find(p => p.name === 'Syndicate');
 
-    return rawTasks.filter(t =>
-      t.project_id === (syndicateProject?.id || syndicateProject?._id) || // Show all Syndicate project tasks
-      t.reporter_email === user.email ||
-      t.assignee_email === user.email ||
-      (t.assignees && t.assignees.includes(user.email))
-    );
+    return rawTasks.filter(t => {
+      const userEmail = (user.email || '').toLowerCase();
+      const reporterEmail = (t.reporter_email || '').toLowerCase();
+      const assigneeEmail = (t.assignee_email || '').toLowerCase();
+      // Safe check for assignees array with lowercasing
+      const isAssigned = t.assignees && Array.isArray(t.assignees) && t.assignees.some(e => (e || '').toLowerCase() === userEmail);
+
+      return t.project_id === (syndicateProject?.id || syndicateProject?._id) || // Show all Syndicate project tasks
+        reporterEmail === userEmail ||
+        assigneeEmail === userEmail ||
+        isAssigned;
+    });
   }, [rawTasks, user, projects]);
 
   const { data: taskGroups = [], isLoading: groupsLoading } = useQuery({

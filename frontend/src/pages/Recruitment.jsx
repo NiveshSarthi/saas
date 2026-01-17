@@ -18,7 +18,8 @@ import {
   Search,
   Filter,
   UserPlus,
-  Clock
+  Clock,
+  Edit
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -178,6 +179,63 @@ export default function Recruitment() {
       toast.error('Failed to add candidate: ' + error.message);
     },
   });
+
+  // Update candidate details mutation
+  const updateCandidateMutation = useMutation({
+    mutationFn: async ({ id, data }) => {
+      return await base44.entities.Candidate.update(id, data);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['candidates'] });
+      setCandidateDialogOpen(false);
+      setCandidateForm({
+        full_name: '',
+        email: '',
+        phone: '',
+        current_position: '',
+        current_company: '',
+        experience_years: '',
+        skills: '',
+        education: '',
+        expected_salary: '',
+        current_salary: '',
+        location: '',
+        source: 'job_portal',
+        priority: 'medium',
+        tags: '',
+        resume: null
+      });
+      setEditingCandidateId(null);
+      toast.success('Candidate updated successfully');
+    },
+    onError: (error) => {
+      toast.error('Failed to update candidate: ' + error.message);
+    },
+  });
+
+  const [editingCandidateId, setEditingCandidateId] = useState(null);
+
+  const handleEditCandidate = (candidate) => {
+    setCandidateForm({
+      full_name: candidate.full_name || '',
+      email: candidate.email || '',
+      phone: candidate.phone || '',
+      current_position: candidate.current_position || '',
+      current_company: candidate.current_company || '',
+      experience_years: candidate.experience_years || '',
+      skills: candidate.skills ? candidate.skills.join(', ') : '',
+      education: candidate.education ? candidate.education.join('\n') : '',
+      expected_salary: candidate.expected_salary || '',
+      current_salary: candidate.current_salary || '',
+      location: candidate.location || '',
+      source: candidate.source || 'job_portal',
+      priority: candidate.priority || 'medium',
+      tags: candidate.tags ? candidate.tags.join(', ') : '',
+      resume: null // keep null for now, or handle existing file display
+    });
+    setEditingCandidateId(candidate.id);
+    setCandidateDialogOpen(true);
+  };
 
   // Create interview mutation
   const createInterviewMutation = useMutation({
@@ -472,6 +530,14 @@ export default function Recruitment() {
                             <Button
                               variant="outline"
                               size="sm"
+                              onClick={() => handleEditCandidate(candidate)}
+                            >
+                              <Edit className="w-4 h-4 mr-1" />
+                              Edit
+                            </Button>
+                            <Button
+                              variant="outline"
+                              size="sm"
                               onClick={() => {
                                 setInterviewForm(prev => ({ ...prev, candidate_id: candidate.id }));
                                 setInterviewDialogOpen(true);
@@ -548,9 +614,9 @@ export default function Recruitment() {
                         <TableCell>
                           <Badge className={
                             interview.status === 'completed' ? 'bg-green-100 text-green-700' :
-                            interview.status === 'cancelled' ? 'bg-red-100 text-red-700' :
-                            interview.status === 'no_show' ? 'bg-orange-100 text-orange-700' :
-                            'bg-blue-100 text-blue-700'
+                              interview.status === 'cancelled' ? 'bg-red-100 text-red-700' :
+                                interview.status === 'no_show' ? 'bg-orange-100 text-orange-700' :
+                                  'bg-blue-100 text-blue-700'
                           }>
                             {interview.status}
                           </Badge>
@@ -582,18 +648,52 @@ export default function Recruitment() {
       </Tabs>
 
       {/* Add Candidate Dialog */}
-      <Dialog open={candidateDialogOpen} onOpenChange={setCandidateDialogOpen}>
+      <Dialog open={candidateDialogOpen} onOpenChange={(open) => {
+        setCandidateDialogOpen(open);
+        if (!open) {
+          setEditingCandidateId(null);
+          setCandidateForm({
+            full_name: '',
+            email: '',
+            phone: '',
+            current_position: '',
+            current_company: '',
+            experience_years: '',
+            skills: '',
+            education: '',
+            expected_salary: '',
+            current_salary: '',
+            location: '',
+            source: 'job_portal',
+            priority: 'medium',
+            tags: '',
+            resume: null
+          });
+        }
+      }}>
         <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
           <DialogHeader>
-            <DialogTitle>Add New Candidate</DialogTitle>
+            <DialogTitle>{editingCandidateId ? 'Edit Candidate' : 'Add New Candidate'}</DialogTitle>
             <DialogDescription>
-              Enter candidate information and upload their resume
+              {editingCandidateId ? 'Update candidate information' : 'Enter candidate information and upload their resume'}
             </DialogDescription>
           </DialogHeader>
 
           <form onSubmit={(e) => {
             e.preventDefault();
-            createCandidateMutation.mutate(candidateForm);
+            if (editingCandidateId) {
+              // Prepare data for update
+              const updateData = {
+                ...candidateForm,
+                skills: typeof candidateForm.skills === 'string' ? candidateForm.skills.split(',').map(s => s.trim()).filter(s => s) : candidateForm.skills,
+                education: typeof candidateForm.education === 'string' ? candidateForm.education.split('\n').filter(e => e.trim()) : candidateForm.education,
+                tags: typeof candidateForm.tags === 'string' ? candidateForm.tags.split(',').map(t => t.trim()).filter(t => t) : candidateForm.tags,
+              };
+              delete updateData.resume; // don't update file directly via update for now
+              updateCandidateMutation.mutate({ id: editingCandidateId, data: updateData });
+            } else {
+              createCandidateMutation.mutate(candidateForm);
+            }
           }}>
             <div className="space-y-4">
               <div className="grid grid-cols-2 gap-4">
@@ -769,9 +869,9 @@ export default function Recruitment() {
               </Button>
               <Button
                 type="submit"
-                disabled={createCandidateMutation.isPending}
+                disabled={createCandidateMutation.isPending || updateCandidateMutation.isPending}
               >
-                {createCandidateMutation.isPending ? 'Adding...' : 'Add Candidate'}
+                {createCandidateMutation.isPending || updateCandidateMutation.isPending ? 'Saving...' : (editingCandidateId ? 'Update Candidate' : 'Add Candidate')}
               </Button>
             </div>
           </form>

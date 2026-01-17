@@ -671,3 +671,67 @@ const workDaySchema = new mongoose.Schema({
 
 export const AttendanceSettings = mongoose.model('AttendanceSettings', attendanceSettingsSchema);
 export const WorkDay = mongoose.model('WorkDay', workDaySchema);
+
+const candidateSchema = new mongoose.Schema({
+    full_name: { type: String, required: true },
+    email: { type: String, required: true },
+    phone: String,
+    current_position: String,
+    current_company: String,
+    experience_years: Number,
+    skills: [String],
+    education: [String],
+    expected_salary: Number,
+    current_salary: Number,
+    location: String,
+    source: String,
+    priority: { type: String, enum: ['low', 'medium', 'high'], default: 'medium' },
+    tags: [String],
+    resume_url: String,
+    status: {
+        type: String,
+        enum: ['new', 'screening', 'interviewed', 'offered', 'hired', 'rejected'],
+        default: 'new'
+    },
+    created_by: String,
+    assigned_to: String,
+    created_at: { type: Date, default: Date.now },
+    updated_at: { type: Date, default: Date.now }
+});
+
+const interviewSchema = new mongoose.Schema({
+    candidate_id: { type: String, required: true },
+    candidate_name: String,
+    candidate_email: String,
+    interviewer_email: { type: String, required: true },
+    interviewer_name: String,
+    interview_type: { type: String, default: 'technical' },
+    round: { type: Number, default: 1 },
+    scheduled_date: { type: Date, required: true },
+    duration_minutes: { type: Number, default: 60 },
+    notes: String,
+    meeting_link: String,
+    status: {
+        type: String,
+        enum: ['scheduled', 'completed', 'cancelled', 'no_show'],
+        default: 'scheduled'
+    },
+    feedback: String,
+    rating: Number,
+    created_by: String,
+    created_at: { type: Date, default: Date.now },
+    updated_at: { type: Date, default: Date.now }
+});
+
+const candidateActivitySchema = new mongoose.Schema({
+    candidate_id: String,
+    activity_type: String, // status_changed, note_added, interview_scheduled
+    description: String,
+    performed_by: String,
+    metadata: mongoose.Schema.Types.Mixed,
+    created_at: { type: Date, default: Date.now }
+});
+
+export const Candidate = mongoose.model('Candidate', candidateSchema);
+export const Interview = mongoose.model('Interview', interviewSchema);
+export const CandidateActivity = mongoose.model('CandidateActivity', candidateActivitySchema);

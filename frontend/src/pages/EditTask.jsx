@@ -297,7 +297,8 @@ export default function EditTask() {
       ...formData,
       estimated_hours: formData.estimated_hours ? parseFloat(formData.estimated_hours) : null,
       story_points: formData.story_points ? parseInt(formData.story_points) : null,
-      assignee_email: formData.assignees.length > 0 ? formData.assignees[0] : null,
+      assignee_email: formData.assignees.length > 0 ? (formData.assignees[0] || '').toLowerCase() : null,
+      assignees: formData.assignees.map(e => (e || '').toLowerCase()),
     };
     updateTaskMutation.mutate(dataToSubmit);
   };
