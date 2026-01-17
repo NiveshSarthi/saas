@@ -29,7 +29,7 @@ const mockDataReturn = (data) => (req, res) => res.json({ success: true, data })
 // Task & Recurring
 router.post('/invoke/generateRecurringTaskInstances', mockSuccess);
 
-const FB_API_VERSION = 'v21.0';
+
 
 router.post('/invoke/connectFacebookPage', async (req, res) => {
     try {
@@ -177,7 +177,7 @@ router.post('/invoke/connectFacebookAccount', async (req, res) => {
             try {
                 const pageProof = getAppSecretProof(pageData.access_token);
                 const pageProofParam = pageProof ? `&appsecret_proof=${pageProof}` : '';
-                const formsRes = await fetch(`https://graph.facebook.com/${FB_API_VERSION}/${pageData.id}/leadgen_forms?access_token=${pageData.access_token}${pageProofParam}`);
+                const formsRes = await fetch(`https://graph.facebook.com/${FB_API_VERSION}/${pageData.id}/leadgen_forms?access_token=${pageData.access_token}${pageProofParam}&limit=1000`);
                 const formsData = await formsRes.json();
 
                 if (formsData.data) {
@@ -217,7 +217,10 @@ router.post('/invoke/syncFacebookForms', async (req, res) => {
         let newFormsCount = 0;
 
         for (const page of pages) {
-            const fbRes = await fetch(`https://graph.facebook.com/${FB_API_VERSION}/${page.page_id}/leadgen_forms?access_token=${page.access_token}`);
+            const proof = getAppSecretProof(page.access_token);
+            const proofParam = proof ? `&appsecret_proof=${proof}` : '';
+
+            const fbRes = await fetch(`https://graph.facebook.com/${FB_API_VERSION}/${page.page_id}/leadgen_forms?access_token=${page.access_token}${proofParam}&limit=1000`);
             const fbData = await fbRes.json();
 
             console.log(`Syncing forms for ${page.page_name} (${page.page_id}):`, JSON.stringify(fbData, null, 2));
@@ -269,7 +272,10 @@ router.post('/invoke/fetchFacebookLeads', async (req, res) => {
 
                 try {
                     console.log('Fetching leads for form:', form.form_name, form.form_id);
-                    const fbRes = await fetch(`https://graph.facebook.com/${FB_API_VERSION}/${form.form_id}/leads?access_token=${page.access_token}`);
+                    const proof = getAppSecretProof(page.access_token);
+                    const proofParam = proof ? `&appsecret_proof=${proof}` : '';
+
+                    const fbRes = await fetch(`https://graph.facebook.com/${FB_API_VERSION}/${form.form_id}/leads?access_token=${page.access_token}${proofParam}&limit=1000`);
                     const fbData = await fbRes.json();
 
                     console.log('Facebook response:', fbData);
@@ -283,34 +289,55 @@ router.post('/invoke/fetchFacebookLeads', async (req, res) => {
                     if (fbData.data) {
                         console.log('Leads found:', fbData.data.length);
                         for (const fbLead of fbData.data) {
-                            // Check if lead already exists
-                            const existingLead = await Lead.findOne({ fb_lead_id: fbLead.id });
-                            if (existingLead) {
-                                duplicatesSkipped++;
-                                continue;
-                            }
-
-                            // Extract fields
-                            const fieldData = {};
-                            fbLead.field_data.forEach(field => {
-                                fieldData[field.name] = field.values[0];
-                            });
-
-                            const leadData = {
-                                lead_name: fieldData.full_name || fieldData.first_name + ' ' + (fieldData.last_name || ''),
-                                email: fieldData.email,
-                                phone: fieldData.phone_number || fieldData.phone,
-                                lead_source: 'facebook',
-                                status: 'new',
-                                fb_lead_id: fbLead.id,
-                                fb_form_id: form.form_id,
-                                fb_created_time: fbLead.created_time,
-                                notes: `Form: ${form.form_name}\nPage ID: ${page.page_id}\nFacebook ID: ${fbLead.id}`,
-                                created_date: new Date()
+                            // Helper to find field value by loose matching
+                            const getField = (keys) => {
+                                const field = fbLead.field_data.find(f => keys.some(k => f.name.toLowerCase().includes(k)));
+                                return field ? field.values[0] : null;
                             };
 
-                            await Lead.create(leadData);
-                            newLeadsCreated++;
+                            const fullName = getField(['full_name', 'fullname', 'name']) ||
+                                `${getField(['first_name']) || ''} ${getField(['last_name']) || ''}`.trim();
+                            const email = getField(['email', 'e-mail']);
+                            const phone = getField(['phone', 'mobile', 'contact']);
+                            const city = getField(['city', 'location', 'town']);
+                            const company = getField(['company', 'business']);
+                            const jobTitle = getField(['job', 'title', 'position']);
+
+                            const leadUpdateData = {
+                                lead_name: fullName || 'Facebook Lead', // Fallback
+                                email: email,
+                                phone: phone,
+                                location: city,
+                                company: company,
+                                job_title: jobTitle,
+                                lead_source: 'facebook',
+                                fb_form_id: form.form_id,
+                                fb_page_id: page.page_id,
+                                fb_created_time: fbLead.created_time,
+                                raw_facebook_data: fbLead.field_data, // Save all fields
+                                notes: `Form Name: ${form.form_name}\nPage ID: ${page.page_id}\nFacebook ID: ${fbLead.id}`,
+                                last_activity_date: new Date()
+                            };
+
+                            // Upsert: Update if exists, Create if new
+                            const existingLead = await Lead.findOne({ fb_lead_id: fbLead.id });
+
+                            if (existingLead) {
+                                // Only update if significantly changed or missing data
+                                if (!existingLead.lead_name || existingLead.lead_name === 'undefined' || !existingLead.raw_facebook_data || !existingLead.fb_page_id) {
+                                    Object.assign(existingLead, leadUpdateData);
+                                    await existingLead.save();
+                                    console.log(`Updated existing lead: ${fbLead.id}`);
+                                } else {
+                                    duplicatesSkipped++;
+                                }
+                            } else {
+                                leadUpdateData.status = 'new';
+                                leadUpdateData.created_date = new Date();
+                                leadUpdateData.fb_lead_id = fbLead.id;
+                                await Lead.create(leadUpdateData);
+                                newLeadsCreated++;
+                            }
                         }
                     }
                 } catch (formError) {
@@ -407,14 +434,16 @@ router.post('/invoke/debugFacebookToken', async (req, res) => {
         const pageData = await pageRes.json();
 
         // Test forms
-        const formsRes = await fetch(`https://graph.facebook.com/${FB_API_VERSION}/${page_id}/leadgen_forms?access_token=${page_token}`);
+        const proof = getAppSecretProof(page_token);
+        const proofParam = proof ? `&appsecret_proof=${proof}` : '';
+        const formsRes = await fetch(`https://graph.facebook.com/${FB_API_VERSION}/${page_id}/leadgen_forms?access_token=${page_token}${proofParam}`);
         const formsData = await formsRes.json();
 
         // Test leads if forms exist
         let leadsData = null;
         if (formsData.data && formsData.data.length > 0) {
             const formId = formsData.data[0].id;
-            const leadsRes = await fetch(`https://graph.facebook.com/${FB_API_VERSION}/${formId}/leads?access_token=${page_token}`);
+            const leadsRes = await fetch(`https://graph.facebook.com/${FB_API_VERSION}/${formId}/leads?access_token=${page_token}${proofParam}`);
             leadsData = await leadsRes.json();
         }
 
@@ -473,7 +502,10 @@ router.post('/webhooks/facebook', async (req, res) => {
                                 return;
                             }
 
-                            const leadRes = await fetch(`https://graph.facebook.com/${FB_API_VERSION}/${leadId}?access_token=${page.access_token}`);
+                            const proof = getAppSecretProof(page.access_token);
+                            const proofParam = proof ? `&appsecret_proof=${proof}` : '';
+
+                            const leadRes = await fetch(`https://graph.facebook.com/${FB_API_VERSION}/${leadId}?access_token=${page.access_token}${proofParam}`);
                             const leadData = await leadRes.json();
 
                             if (leadData) {
