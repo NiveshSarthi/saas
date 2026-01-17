@@ -62,6 +62,9 @@ export async function sendAssignmentNotification({
       return null;
     }
 
+    // Generate correct link based on module
+    const generatedLink = link || getModuleLink(module, itemId);
+
     const notification = await base44.entities.Notification.create({
       user_email: assignedTo,
       type: NOTIFICATION_TYPES.ASSIGNMENT,
@@ -69,7 +72,7 @@ export async function sendAssignmentNotification({
       message: `${assignedByName} assigned you: ${itemName}${description ? ' - ' + description : ''}`,
       actor_email: assignedBy,
       read: false,
-      link: link || `/${module}/${itemId}`,
+      link: generatedLink,
       metadata: {
         module,
         itemId,
@@ -93,7 +96,7 @@ export async function sendAssignmentNotification({
     return notification;
   } catch (error) {
     console.error('Failed to send assignment notification:', error);
-    
+
     // Log failure
     await logNotificationDelivery({
       recipientEmail: assignedTo,
@@ -104,8 +107,31 @@ export async function sendAssignmentNotification({
       success: false,
       error: error.message
     });
-    
+
     return null;
+  }
+}
+
+/**
+ * Get correct link for module item
+ */
+function getModuleLink(module, itemId) {
+  switch (module) {
+    case MODULES.TASK:
+    case MODULES.SUBTASK:
+      return `/TaskDetail?id=${itemId}`;
+    case MODULES.LEAD:
+      return `/LeadDetail?id=${itemId}`;
+    case MODULES.MARKETING_TASK:
+      return `/Marketing?taskId=${itemId}`; // Assuming Marketing page handles this
+    case MODULES.PROJECT:
+      return `/Projects?id=${itemId}`;
+    case MODULES.APPROVAL:
+      return `/LeaveApprovals?id=${itemId}`;
+    case MODULES.MEETING:
+      return `/Meetings?id=${itemId}`;
+    default:
+      return `/${module}/${itemId}`;
   }
 }
 
@@ -115,12 +141,12 @@ export async function sendAssignmentNotification({
  */
 export async function sendBulkAssignmentNotifications(assignments) {
   const results = [];
-  
+
   for (const assignment of assignments) {
     const result = await sendAssignmentNotification(assignment);
     results.push(result);
   }
-  
+
   return results;
 }
 
@@ -163,12 +189,12 @@ export async function processMentionsAndNotify({
   // Find matching users
   const mentionedUsers = [];
   for (const mention of mentions) {
-    const user = allUsers.find(u => 
-      u.email === mention || 
+    const user = allUsers.find(u =>
+      u.email === mention ||
       u.full_name?.toLowerCase() === mention.toLowerCase() ||
       u.email?.toLowerCase().includes(mention.toLowerCase())
     );
-    
+
     if (user && user.email !== mentionedBy) {
       mentionedUsers.push(user);
     }
@@ -188,7 +214,7 @@ export async function processMentionsAndNotify({
         message: `${mentionedByName} mentioned you in ${getModuleDisplayName(module)}: ${itemName}`,
         actor_email: mentionedBy,
         read: false,
-        link: link || `/${module}/${itemId}`,
+        link: link || getModuleLink(module, itemId),
         metadata: {
           module,
           itemId,
@@ -212,7 +238,7 @@ export async function processMentionsAndNotify({
       });
     } catch (error) {
       console.error(`Failed to send mention notification to ${user.email}:`, error);
-      
+
       await logNotificationDelivery({
         recipientEmail: user.email,
         senderEmail: mentionedBy,
@@ -253,7 +279,7 @@ export async function sendCommentNotification({
       message: `${commentedByName} commented on ${itemName}: "${commentText.substring(0, 100)}${commentText.length > 100 ? '...' : ''}"`,
       actor_email: commentedBy,
       read: false,
-      link: link || `/${module}/${itemId}`,
+      link: link || getModuleLink(module, itemId),
       metadata: {
         module,
         itemId,
@@ -275,7 +301,7 @@ export async function sendCommentNotification({
     return notification;
   } catch (error) {
     console.error('Failed to send comment notification:', error);
-    
+
     await logNotificationDelivery({
       recipientEmail,
       senderEmail: commentedBy,
@@ -285,7 +311,7 @@ export async function sendCommentNotification({
       success: false,
       error: error.message
     });
-    
+
     return null;
   }
 }
@@ -342,7 +368,7 @@ function getModuleDisplayName(module) {
     petty_cash: 'Petty Cash Request',
     finance: 'Finance Item'
   };
-  
+
   return displayNames[module] || module;
 }
 
@@ -359,10 +385,10 @@ export async function notifyMultipleAssignees({
   link
 }) {
   const notifications = [];
-  
+
   for (const assigneeEmail of assignees) {
     if (assigneeEmail === assignedBy) continue;
-    
+
     const notification = await sendAssignmentNotification({
       assignedTo: assigneeEmail,
       assignedBy,
@@ -372,12 +398,12 @@ export async function notifyMultipleAssignees({
       itemId,
       link
     });
-    
+
     if (notification) {
       notifications.push(notification);
     }
   }
-  
+
   return notifications;
 }
 
@@ -396,10 +422,10 @@ export async function notifyWatchers({
   actionDescription
 }) {
   const notifications = [];
-  
+
   for (const watcherEmail of watchers) {
     if (watcherEmail === actorEmail) continue;
-    
+
     try {
       const notification = await base44.entities.Notification.create({
         user_email: watcherEmail,
@@ -408,7 +434,7 @@ export async function notifyWatchers({
         message: `${actorName} ${actionDescription} on ${itemName}`,
         actor_email: actorEmail,
         read: false,
-        link: link || `/${module}/${itemId}`,
+        link: link || getModuleLink(module, itemId),
         metadata: {
           module,
           itemId,
@@ -416,12 +442,12 @@ export async function notifyWatchers({
           action
         }
       });
-      
+
       notifications.push(notification);
     } catch (error) {
       console.error(`Failed to notify watcher ${watcherEmail}:`, error);
     }
   }
-  
+
   return notifications;
 }

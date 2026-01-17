@@ -4,15 +4,15 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Link } from 'react-router-dom';
 import { createPageUrl } from '@/utils';
 import { cn } from '@/lib/utils';
-import { 
-  ArrowLeft, 
-  Phone, 
-  Mail, 
-  MapPin, 
-  CheckCircle2, 
-  Clock, 
-  User, 
-  Snowflake, 
+import {
+  ArrowLeft,
+  Phone,
+  Mail,
+  MapPin,
+  CheckCircle2,
+  Clock,
+  User,
+  Snowflake,
   XCircle,
   DollarSign,
   Calendar as CalendarIcon,
@@ -45,6 +45,7 @@ import LeadSourceBadge from '@/components/leads/LeadSourceBadge';
 import LeadProgressBar from '@/components/leads/LeadProgressBar';
 import NextActionSuggestion from '@/components/leads/NextActionSuggestion';
 import StageDetailsHistory from '@/components/leads/StageDetailsHistory';
+import { sendAssignmentNotification, MODULES } from '@/components/utils/notificationService';
 
 const STAGES = [
   { key: 'new', label: 'New', color: 'bg-slate-500' },
@@ -76,7 +77,7 @@ export default function LeadDetail() {
       try {
         const userData = await base44.auth.me();
         setCurrentUser(userData);
-      } catch (e) {}
+      } catch (e) { }
     };
     fetchUser();
   }, []);
@@ -85,20 +86,20 @@ export default function LeadDetail() {
     queryKey: ['lead-detail', leadId],
     queryFn: async () => {
       if (!leadId) return null;
-      
+
       // Try all cache sources first
       const cachedFromManagement = queryClient.getQueryData(['leads-management']);
       if (cachedFromManagement) {
         const found = cachedFromManagement.find(l => l.id === leadId);
         if (found) return found;
       }
-      
+
       const cachedFromLeads = queryClient.getQueryData(['leads']);
       if (cachedFromLeads) {
         const found = cachedFromLeads.find(l => l.id === leadId);
         if (found) return found;
       }
-      
+
       // Fetch fresh data
       const allLeads = await base44.entities.Lead.list('-created_date', 10000);
       return allLeads.find(l => l.id === leadId) || null;
@@ -136,27 +137,27 @@ export default function LeadDetail() {
 
   const handleContactToggle = async (contacted) => {
     if (!lead) return;
-    
+
     // Check permissions: only admin or assigned user can change contact status
     const canEdit = currentUser?.role === 'admin' || lead.assigned_to === currentUser?.email;
     if (!canEdit) {
       toast.error('Only the assigned owner or admin can change the lead status');
       return;
     }
-    
+
     const willChangeStage = contacted && lead.status === 'new';
-    
+
     // Check for duplicate within last 5 seconds
     const recentActivities = await base44.entities.RELeadActivity.filter(
       { lead_id: lead.id },
       '-created_date',
       5
     );
-    
-    const noteText = contacted 
+
+    const noteText = contacted
       ? (willChangeStage ? 'Contacted & Stage Updated: New → Contacted' : 'Status: Marked as contacted')
       : 'Status: Marked as not contacted';
-    
+
     const isDuplicate = recentActivities.some(activity => {
       const timeDiff = Date.now() - new Date(activity.created_date).getTime();
       return timeDiff < 5000 && activity.notes === noteText;
@@ -164,7 +165,7 @@ export default function LeadDetail() {
 
     await updateLeadMutation.mutateAsync({
       id: lead.id,
-      data: { 
+      data: {
         last_contact_date: contacted ? new Date().toISOString() : null,
         status: willChangeStage ? 'contacted' : lead.status
       }
@@ -182,23 +183,23 @@ export default function LeadDetail() {
     // Invalidate queries to ensure fresh data
     queryClient.invalidateQueries({ queryKey: ['lead-detail', leadId] });
     queryClient.invalidateQueries({ queryKey: ['leads-management'] });
-    
+
     toast.success(contacted ? 'Lead marked as contacted' : 'Contact status cleared');
   };
 
   const handleStageClick = (stage) => {
     if (!lead) return;
-    
+
     // Check permissions: only admin or assigned user can change status
     const canEdit = currentUser?.role === 'admin' || lead.assigned_to === currentUser?.email;
     if (!canEdit) {
       toast.error('Only the assigned owner or admin can change the lead status');
       return;
     }
-    
+
     const currentIndex = STAGES.findIndex(s => s.key === lead.status);
     const targetIndex = STAGES.findIndex(s => s.key === stage.key);
-    
+
     if (targetIndex === currentIndex + 1) {
       setTargetStage(stage);
       setStageDialogOpen(true);
@@ -220,7 +221,7 @@ export default function LeadDetail() {
     queryClient.invalidateQueries({ queryKey: ['leads-management'] });
     queryClient.invalidateQueries({ queryKey: ['lead-activities'] });
     queryClient.invalidateQueries({ queryKey: ['users-for-leads'] });
-    
+
     if (updatedLead.status === 'closed_won') {
       triggerConfetti();
       toast.success('🎉 Deal Won! Congratulations!', { duration: 5000 });
@@ -253,7 +254,7 @@ export default function LeadDetail() {
 
   // Check access permission: only admin or assigned user can view lead details
   const canViewLead = currentUser?.role === 'admin' || lead.assigned_to === currentUser?.email;
-  
+
   if (!canViewLead) {
     return (
       <div className="flex flex-col items-center justify-center h-screen">
@@ -285,7 +286,7 @@ export default function LeadDetail() {
   // Parse Facebook lead data from notes
   const parseFacebookData = () => {
     if (!lead?.notes || lead.lead_source !== 'facebook') return null;
-    
+
     const data = {
       formName: null,
       pageId: null,
@@ -302,27 +303,27 @@ export default function LeadDetail() {
       questions: [],
       rawNotes: lead.notes
     };
-    
+
     const lines = lead.notes.split('\n');
     let inFormFields = false;
-    
+
     for (const line of lines) {
       if (!line.trim()) continue;
-      
+
       // Check if we're entering form fields section
       if (line.includes('--- Form Fields ---')) {
         inFormFields = true;
         continue;
       }
-      
+
       if (!line.includes(':')) continue;
-      
+
       const colonIndex = line.indexOf(':');
       const key = line.substring(0, colonIndex).trim();
       const value = line.substring(colonIndex + 1).trim();
-      
+
       if (!value) continue;
-      
+
       // Parse meta fields
       if (key === 'Form Name') {
         data.formName = value;
@@ -353,7 +354,7 @@ export default function LeadDetail() {
         data.questions.push({ question: key, answer: value });
       }
     }
-    
+
     return data;
   };
 
@@ -405,12 +406,12 @@ export default function LeadDetail() {
 
             <div className="flex items-center gap-3">
               <LeadQuickActions lead={lead} currentUser={currentUser} />
-              
+
               <Separator orientation="vertical" className="h-8" />
 
               {currentUser?.role === 'admin' ? (
-                <Button 
-                  size="sm" 
+                <Button
+                  size="sm"
                   className="bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white shadow-md"
                   onClick={() => setAssignDialogOpen(true)}
                 >
@@ -418,8 +419,8 @@ export default function LeadDetail() {
                   {!lead.assigned_to ? 'Assign Lead' : 'Reassign'}
                 </Button>
               ) : !lead.assigned_to ? (
-                <Button 
-                  size="sm" 
+                <Button
+                  size="sm"
                   className="bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white shadow-md"
                   onClick={async () => {
                     await updateLeadMutation.mutateAsync({
@@ -429,9 +430,19 @@ export default function LeadDetail() {
                     await createActivityMutation.mutateAsync({
                       lead_id: lead.id,
                       activity_type: 'Assignment',
-                      description: `Self-assigned`,
                       actor_email: currentUser.email,
                     });
+
+                    await sendAssignmentNotification({
+                      assignedTo: currentUser.email,
+                      assignedBy: currentUser.email,
+                      assignedByName: currentUser.full_name || currentUser.email,
+                      module: MODULES.LEAD,
+                      itemName: lead.lead_name || lead.name,
+                      itemId: lead.id,
+                      description: 'Self-assigned'
+                    });
+
                     toast.success('Lead assigned to you');
                   }}
                 >
@@ -547,7 +558,7 @@ export default function LeadDetail() {
                         {lead.last_contact_date ? 'Contacted' : 'Not Contacted Yet'}
                       </div>
                       <div className="text-sm text-slate-600">
-                        {lead.last_contact_date 
+                        {lead.last_contact_date
                           ? `Last contact: ${new Date(lead.last_contact_date).toLocaleDateString()}`
                           : 'Reach out to this lead soon'
                         }

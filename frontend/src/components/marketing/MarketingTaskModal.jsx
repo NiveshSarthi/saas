@@ -23,6 +23,7 @@ import { createPageUrl } from '@/utils';
 import { MarketingLogger } from '@/components/utils/marketingLogger';
 import ActivityLog from './ActivityLog';
 import { base44 } from '@/api/base44Client';
+import { sendAssignmentNotification, MODULES } from '@/components/utils/notificationService';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
 import { format } from 'date-fns';
@@ -271,7 +272,19 @@ export default function MarketingTaskModal({ isOpen, onClose, task, user }) {
       };
       return base44.entities.MarketingTask.create(taskData);
     },
-    onSuccess: () => {
+    onSuccess: async (createdTask, variables) => {
+      if (variables.assignee_email) {
+        await sendAssignmentNotification({
+          assignedTo: variables.assignee_email,
+          assignedBy: user?.email,
+          assignedByName: user?.full_name || user?.email,
+          module: MODULES.MARKETING_TASK,
+          itemName: variables.campaign_name,
+          itemId: createdTask.id,
+          link: `/marketing?taskId=${createdTask.id}`,
+          metadata: {}
+        });
+      }
       queryClient.invalidateQueries(['marketing-tasks']);
       toast.success('Task created successfully');
       onClose();
@@ -280,7 +293,20 @@ export default function MarketingTaskModal({ isOpen, onClose, task, user }) {
 
   const updateMutation = useMutation({
     mutationFn: (data) => base44.entities.MarketingTask.update(task.id, data),
-    onSuccess: () => {
+    onSuccess: async (_, variables) => {
+      // Check if assignee changed
+      if (variables.assignee_email && variables.assignee_email !== task.assignee_email) {
+        await sendAssignmentNotification({
+          assignedTo: variables.assignee_email,
+          assignedBy: user?.email,
+          assignedByName: user?.full_name || user?.email,
+          module: MODULES.MARKETING_TASK,
+          itemName: variables.campaign_name || task.campaign_name,
+          itemId: task.id,
+          link: `/marketing?taskId=${task.id}`,
+          metadata: {}
+        });
+      }
       queryClient.invalidateQueries(['marketing-tasks']);
       toast.success('Task updated successfully');
       if (!comment) onClose(); // Keep open if commenting

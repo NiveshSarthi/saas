@@ -21,15 +21,15 @@ export async function handleParentTaskAutomation(subtaskId, newStatus, parentTas
 
     // Check if all subtasks are completed
     const allCompleted = allSubtasks.every(st => st.status === 'done');
-    
+
     // Check if any subtask is not completed
     const anyIncomplete = allSubtasks.some(st => st.status !== 'done');
 
     // Auto-complete parent if all subtasks are done
     if (allCompleted && parentTask.status !== 'done') {
-      await base44.entities.Task.update(parentTaskId, { 
+      await base44.entities.Task.update(parentTaskId, {
         status: 'done',
-        progress: 100 
+        progress: 100
       });
 
       // Log activity
@@ -63,13 +63,13 @@ export async function handleParentTaskAutomation(subtaskId, newStatus, parentTas
           task_id: parentTaskId,
           project_id: parentTask.project_id,
           actor_email: 'system',
-          link: `/task/${parentTaskId}`
+          link: `/TaskDetail?id=${parentTaskId}`
         });
       }
     }
     // Reopen parent if it was done but now has incomplete subtasks
     else if (anyIncomplete && parentTask.status === 'done') {
-      await base44.entities.Task.update(parentTaskId, { 
+      await base44.entities.Task.update(parentTaskId, {
         status: 'in_progress',
         progress: Math.round((allSubtasks.filter(st => st.status === 'done').length / allSubtasks.length) * 100)
       });
@@ -105,7 +105,7 @@ export async function handleParentTaskAutomation(subtaskId, newStatus, parentTas
           task_id: parentTaskId,
           project_id: parentTask.project_id,
           actor_email: 'system',
-          link: `/task/${parentTaskId}`
+          link: `/TaskDetail?id=${parentTaskId}`
         });
       }
     }

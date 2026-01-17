@@ -1,3 +1,4 @@
+// @ts-nocheck
 import React, { useState, useEffect } from 'react';
 import { base44 } from '@/api/base44Client';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
@@ -26,7 +27,8 @@ import {
   TrendingUp,
   Target,
   Flame,
-  Filter
+  Filter,
+  Search
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -41,7 +43,14 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
-import TaskFilters from '@/components/tasks/TaskFilters';
+import { Input } from '@/components/ui/input';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
 import TaskCard from '@/components/tasks/TaskCard';
 import AdvancedFilterPanel from '@/components/filters/AdvancedFilterPanel';
 import FilterChips from '@/components/filters/FilterChips';
@@ -72,6 +81,8 @@ export default function MyTasks() {
     status: 'all',
     priority: 'all',
     type: 'all',
+    sprint: 'all',
+    timeline: 'all' // Linked to activeTab
   });
   const [advancedFilters, setAdvancedFilters] = useState({});
   const [showAdvancedFilter, setShowAdvancedFilter] = useState(false);
@@ -90,6 +101,33 @@ export default function MyTasks() {
     };
     fetchUser();
   }, []);
+
+  // Sync timeline filter with activeTab
+  useEffect(() => {
+    if (activeTab === 'all' && filters.timeline !== 'all') {
+      setFilters(prev => ({ ...prev, timeline: 'all' }));
+    } else if (activeTab === 'today' && filters.timeline !== 'today') {
+      setFilters(prev => ({ ...prev, timeline: 'today' }));
+    } else if (activeTab === 'upcoming' && filters.timeline !== 'this_week') {
+      // Mapping 'upcoming' roughly to 'this_week' or keeping distinct?
+      // TeamTasks has 'this_week', 'today', 'overdue'.
+      // MyTasks has 'today', 'tomorrow', 'upcoming', 'overdue', 'closed'.
+      // Let's map 'upcoming' to 'this_week' for the dropdown if matches, else handle custom.
+      // For now, let's just update the specific matching ones.
+      if (filters.timeline !== 'this_week') setFilters(prev => ({ ...prev, timeline: 'this_week' }));
+    } else if (activeTab === 'overdue' && filters.timeline !== 'overdue') {
+      setFilters(prev => ({ ...prev, timeline: 'overdue' }));
+    }
+  }, [activeTab]);
+
+  // Sync activeTab when timeline filter changes
+  const handleTimelineChange = (value) => {
+    setFilters(prev => ({ ...prev, timeline: value }));
+    if (value === 'all') setActiveTab('all');
+    if (value === 'today') setActiveTab('today');
+    if (value === 'overdue') setActiveTab('overdue');
+    if (value === 'this_week') setActiveTab('upcoming');
+  };
 
   const { data: tasks = [], isLoading } = useQuery({
     queryKey: ['my-tasks'],
@@ -290,28 +328,8 @@ export default function MyTasks() {
   const filteredTasks = sortedMyTasks.filter(task => {
     // Apply advanced filters first
     if (!applyAdvancedFilters(task)) return false;
-    // Tab filter
-    if (activeTab === 'all') {
-      // Exclude closed (done) tasks from 'all' tab
-      if (task.status === 'done') return false;
-    } else if (activeTab === 'today') {
-      if (!task.due_date || !isToday(new Date(task.due_date)) || task.status === 'done') return false;
-    } else if (activeTab === 'tomorrow') {
-      if (!task.due_date || !isTomorrow(new Date(task.due_date)) || task.status === 'done') return false;
-    } else if (activeTab === 'upcoming') {
-      if (!task.due_date || task.status === 'done') return false;
-      const date = new Date(task.due_date);
-      const nextWeek = addDays(new Date(), 7);
-      if (isPast(date) || date > nextWeek) return false;
-    } else if (activeTab === 'overdue') {
-      if (!task.due_date || task.status === 'done') return false;
-      if (!isPast(new Date(task.due_date)) || isToday(new Date(task.due_date))) return false;
-    } else if (activeTab === 'closed') {
-      // Only show closed (done) tasks
-      if (task.status !== 'done') return false;
-    }
 
-    // Search filter
+    // --- Search Filter ---
     if (filters.search) {
       const searchLower = filters.search.toLowerCase();
       if (!task.title.toLowerCase().includes(searchLower) &&
@@ -320,13 +338,52 @@ export default function MyTasks() {
       }
     }
 
-    // Status filter
+    // --- Sprint Filter ---
+    if (filters.sprint !== 'all') {
+      if (filters.sprint === 'no_sprint' && task.sprint_id) return false;
+      if (filters.sprint !== 'no_sprint' && String(task.sprint_id) !== String(filters.sprint)) return false;
+    }
+
+    // --- Status Filter ---
+    // NOTE: Tabs can also filter by status (e.g. 'closed' tab), so we need to be careful.
+    // If explicit status filter is set, it might conflict with Tabs.
+    // TeamTasks logic: strict equality.
     if (filters.status !== 'all' && task.status !== filters.status) return false;
 
-    // Priority filter
-    if (filters.priority !== 'all' && task.priority !== filters.priority) return false;
 
-    // Type filter
+    // --- Tab / Timeline Filter Logic ---
+    // We treat activeTab as the primary source of truth for the "Base View", 
+    // but the dropdowns can refine it or switch it.
+
+    if (activeTab === 'all') {
+      // Exclude closed (done) tasks from 'all' tab unless specifically asked via status filter? 
+      // Existing logic was: if (task.status === 'done') return false;
+      // If user sets Status = 'Completed' in dropdown, they probably want to see them.
+      if (filters.status === 'all' && task.status === 'done') return false;
+    } else if (activeTab === 'today') {
+      if (!task.due_date || !isToday(new Date(task.due_date))) return false;
+      // Allow done tasks if status is explicitly set to done, otherwise hide?
+      // Existing logic: if (task.status === 'done') return false; 
+      if (filters.status !== 'done' && task.status === 'done') return false;
+    } else if (activeTab === 'tomorrow') {
+      if (!task.due_date || !isTomorrow(new Date(task.due_date))) return false;
+      if (filters.status !== 'done' && task.status === 'done') return false;
+    } else if (activeTab === 'upcoming') {
+      // Logic: !isPast && > today && <= nextWeek
+      if (!task.due_date) return false;
+      const date = new Date(task.due_date);
+      const nextWeek = addDays(new Date(), 7);
+      if (isPast(date) || date > nextWeek) return false;
+      if (filters.status !== 'done' && task.status === 'done') return false;
+    } else if (activeTab === 'overdue') {
+      if (!task.due_date || isToday(new Date(task.due_date)) || !isPast(new Date(task.due_date))) return false;
+      if (task.status === 'done') return false; // Overdue inherently implies not done
+    } else if (activeTab === 'closed') {
+      if (task.status !== 'done') return false;
+    }
+
+    // --- Type & Priority Filters (from old or advanced) ---
+    if (filters.priority !== 'all' && task.priority !== filters.priority) return false;
     if (filters.type !== 'all' && task.task_type !== filters.type) return false;
 
     return true;
@@ -484,19 +541,62 @@ export default function MyTasks() {
       </div>
 
       {/* Filters Bar */}
-      <div className="bg-slate-100 rounded-lg sm:rounded-xl p-3 sm:p-4 flex flex-col lg:flex-row gap-3 sm:gap-4 overflow-x-auto">
-        <div className="flex items-center gap-2">
-          <TaskFilters filters={filters} onFilterChange={setFilters} users={users} />
+      <div className="flex flex-col lg:flex-row gap-4 p-5 bg-white/80 backdrop-blur-sm rounded-2xl border-2 border-slate-200/50 shadow-lg">
+        <div className="flex-1 relative">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+          <Input
+            placeholder="Search tasks..."
+            className="pl-9 bg-white"
+            value={filters.search}
+            onChange={(e) => setFilters(prev => ({ ...prev, search: e.target.value }))}
+          />
         </div>
-        <div className="flex items-center gap-2 lg:ml-auto">
-          <Button
-            variant="outline"
-            onClick={() => setShowAdvancedFilter(true)}
-            className="gap-2"
-          >
-            <Filter className="w-4 h-4" />
-            Advanced Filters
-          </Button>
+
+        <Button variant="outline" onClick={() => setShowAdvancedFilter(true)} className="whitespace-nowrap">
+          <Filter className="w-4 h-4 mr-2" />
+          Advanced Filters
+        </Button>
+
+        <div className="flex gap-2 overflow-x-auto pb-2 lg:pb-0">
+          <Select value={filters.status} onValueChange={(v) => setFilters(prev => ({ ...prev, status: v }))}>
+            <SelectTrigger className="w-[140px] bg-white min-w-[140px]">
+              <SelectValue placeholder="Status" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">All Status</SelectItem>
+              <SelectItem value="todo">To Do</SelectItem>
+              <SelectItem value="in_progress">In Progress</SelectItem>
+              <SelectItem value="completed">Completed</SelectItem>
+            </SelectContent>
+          </Select>
+
+          <Select value={filters.timeline} onValueChange={handleTimelineChange}>
+            <SelectTrigger className="w-[140px] bg-white min-w-[140px]">
+              <SelectValue placeholder="Timeline" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">All Time</SelectItem>
+              <SelectItem value="today">Today</SelectItem>
+              <SelectItem value="this_week">This Week</SelectItem>
+              <SelectItem value="overdue">Overdue</SelectItem>
+            </SelectContent>
+          </Select>
+
+          <Select value={filters.sprint} onValueChange={(v) => setFilters(prev => ({ ...prev, sprint: v }))}>
+            <SelectTrigger className="w-[140px] bg-white min-w-[140px]">
+              <SelectValue placeholder="Sprint" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">All Sprints</SelectItem>
+              <SelectItem value="no_sprint">No Sprint</SelectItem>
+              {sprints.map(s => (
+                <SelectItem key={s.id} value={String(s.id)}>{s.name}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+
+        <div className="flex items-center gap-2 lg:ml-auto border-l pl-4 border-slate-200">
           <Button
             variant={viewMode === 'list' ? 'default' : 'outline'}
             size="icon"
