@@ -205,7 +205,9 @@ export default function FacebookConnectionManager() {
       setUserToken('');
     },
     onError: (error) => {
-      toast.error('Failed to connect account: ' + (error.response?.data?.error || error.message));
+      const msg = error.response?.data?.error || error.message || 'Unknown error';
+      console.error('Connect Account Error:', error);
+      toast.error(`Connection Failed: ${msg}`);
     }
   });
 
