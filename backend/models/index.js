@@ -222,6 +222,20 @@ export const Lead = mongoose.model('Lead', leadSchema);
 export const Department = mongoose.model('Department', departmentSchema);
 export const SavedFilter = mongoose.model('SavedFilter', savedFilterSchema);
 
+const organizationSchema = new mongoose.Schema({
+    name: String,
+    logo_url: String,
+    settings: {
+        autoAssignPaused: { type: Boolean, default: false },
+        theme: String,
+        notifications: mongoose.Schema.Types.Mixed
+    },
+    created_by: String,
+    created_at: { type: Date, default: Date.now }
+});
+
+export const Organization = mongoose.model('Organization', organizationSchema);
+
 const projectSchema = new mongoose.Schema({
     name: String,
     description: String,
