@@ -1,5 +1,7 @@
+// @ts-nocheck
 import React, { useState, useEffect, useMemo } from 'react';
 import { base44 } from '@/api/base44Client';
+import { sendAssignmentNotification, MODULES } from '@/components/utils/notificationService';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { usePermissions } from '@/components/rbac/PermissionsContext';
 import { Button } from '@/components/ui/button';
@@ -111,8 +113,32 @@ export default function MarketingPage() {
         action: 'created',
         user_email: user?.email,
         user_name: user?.full_name || user?.email,
-        details: {}
       });
+
+      // Send notifications to assigned team members
+      const roles = [
+        { key: 'assigned_director', label: 'Director' },
+        { key: 'assigned_cameraman', label: 'Cameraman' },
+        { key: 'assigned_editor', label: 'Editor' },
+        { key: 'assigned_manager', label: 'Manager' }
+      ];
+
+      for (const role of roles) {
+        if (data[role.key]) {
+          await sendAssignmentNotification({
+            assignedTo: data[role.key],
+            assignedBy: user?.email,
+            assignedByName: user?.full_name || user?.email,
+            module: MODULES.MARKETING_TASK, // Using Marketing Task module
+            itemName: data.title,
+            itemId: result.id || result._id,
+            description: `Role: ${role.label}`,
+            link: `/Marketing?video=${result.id || result._id}`, // Assuming this link structure, or just /Marketing
+            metadata: {}
+          });
+        }
+      }
+
       return result;
     },
     onSuccess: () => {

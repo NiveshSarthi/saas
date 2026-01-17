@@ -288,22 +288,22 @@ export default function CheckInOutWidget({ user, todayRecord, onUpdate }) {
     <Card className="border-0 shadow-lg bg-gradient-to-r from-indigo-600 to-purple-700 text-white overflow-hidden relative">
       <div className="absolute inset-0 bg-[url('data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iNjAiIGhlaWdodD0iNjAiIHhtbG5zPSJodHRwOi8vd3d3LnczLm9yZy8yMDAwL3N2ZyI+PGRlZnM+PHBhdHRlcm4gaWQ9ImdyaWQiIHdpZHRoPSI2MCIgaGVpZ2h0PSI2MCIgcGF0dGVyblVuaXRzPSJ1c2VyU3BhY2VPblVzZSI+PHBhdGggZD0iTSAxMCAwIEwgMCAwIDAgMTAiIGZpbGw9Im5vbmUiIHN0cm9rZT0id2hpdGUiIHN0cm9rZS1vcGFjaXR5PSIwLjEiIHN0cm9rZS13aWR0aD0iMSIvPjwvcGF0dGVybj48L2RlZnM+PHJlY3Qgd2lkdGg9IjEwMCUiIGhlaWdodD0iMTAwJSIgZmlsbD0idXJsKCNncmlkKSIvPjwvc3ZnPg==')] opacity-10"></div>
 
-      <div className="relative p-6 lg:p-8 flex flex-col lg:flex-row items-center justify-between gap-8">
+      <div className="relative p-6 flex flex-col items-center justify-between gap-6 md:gap-8">
 
-        {/* Left: Clock & Date */}
-        <div className="flex items-center gap-6">
-          <div className="p-4 bg-white/10 backdrop-blur-md rounded-2xl border border-white/20 shadow-xl">
+        {/* Top: Clock & Date */}
+        <div className="flex flex-col sm:flex-row items-center gap-6 w-full justify-center sm:justify-start">
+          <div className="p-4 bg-white/10 backdrop-blur-md rounded-2xl border border-white/20 shadow-xl flex-shrink-0">
             <Clock className="w-10 h-10 text-white" />
           </div>
-          <div>
+          <div className="text-center sm:text-left">
             <div className="text-sm font-medium text-indigo-100">
               {format(currentTime, 'EEEE, MMMM d, yyyy')}
             </div>
-            <div className="text-5xl font-bold tracking-tight">
+            <div className="text-4xl sm:text-5xl font-bold tracking-tight whitespace-nowrap">
               {format(currentTime, 'hh:mm:ss')}
-              <span className="text-2xl font-medium ml-2 text-indigo-200">{format(currentTime, 'a')}</span>
+              <span className="text-xl sm:text-2xl font-medium ml-2 text-indigo-200">{format(currentTime, 'a')}</span>
             </div>
-            <div className="flex items-center gap-2 mt-2">
+            <div className="flex items-center justify-center sm:justify-start gap-2 mt-2">
               <Badge className={cn("bg-white/20 hover:bg-white/30 text-white border-0", !todayRecord && "animate-pulse")}>
                 {todayRecord ? (todayRecord.status === 'checked_in' ? 'Running' : 'Completed') : 'Not Started'}
               </Badge>
@@ -318,10 +318,10 @@ export default function CheckInOutWidget({ user, todayRecord, onUpdate }) {
 
         {/* Middle: Stats (Only if checked in) */}
         {todayRecord && (
-          <div className="flex flex-wrap items-center gap-4 lg:gap-8 lg:border-l lg:border-white/10 lg:pl-8 w-full lg:w-auto justify-center lg:justify-start bg-indigo-800/20 lg:bg-transparent p-4 lg:p-0 rounded-xl lg:rounded-none">
-            <div className="text-center lg:text-left">
-              <p className="text-xs text-indigo-200 uppercase font-semibold">Check In</p>
-              <p className="text-xl lg:text-2xl font-bold">
+          <div className="flex flex-wrap items-center justify-around gap-4 w-full bg-indigo-800/20 p-4 rounded-xl border border-white/5">
+            <div className="text-center flex-1 min-w-[80px]">
+              <p className="text-xs text-indigo-200 uppercase font-semibold mb-1">Check In</p>
+              <p className="text-lg sm:text-xl font-bold">
                 {(() => {
                   if (!todayRecord.check_in) return '-';
                   const d = new Date(todayRecord.check_in);
@@ -329,10 +329,10 @@ export default function CheckInOutWidget({ user, todayRecord, onUpdate }) {
                 })()}
               </p>
             </div>
-            <div className="w-px h-8 bg-white/20 lg:hidden"></div>
-            <div className="text-center lg:text-left">
-              <p className="text-xs text-indigo-200 uppercase font-semibold">Check Out</p>
-              <p className="text-xl lg:text-2xl font-bold">
+            <div className="w-px h-8 bg-white/20"></div>
+            <div className="text-center flex-1 min-w-[80px]">
+              <p className="text-xs text-indigo-200 uppercase font-semibold mb-1">Check Out</p>
+              <p className="text-lg sm:text-xl font-bold">
                 {(() => {
                   if (!todayRecord.check_out) return '-';
                   const d = new Date(todayRecord.check_out);
@@ -340,10 +340,10 @@ export default function CheckInOutWidget({ user, todayRecord, onUpdate }) {
                 })()}
               </p>
             </div>
-            <div className="w-px h-8 bg-white/20 lg:hidden"></div>
-            <div className="text-center lg:text-left">
-              <p className="text-xs text-indigo-200 uppercase font-semibold">Duration</p>
-              <p className="text-xl lg:text-2xl font-bold">
+            <div className="w-px h-8 bg-white/20"></div>
+            <div className="text-center flex-1 min-w-[80px]">
+              <p className="text-xs text-indigo-200 uppercase font-semibold mb-1">Duration</p>
+              <p className="text-lg sm:text-xl font-bold">
                 {(() => {
                   const hours = todayRecord.total_hours || 0;
                   const h = Math.floor(hours);
@@ -356,12 +356,18 @@ export default function CheckInOutWidget({ user, todayRecord, onUpdate }) {
           </div>
         )}
 
-        {/* Right: Actions */}
-        <div className="flex items-center gap-4 w-full lg:w-auto">
+        {/* Bottom: Actions */}
+        <div className="flex flex-col sm:flex-row items-stretch gap-4 w-full">
+          {user?.role_id === 'admin' && ( // Debug helpers only for admin if needed, hidden for now
+            null
+          )}
+
           {isWeekOff && (
-            <Badge variant="outline" className="text-amber-300 border-amber-300/50 bg-amber-900/20 mr-2">
-              Holiday
-            </Badge>
+            <div className="sm:hidden w-full mb-2">
+              <Badge variant="outline" className="w-full justify-center text-amber-300 border-amber-300/50 bg-amber-900/20 py-1">
+                Holiday / Week Off
+              </Badge>
+            </div>
           )}
 
           <Button
@@ -369,13 +375,13 @@ export default function CheckInOutWidget({ user, todayRecord, onUpdate }) {
             onClick={() => checkInMutation.mutate()}
             disabled={!canCheckIn || checkInMutation.isPending || gettingLocation}
             className={cn(
-              "flex-1 lg:flex-none h-14 px-8 rounded-xl font-bold text-lg shadow-lg transition-all",
+              "flex-1 h-12 sm:h-14 rounded-xl font-bold text-base sm:text-lg shadow-lg transition-all",
               canCheckIn
                 ? "bg-white text-indigo-600 hover:bg-indigo-50"
                 : "bg-indigo-900/50 text-indigo-400 cursor-not-allowed"
             )}
           >
-            <LogIn className="w-5 h-5 mr-3" />
+            <LogIn className="w-5 h-5 mr-2 sm:mr-3" />
             {gettingLocation ? 'Locating...' : 'Check In'}
           </Button>
 
@@ -384,13 +390,13 @@ export default function CheckInOutWidget({ user, todayRecord, onUpdate }) {
             onClick={() => checkOutMutation.mutate()}
             disabled={!canCheckOut || checkOutMutation.isPending}
             className={cn(
-              "flex-1 lg:flex-none h-14 px-8 rounded-xl font-bold text-lg shadow-lg transition-all",
+              "flex-1 h-12 sm:h-14 rounded-xl font-bold text-base sm:text-lg shadow-lg transition-all",
               canCheckOut
                 ? "bg-orange-500 hover:bg-orange-600 text-white border-2 border-transparent"
                 : "bg-indigo-900/50 text-indigo-400 border-2 border-transparent cursor-not-allowed"
             )}
           >
-            <LogOut className="w-5 h-5 mr-3" />
+            <LogOut className="w-5 h-5 mr-2 sm:mr-3" />
             Check Out
           </Button>
         </div>

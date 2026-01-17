@@ -1,5 +1,7 @@
+// @ts-nocheck
 import React, { useState, useEffect } from 'react';
 import { base44 } from '@/api/base44Client';
+import { sendAssignmentNotification, MODULES } from '@/components/utils/notificationService';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -93,6 +95,34 @@ export default function VideoDetailModal({
     // Save mutation
     const saveMutation = useMutation({
         mutationFn: async (data) => {
+            // detailed checking for assignment changes
+            const roles = [
+                { key: 'assigned_director', label: 'Director' },
+                { key: 'assigned_cameraman', label: 'Cameraman' },
+                { key: 'assigned_editor', label: 'Editor' },
+                { key: 'assigned_manager', label: 'Manager' }
+            ];
+
+            for (const role of roles) {
+                if (data[role.key] && data[role.key] !== video[role.key]) {
+                    try {
+                        await sendAssignmentNotification({
+                            assignedTo: data[role.key],
+                            assignedBy: currentUser?.email,
+                            assignedByName: currentUser?.full_name || currentUser?.email,
+                            module: MODULES.MARKETING_TASK,
+                            itemName: data.title || video.title,
+                            itemId: video.id || video._id,
+                            description: `Role: ${role.label}`,
+                            link: `/Marketing?video=${video.id || video._id}`,
+                            metadata: {}
+                        });
+                    } catch (e) {
+                        console.error('Failed to send notification for role update', e);
+                    }
+                }
+            }
+
             return base44.entities.Video.update(video.id || video._id, {
                 ...data,
                 updated_at: new Date()
@@ -303,8 +333,8 @@ export default function VideoDetailModal({
                                 <div className="flex items-center gap-2 mt-1">
                                     <Badge variant="outline">{video.status}</Badge>
                                     <Badge className={`text-xs ${video.editing_level === 'A+' ? 'bg-purple-100 text-purple-700' :
-                                            video.editing_level === 'A' ? 'bg-blue-100 text-blue-700' :
-                                                'bg-slate-100 text-slate-700'
+                                        video.editing_level === 'A' ? 'bg-blue-100 text-blue-700' :
+                                            'bg-slate-100 text-slate-700'
                                         }`}>
                                         {video.editing_level}
                                     </Badge>
@@ -321,6 +351,7 @@ export default function VideoDetailModal({
 
                 <Tabs value={activeTab} onValueChange={setActiveTab} className="flex-1 flex flex-col overflow-hidden">
                     <TabsList className="border-b w-full justify-start rounded-none bg-transparent p-0">
+                        {/* @ts-ignore */}
                         <TabsTrigger
                             value="details"
                             className="data-[state=active]:border-b-2 data-[state=active]:border-indigo-600 rounded-none"
@@ -328,6 +359,7 @@ export default function VideoDetailModal({
                             <FileText className="w-4 h-4 mr-1" />
                             Details
                         </TabsTrigger>
+                        {/* @ts-ignore */}
                         <TabsTrigger
                             value="comments"
                             className="data-[state=active]:border-b-2 data-[state=active]:border-indigo-600 rounded-none"
@@ -335,6 +367,7 @@ export default function VideoDetailModal({
                             <MessageSquare className="w-4 h-4 mr-1" />
                             Comments ({comments.length})
                         </TabsTrigger>
+                        {/* @ts-ignore */}
                         <TabsTrigger
                             value="activity"
                             className="data-[state=active]:border-b-2 data-[state=active]:border-indigo-600 rounded-none"

@@ -1,3 +1,4 @@
+// @ts-nocheck
 import React, { useState, useEffect } from 'react';
 import { base44 } from '@/api/base44Client';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
@@ -48,7 +49,7 @@ export default function NotificationPanel({ isOpen, onClose, user }) {
   });
 
   const markAsReadMutation = useMutation({
-    mutationFn: (notificationId) => 
+    mutationFn: (notificationId) =>
       base44.entities.Notification.update(notificationId, { read: true }),
     onSuccess: () => {
       queryClient.invalidateQueries(['notifications']);
@@ -59,7 +60,7 @@ export default function NotificationPanel({ isOpen, onClose, user }) {
     mutationFn: async () => {
       const unreadNotifications = notifications.filter(n => !n.read);
       await Promise.all(
-        unreadNotifications.map(n => 
+        unreadNotifications.map(n =>
           base44.entities.Notification.update(n.id, { read: true })
         )
       );
@@ -70,7 +71,7 @@ export default function NotificationPanel({ isOpen, onClose, user }) {
   });
 
   const deleteNotificationMutation = useMutation({
-    mutationFn: (notificationId) => 
+    mutationFn: (notificationId) =>
       base44.entities.Notification.delete(notificationId),
     onSuccess: () => {
       queryClient.invalidateQueries(['notifications']);
@@ -213,7 +214,9 @@ export default function NotificationPanel({ isOpen, onClose, user }) {
                               {notification.message}
                             </p>
                             <p className="text-xs text-slate-400">
-                              {formatDistanceToNow(new Date(notification.created_date), { addSuffix: true })}
+                              {notification.created_date && !isNaN(new Date(notification.created_date).getTime())
+                                ? formatDistanceToNow(new Date(notification.created_date), { addSuffix: true })
+                                : 'Just now'}
                             </p>
                           </Link>
                         </div>

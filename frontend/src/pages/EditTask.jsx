@@ -47,7 +47,7 @@ import AICompletionPredictor from '@/components/tasks/AICompletionPredictor';
 import UserMultiSelect from '@/components/common/UserMultiSelect';
 import CustomFieldsForm from '@/components/tasks/CustomFieldsForm';
 import FileUpload from '@/components/common/FileUpload';
-import { notifyMultipleAssignees, MODULES } from '@/components/utils/notificationService';
+import { notifyMultipleAssignees, sendAssignmentNotification, MODULES } from '@/components/utils/notificationService';
 
 export default function EditTask() {
   const navigate = useNavigate();
@@ -263,16 +263,17 @@ export default function EditTask() {
       }
 
       // Create notification if assignee changed
-      if (task.assignee_email !== data.assignee_email && data.assignee_email && data.assignee_email !== user?.email) {
-        await base44.entities.Notification.create({
-          user_email: data.assignee_email,
-          type: 'task_assigned',
-          title: 'Task Assigned to You',
-          message: `You have been assigned to task: ${task.title}`,
-          task_id: taskId,
-          project_id: task.project_id,
-          actor_email: user?.email,
-          link: `/TaskDetail?id=${taskId}`
+      // Create notification if assignee changed
+      if (task.assignee_email !== data.assignee_email && data.assignee_email) {
+        await sendAssignmentNotification({
+          assignedTo: data.assignee_email,
+          assignedBy: user?.email,
+          assignedByName: user?.full_name || user?.email,
+          module: MODULES.TASK,
+          itemName: task.title,
+          itemId: taskId,
+          link: `/TaskDetail?id=${taskId}`,
+          metadata: {}
         });
       }
     },

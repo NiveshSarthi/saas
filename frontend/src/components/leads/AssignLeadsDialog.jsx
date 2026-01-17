@@ -2,6 +2,7 @@
 import React, { useState } from 'react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { base44 } from '@/api/base44Client';
+import { sendAssignmentNotification, MODULES } from '@/components/utils/notificationService';
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
@@ -39,21 +40,22 @@ export default function AssignLeadsDialog({
         const lead = leadsToAssign[i];
 
         setProgress({ current: i + 1, total: leadsToAssign.length, step: 'assigning' });
+        // Update activity log with structured notes if possible, otherwise keep consistent
         await base44.entities.Lead.update(lead.id, {
           assigned_to: userEmail,
-          // Update activity log with structured notes if possible, otherwise keep consistent
           notes: (lead.notes || '') + `\n[${new Date().toLocaleString()}] Assigned to ${salesUsers.find(u => u.email === userEmail)?.full_name || userEmail} by ${currentUser.full_name || currentUser.email}`
         });
 
         setProgress({ current: i + 1, total: leadsToAssign.length, step: 'notifying' });
-        await base44.entities.Notification.create({
-          user_email: userEmail,
-          type: 'lead_assigned',
-          title: 'New Lead Assigned',
-          message: `${currentUser.full_name || currentUser.email} assigned you a lead: ${lead.lead_name || lead.name}`,
-          actor_email: currentUser.email,
-          link: `LeadManagement`,
-          read: false
+        await sendAssignmentNotification({
+          assignedTo: userEmail,
+          assignedBy: currentUser?.email,
+          assignedByName: currentUser?.full_name || currentUser?.email,
+          module: MODULES.LEAD,
+          itemName: lead.lead_name || lead.name,
+          itemId: lead.id,
+          link: `/LeadDetail?id=${lead.id}`,
+          metadata: {}
         });
       }
 
