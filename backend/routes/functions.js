@@ -2,8 +2,18 @@ import express from 'express';
 import { calculateMonthlySalary } from '../controllers/salaryController.js';
 import * as aiController from '../controllers/aiController.js';
 import * as models from '../models/index.js';
+import crypto from 'crypto';
 
 const router = express.Router();
+
+const FB_API_VERSION = 'v21.0';
+
+// Helper to generate appsecret_proof
+const getAppSecretProof = (accessToken) => {
+    const appSecret = process.env.FB_APP_SECRET;
+    if (!appSecret) return null;
+    return crypto.createHmac('sha256', appSecret).update(accessToken).digest('hex');
+};
 
 router.post('/invoke/calculateMonthlySalary', calculateMonthlySalary);
 
@@ -119,16 +129,22 @@ router.post('/invoke/connectFacebookAccount', async (req, res) => {
         const FacebookPageConnection = models.FacebookPageConnection;
 
         if (!user_token) {
+            console.error('connectFacebookAccount: User Access Token is missing in request body.');
             return res.status(400).json({ error: 'User Access Token is required' });
         }
+        console.log(`Received user_token (len: ${user_token.length})... fetching accounts.`);
 
         // Fetch all pages for the user
         console.log('Fetching pages with User Token...');
-        const accountsRes = await fetch(`https://graph.facebook.com/${FB_API_VERSION}/me/accounts?access_token=${user_token}&fields=name,access_token,id,tasks&limit=100`);
+        const proof = getAppSecretProof(user_token);
+        const proofParam = proof ? `&appsecret_proof=${proof}` : '';
+
+        const accountsRes = await fetch(`https://graph.facebook.com/${FB_API_VERSION}/me/accounts?access_token=${user_token}${proofParam}&fields=name,access_token,id,tasks&limit=100`);
         const accountsData = await accountsRes.json();
 
         if (accountsData.error) {
-            return res.status(400).json({ error: accountsData.error.message });
+            console.error('Facebook API Error (connectFacebookAccount):', accountsData.error);
+            return res.status(400).json({ error: `Facebook API: ${accountsData.error.message}` });
         }
 
         const pagesList = accountsData.data || [];
@@ -159,7 +175,9 @@ router.post('/invoke/connectFacebookAccount', async (req, res) => {
 
             // Sync Forms for this page
             try {
-                const formsRes = await fetch(`https://graph.facebook.com/${FB_API_VERSION}/${pageData.id}/leadgen_forms?access_token=${pageData.access_token}`);
+                const pageProof = getAppSecretProof(pageData.access_token);
+                const pageProofParam = pageProof ? `&appsecret_proof=${pageProof}` : '';
+                const formsRes = await fetch(`https://graph.facebook.com/${FB_API_VERSION}/${pageData.id}/leadgen_forms?access_token=${pageData.access_token}${pageProofParam}`);
                 const formsData = await formsRes.json();
 
                 if (formsData.data) {
