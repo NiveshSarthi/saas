@@ -349,7 +349,8 @@ export default function NewTask() {
       story_points: formData.story_points ? parseInt(formData.story_points) : null,
       reporter_email: user?.email,
       created_by: user?.email,
-      assignee_email: formData.assignees.length > 0 ? formData.assignees[0] : null,
+      assignee_email: formData.assignees.length > 0 ? (formData.assignees[0] || '').toLowerCase() : null,
+      assignees: formData.assignees.map(e => (e || '').toLowerCase()),
     };
     createTaskMutation.mutate(dataToSubmit);
   };
