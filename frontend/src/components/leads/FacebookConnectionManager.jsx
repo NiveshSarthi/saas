@@ -23,8 +23,11 @@ import {
   XCircle,
   FileText,
   Zap,
-  Download
+  Download,
+  Trash2,
+  Users
 } from 'lucide-react';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { toast } from 'sonner';
 import { formatDistanceToNow } from 'date-fns';
 
@@ -169,6 +172,19 @@ export default function FacebookConnectionManager() {
     }
   });
 
+  const deletePageMutation = useMutation({
+    mutationFn: async (id) => {
+      await base44.entities.FacebookPageConnection.delete(id);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['facebook-pages'] });
+      toast.success('Page connection removed');
+    },
+    onError: () => {
+      toast.error('Failed to remove page connection');
+    }
+  });
+
   const handleTogglePage = (page) => {
     const newStatus = page.status === 'active' ? 'inactive' : 'active';
     togglePageMutation.mutate({ pageId: page.id, newStatus });
@@ -176,6 +192,30 @@ export default function FacebookConnectionManager() {
 
   const [fbPageId, setFbPageId] = useState('');
   const [fbPageToken, setFbPageToken] = useState('');
+  const [userToken, setUserToken] = useState('');
+
+  const connectAccountMutation = useMutation({
+    mutationFn: async ({ user_token }) => {
+      const response = await base44.functions.invoke('connectFacebookAccount', { user_token });
+      return response.data;
+    },
+    onSuccess: async (data) => {
+      await queryClient.invalidateQueries({ queryKey: ['facebook-pages'] });
+      toast.success(data.message || 'All pages connected successfully');
+      setUserToken('');
+    },
+    onError: (error) => {
+      toast.error('Failed to connect account: ' + (error.response?.data?.error || error.message));
+    }
+  });
+
+  const handleConnectAccount = () => {
+    if (!userToken) {
+      toast.error('Please enter User Access Token');
+      return;
+    }
+    connectAccountMutation.mutate({ user_token: userToken });
+  };
 
   const handleConnect = async () => {
     if (!fbPageId || !fbPageToken) {
@@ -223,52 +263,100 @@ export default function FacebookConnectionManager() {
           </DialogHeader>
 
           <div className="space-y-4 py-4">
-            {/* Settings Panel */}
-            <div className="bg-slate-50 border border-slate-200 rounded-lg p-4 space-y-4">
-              <h4 className="font-semibold text-slate-900 flex items-center gap-2">
-                <Zap className="w-4 h-4 text-indigo-600" />
-                Connection Settings
-              </h4>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div className="space-y-2">
-                  <label className="text-sm font-medium text-slate-700">Page ID</label>
-                  <input
-                    type="text"
-                    placeholder="Enter Page ID"
-                    value={fbPageId}
-                    onChange={(e) => setFbPageId(e.target.value)}
-                    className="w-full px-3 py-2 border rounded-md text-sm focus:ring-2 focus:ring-indigo-500 outline-none"
-                  />
+            {/* Connection Tabs */}
+            <Tabs defaultValue="bulk" className="w-full">
+              <TabsList className="grid w-full grid-cols-2">
+                <TabsTrigger value="bulk">Connect All Pages</TabsTrigger>
+                <TabsTrigger value="single">Connect Single Page</TabsTrigger>
+              </TabsList>
+
+              <TabsContent value="bulk" className="space-y-4 py-4">
+                <div className="bg-slate-50 border border-slate-200 rounded-lg p-4 space-y-4">
+                  <h4 className="font-semibold text-slate-900 flex items-center gap-2">
+                    <Users className="w-4 h-4 text-indigo-600" />
+                    Bulk Connection (User Token)
+                  </h4>
+                  <div className="space-y-2">
+                    <label className="text-sm font-medium text-slate-700">User Access Token</label>
+                    <input
+                      type="password"
+                      placeholder="Enter User Token (with pages_show_list)"
+                      value={userToken}
+                      onChange={(e) => setUserToken(e.target.value)}
+                      className="w-full px-3 py-2 border rounded-md text-sm focus:ring-2 focus:ring-indigo-500 outline-none"
+                    />
+                    <p className="text-xs text-slate-500">
+                      This will fetch and connect ALL pages where you are an admin.
+                    </p>
+                  </div>
+                  <Button
+                    onClick={handleConnectAccount}
+                    disabled={connectAccountMutation.isPending}
+                    className="w-full bg-indigo-600 hover:bg-indigo-700"
+                  >
+                    {connectAccountMutation.isPending ? (
+                      <>
+                        <RefreshCw className="w-4 h-4 mr-2 animate-spin" />
+                        Connecting All Pages...
+                      </>
+                    ) : (
+                      <>
+                        <Users className="w-4 h-4 mr-2" />
+                        Fetch & Connect All Pages
+                      </>
+                    )}
+                  </Button>
                 </div>
-                <div className="space-y-2">
-                  <label className="text-sm font-medium text-slate-700">Access Token</label>
-                  <input
-                    type="password"
-                    placeholder="Enter Page Token"
-                    value={fbPageToken}
-                    onChange={(e) => setFbPageToken(e.target.value)}
-                    className="w-full px-3 py-2 border rounded-md text-sm focus:ring-2 focus:ring-indigo-500 outline-none"
-                  />
+              </TabsContent>
+
+              <TabsContent value="single" className="space-y-4 py-4">
+                <div className="bg-slate-50 border border-slate-200 rounded-lg p-4 space-y-4">
+                  <h4 className="font-semibold text-slate-900 flex items-center gap-2">
+                    <Zap className="w-4 h-4 text-indigo-600" />
+                    Single Page Connection
+                  </h4>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div className="space-y-2">
+                      <label className="text-sm font-medium text-slate-700">Page ID</label>
+                      <input
+                        type="text"
+                        placeholder="Enter Page ID"
+                        value={fbPageId}
+                        onChange={(e) => setFbPageId(e.target.value)}
+                        className="w-full px-3 py-2 border rounded-md text-sm focus:ring-2 focus:ring-indigo-500 outline-none"
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <label className="text-sm font-medium text-slate-700">Page Access Token</label>
+                      <input
+                        type="password"
+                        placeholder="Enter Page Token"
+                        value={fbPageToken}
+                        onChange={(e) => setFbPageToken(e.target.value)}
+                        className="w-full px-3 py-2 border rounded-md text-sm focus:ring-2 focus:ring-indigo-500 outline-none"
+                      />
+                    </div>
+                  </div>
+                  <Button
+                    onClick={handleConnect}
+                    disabled={connectLoading || connectMutation.isPending}
+                    className="w-full bg-indigo-600 hover:bg-indigo-700"
+                  >
+                    {connectLoading || connectMutation.isPending ? (
+                      <>
+                        <RefreshCw className="w-4 h-4 mr-2 animate-spin" />
+                        Connecting...
+                      </>
+                    ) : (
+                      <>
+                        <Facebook className="w-4 h-4 mr-2" />
+                        Connect Page
+                      </>
+                    )}
+                  </Button>
                 </div>
-              </div>
-              <Button
-                onClick={handleConnect}
-                disabled={connectLoading || connectMutation.isPending}
-                className="w-full bg-indigo-600 hover:bg-indigo-700"
-              >
-                {connectLoading || connectMutation.isPending ? (
-                  <>
-                    <RefreshCw className="w-4 h-4 mr-2 animate-spin" />
-                    Connecting...
-                  </>
-                ) : (
-                  <>
-                    <Facebook className="w-4 h-4 mr-2" />
-                    Connect New Page
-                  </>
-                )}
-              </Button>
-            </div>
+              </TabsContent>
+            </Tabs>
 
             <div className="grid grid-cols-2 gap-3">
               {pages.length > 0 && (
@@ -457,11 +545,25 @@ export default function FacebookConnectionManager() {
                             Page ID: {page.page_id}
                           </CardDescription>
                         </div>
-                        <Switch
-                          checked={page.status === 'active'}
-                          onCheckedChange={() => handleTogglePage(page)}
-                          disabled={togglePageMutation.isPending}
-                        />
+                        <div className="flex items-center gap-2">
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="h-8 w-8 text-red-500 hover:text-red-700 hover:bg-red-50"
+                            onClick={() => {
+                              if (confirm('Are you sure you want to remove this page connection?')) {
+                                deletePageMutation.mutate(page.id);
+                              }
+                            }}
+                          >
+                            <Trash2 className="w-4 h-4" />
+                          </Button>
+                          <Switch
+                            checked={page.status === 'active'}
+                            onCheckedChange={() => handleTogglePage(page)}
+                            disabled={togglePageMutation.isPending}
+                          />
+                        </div>
                       </div>
                     </CardHeader>
                     <CardContent className="pt-0 space-y-3">

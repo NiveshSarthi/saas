@@ -394,7 +394,7 @@ export default function LeadManagement() {
       (lead.lead_source === 'facebook' && lead.notes?.includes(`Page ID: ${selectedPage}`));
 
     const matchesFormFilter = selectedForm === 'all' ||
-      (lead.lead_source === 'facebook' && lead.notes?.includes(`Form: ${selectedForm}`));
+      (lead.lead_source === 'facebook' && lead.fb_form_id === selectedForm);
 
     const matchesFormNameFilter = filterFormName === 'all' || extractFormName(lead.notes) === filterFormName;
 
