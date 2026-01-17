@@ -78,8 +78,12 @@ router.post('/invoke/connectFacebookPage', async (req, res) => {
 
         // AUTO-SYNC FORMS: Immediately fetch forms so they are available without manual sync
         try {
+            console.log(`Fetching forms for page ${page_id}...`);
             const formsRes = await fetch(`https://graph.facebook.com/${FB_API_VERSION}/${page_id}/leadgen_forms?access_token=${page_token}`);
             const formsData = await formsRes.json();
+
+            console.log('Forms API Response:', JSON.stringify(formsData, null, 2));
+
             if (formsData.data) {
                 const currentFormIds = new Set(page.lead_forms.map(f => f.form_id));
                 for (const fbForm of formsData.data) {
@@ -94,12 +98,95 @@ router.post('/invoke/connectFacebookPage', async (req, res) => {
                 }
                 await page.save();
                 console.log(`Auto-synced ${formsData.data.length} forms for page ${page_id}`);
+            } else if (formsData.error) {
+                console.error('Error fetching forms:', formsData.error);
             }
         } catch (syncError) {
             console.error('Auto-form sync failed during connection:', syncError);
         }
 
         res.json({ success: true, data: { message: `Connected to ${page.page_name} and synced forms.`, page } });
+    } catch (e) {
+        res.status(500).json({ error: e.message });
+    }
+});
+
+
+
+router.post('/invoke/connectFacebookAccount', async (req, res) => {
+    try {
+        const { user_token } = req.body;
+        const FacebookPageConnection = models.FacebookPageConnection;
+
+        if (!user_token) {
+            return res.status(400).json({ error: 'User Access Token is required' });
+        }
+
+        // Fetch all pages for the user
+        console.log('Fetching pages with User Token...');
+        const accountsRes = await fetch(`https://graph.facebook.com/${FB_API_VERSION}/me/accounts?access_token=${user_token}&fields=name,access_token,id,tasks&limit=100`);
+        const accountsData = await accountsRes.json();
+
+        if (accountsData.error) {
+            return res.status(400).json({ error: accountsData.error.message });
+        }
+
+        const pagesList = accountsData.data || [];
+        console.log(`Found ${pagesList.length} pages.`);
+
+        const results = [];
+
+        for (const pageData of pagesList) {
+            // Upsert Page Connection
+            let page = await FacebookPageConnection.findOne({ page_id: pageData.id });
+
+            if (!page) {
+                page = await FacebookPageConnection.create({
+                    page_id: pageData.id,
+                    page_name: pageData.name,
+                    access_token: pageData.access_token,
+                    status: 'active',
+                    lead_forms: [],
+                    last_sync_date: new Date()
+                });
+            } else {
+                page.access_token = pageData.access_token;
+                page.page_name = pageData.name;
+                page.status = 'active'; // Re-activate if found
+                page.last_sync_date = new Date();
+                await page.save();
+            }
+
+            // Sync Forms for this page
+            try {
+                const formsRes = await fetch(`https://graph.facebook.com/${FB_API_VERSION}/${pageData.id}/leadgen_forms?access_token=${pageData.access_token}`);
+                const formsData = await formsRes.json();
+
+                if (formsData.data) {
+                    const currentFormIds = new Set(page.lead_forms.map(f => f.form_id));
+                    let newForms = 0;
+                    for (const fbForm of formsData.data) {
+                        if (!currentFormIds.has(fbForm.id)) {
+                            page.lead_forms.push({
+                                form_id: fbForm.id,
+                                form_name: fbForm.name,
+                                status: fbForm.status,
+                                subscribed: true
+                            });
+                            newForms++;
+                        }
+                    }
+                    if (newForms > 0) await page.save();
+                }
+            } catch (err) {
+                console.error(`Failed to sync forms for ${pageData.name}:`, err.message);
+            }
+
+            results.push({ name: pageData.name, id: pageData.id, status: 'connected' });
+        }
+
+        res.json({ success: true, data: { message: `Successfully connected ${results.length} pages.`, results } });
+
     } catch (e) {
         res.status(500).json({ error: e.message });
     }
@@ -114,6 +201,8 @@ router.post('/invoke/syncFacebookForms', async (req, res) => {
         for (const page of pages) {
             const fbRes = await fetch(`https://graph.facebook.com/${FB_API_VERSION}/${page.page_id}/leadgen_forms?access_token=${page.access_token}`);
             const fbData = await fbRes.json();
+
+            console.log(`Syncing forms for ${page.page_name} (${page.page_id}):`, JSON.stringify(fbData, null, 2));
 
             if (fbData.data) {
                 const currentFormIds = new Set(page.lead_forms.map(f => f.form_id));
