@@ -752,3 +752,160 @@ const candidateActivitySchema = new mongoose.Schema({
 export const Candidate = mongoose.model('Candidate', candidateSchema);
 export const Interview = mongoose.model('Interview', interviewSchema);
 export const CandidateActivity = mongoose.model('CandidateActivity', candidateActivitySchema);
+
+// =============================================
+// ACCOUNTS MANAGEMENT MODULE
+// =============================================
+
+const chartOfAccountSchema = new mongoose.Schema({
+    code: { type: String, required: true, unique: true },
+    name: { type: String, required: true },
+    type: {
+        type: String,
+        required: true,
+        enum: ['Asset', 'Liability', 'Equity', 'Income', 'Expense']
+    },
+    subtype: String, // Current Asset, Long Term Liability, etc.
+    description: String,
+    balance: { type: Number, default: 0 },
+    is_active: { type: Boolean, default: true },
+    created_at: { type: Date, default: Date.now },
+    updated_at: { type: Date, default: Date.now }
+});
+
+const vendorSchema = new mongoose.Schema({
+    name: { type: String, required: true },
+    email: String,
+    phone: String,
+    address: String,
+    tax_id: String, // GSTIN/VAT
+    payment_terms: String, // Net 30, Net 15
+    balance: { type: Number, default: 0 },
+    status: { type: String, enum: ['active', 'inactive'], default: 'active' },
+    created_at: { type: Date, default: Date.now },
+    updated_at: { type: Date, default: Date.now }
+});
+
+const clientSchema = new mongoose.Schema({
+    name: { type: String, required: true },
+    email: String,
+    phone: String,
+    address: String,
+    tax_id: String,
+    payment_terms: String,
+    balance: { type: Number, default: 0 },
+    status: { type: String, enum: ['active', 'inactive'], default: 'active' },
+    created_at: { type: Date, default: Date.now },
+    updated_at: { type: Date, default: Date.now }
+});
+
+const invoiceSchema = new mongoose.Schema({
+    invoice_number: { type: String, required: true, unique: true },
+    client_id: { type: String, required: true },
+    client_name: String, // Denormalized for display
+    date: { type: Date, required: true },
+    due_date: { type: Date, required: true },
+    items: [{
+        description: String,
+        quantity: Number,
+        unit_price: Number,
+        tax_rate: Number,
+        amount: Number,
+        account_id: String // Revenue account
+    }],
+    notes: String,
+    subtotal: { type: Number, default: 0 },
+    tax_total: { type: Number, default: 0 },
+    total: { type: Number, default: 0 },
+    amount_paid: { type: Number, default: 0 },
+    status: {
+        type: String,
+        enum: ['draft', 'sent', 'partial', 'paid', 'overdue', 'cancelled'],
+        default: 'draft'
+    },
+    created_by: String,
+    created_at: { type: Date, default: Date.now },
+    updated_at: { type: Date, default: Date.now }
+});
+
+const billSchema = new mongoose.Schema({
+    bill_number: String,
+    vendor_id: { type: String, required: true },
+    vendor_name: String,
+    date: { type: Date, required: true },
+    due_date: { type: Date, required: true },
+    items: [{
+        description: String,
+        quantity: Number,
+        unit_price: Number,
+        amount: Number,
+        account_id: String // Expense account
+    }],
+    total: { type: Number, default: 0 },
+    amount_paid: { type: Number, default: 0 },
+    status: {
+        type: String,
+        enum: ['draft', 'received', 'partial', 'paid', 'overdue'],
+        default: 'draft'
+    },
+    created_by: String,
+    created_at: { type: Date, default: Date.now },
+    updated_at: { type: Date, default: Date.now }
+});
+
+const transactionSchema = new mongoose.Schema({
+    date: { type: Date, required: true },
+    description: String,
+    reference_id: String, // Invoice ID, Bill ID, etc.
+    reference_type: { type: String, enum: ['invoice', 'bill', 'payment', 'journal', 'expense'] },
+    account_id: { type: String, required: true }, // General Ledger Account
+    type: { type: String, enum: ['debit', 'credit'], required: true },
+    amount: { type: Number, required: true },
+    created_by: String,
+    created_at: { type: Date, default: Date.now }
+});
+
+const siteVisitSchema = new mongoose.Schema({
+    user_email: { type: String, required: true },
+    user_name: String,
+    client_name: { type: String, required: true },
+    purpose: String,
+    location_start: {
+        latitude: Number,
+        longitude: Number,
+        address: String
+    },
+    location_end: {
+        latitude: Number,
+        longitude: Number,
+        address: String
+    },
+    estimated_duration_minutes: { type: Number, required: true },
+    actual_duration_minutes: Number,
+    start_time: { type: Date, default: Date.now },
+    end_time: Date,
+    status: {
+        type: String,
+        enum: ['ongoing', 'completed', 'cancelled'],
+        default: 'ongoing'
+    },
+    notes: String, // Outcome notes
+    approval_status: {
+        type: String,
+        enum: ['pending', 'approved', 'rejected'],
+        default: 'pending'
+    },
+    approved_by: String, // Admin email or ID
+    rejection_reason: String,
+    created_at: { type: Date, default: Date.now },
+    updated_at: { type: Date, default: Date.now }
+});
+
+export const SiteVisit = mongoose.model('SiteVisit', siteVisitSchema);
+
+export const ChartOfAccount = mongoose.model('ChartOfAccount', chartOfAccountSchema);
+export const Vendor = mongoose.model('Vendor', vendorSchema);
+export const Client = mongoose.model('Client', clientSchema);
+export const Invoice = mongoose.model('Invoice', invoiceSchema);
+export const Bill = mongoose.model('Bill', billSchema);
+export const Transaction = mongoose.model('Transaction', transactionSchema);
