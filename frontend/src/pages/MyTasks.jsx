@@ -228,14 +228,14 @@ export default function MyTasks() {
     }
   };
 
-  // Filter tasks
   const myTasks = tasks.filter(t => {
+    const userEmail = (user?.email || '').toLowerCase();
     // Show if directly assigned
-    if (t.assignee_email === user?.email) return true;
+    if ((t.assignee_email || '').toLowerCase() === userEmail) return true;
     // Show if assignees array includes user
-    if (t.assignees && Array.isArray(t.assignees) && t.assignees.includes(user?.email)) return true;
+    if (t.assignees && Array.isArray(t.assignees) && t.assignees.some(e => (e || '').toLowerCase() === userEmail)) return true;
     // Show if user created the task and it's unassigned
-    if (t.created_by === user?.email && !t.assignee_email && (!t.assignees || t.assignees.length === 0)) return true;
+    if ((t.created_by || '').toLowerCase() === userEmail && !t.assignee_email && (!t.assignees || t.assignees.length === 0)) return true;
     return false;
   });
 

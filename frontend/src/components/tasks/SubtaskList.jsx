@@ -385,8 +385,8 @@ export default function SubtaskList({ parentTaskId, projectId, subtasks = [], us
       task_type: 'subtask',
       status: 'todo',
       priority: newPriority,
-      assignee_email: newAssignees[0] || null,
-      assignees: newAssignees,
+      assignee_email: newAssignees[0] ? newAssignees[0].toLowerCase() : null,
+      assignees: newAssignees.map(e => (e || '').toLowerCase()),
       attachments: newAttachments,
       start_date: newStartDate ? format(newStartDate, 'yyyy-MM-dd') : null,
       due_date: newEndDate ? format(newEndDate, 'yyyy-MM-dd') : null,
@@ -435,7 +435,7 @@ export default function SubtaskList({ parentTaskId, projectId, subtasks = [], us
 
   const handleBulkAssign = (assignees) => {
     selectedSubtasks.forEach(id =>
-      updateSubtaskMutation.mutate({ id, data: { assignees } })
+      updateSubtaskMutation.mutate({ id, data: { assignees: assignees.map(e => (e || '').toLowerCase()) } })
     );
     setSelectedSubtasks([]);
     toast.success('Bulk assigned');
@@ -617,262 +617,262 @@ export default function SubtaskList({ parentTaskId, projectId, subtasks = [], us
                     <Draggable key={sid} draggableId={sid} index={index}>
                       {(provided, snapshot) => (
                         <div
-                      ref={provided.innerRef}
-                      {...provided.draggableProps}
-                      className={cn(
-                        "flex items-start gap-3 p-3 rounded-lg border bg-white group transition-shadow",
-                        snapshot.isDragging && "shadow-lg",
-                        subtask.status === 'done' && "bg-slate-50",
-                        subtask.status === 'blocked' && "border-red-200 bg-red-50"
-                      )}
-                    >
-                      {/* Bulk Select Checkbox */}
-                      <Checkbox
-                        checked={selectedSubtasks.includes(sid)}
-                        onCheckedChange={(checked) => {
-                          if (checked) {
-                            setSelectedSubtasks([...selectedSubtasks, sid]);
-                          } else {
-                            setSelectedSubtasks(selectedSubtasks.filter(id => id !== sid));
-                          }
-                        }}
-                      />
-
-                      {/* Drag Handle */}
-                      <div {...provided.dragHandleProps}>
-                        <GripVertical className="w-4 h-4 text-slate-300 hover:text-slate-500 cursor-grab" />
-                      </div>
-
-                      {/* Status Toggle */}
-                      <button onClick={() => handleToggleStatus({ ...subtask, id: sid })} className="flex-shrink-0">
-                        {(() => {
-                          const StatusIcon = statusConfig[subtask.status]?.icon || Circle;
-                          const color = subtask.status === 'done'
-                            ? 'text-emerald-500'
-                            : subtask.status === 'blocked'
-                              ? 'text-red-500'
-                              : subtask.status === 'in_progress'
-                                ? 'text-blue-500'
-                                : 'text-slate-300';
-                          return <StatusIcon className={cn('w-5 h-5', color)} />;
-                        })()}
-                      </button>
-
-                      {/* Content */}
-                      <div className="flex-1 min-w-0 space-y-2">
-                        {editingId === sid ? (
-                          <Input
-                            value={editTitle}
-                            onChange={(e) => setEditTitle(e.target.value)}
-                            onBlur={() => handleSaveInlineEdit(sid)}
-                            onKeyDown={(e) => {
-                              if (e.key === 'Enter') handleSaveInlineEdit(sid);
-                              if (e.key === 'Escape') setEditingId(null);
+                          ref={provided.innerRef}
+                          {...provided.draggableProps}
+                          className={cn(
+                            "flex items-start gap-3 p-3 rounded-lg border bg-white group transition-shadow",
+                            snapshot.isDragging && "shadow-lg",
+                            subtask.status === 'done' && "bg-slate-50",
+                            subtask.status === 'blocked' && "border-red-200 bg-red-50"
+                          )}
+                        >
+                          {/* Bulk Select Checkbox */}
+                          <Checkbox
+                            checked={selectedSubtasks.includes(sid)}
+                            onCheckedChange={(checked) => {
+                              if (checked) {
+                                setSelectedSubtasks([...selectedSubtasks, sid]);
+                              } else {
+                                setSelectedSubtasks(selectedSubtasks.filter(id => id !== sid));
+                              }
                             }}
-                            autoFocus
-                            className="h-7 text-sm"
                           />
-                        ) : (
-                          <div
-                            className={cn(
-                              "text-sm font-medium cursor-pointer hover:text-indigo-600",
-                              subtask.status === 'done' && "line-through text-slate-500"
-                            )}
-                            onClick={() => handleInlineEdit({ ...subtask, id: sid })}
-                          >
-                            {subtask.title}
+
+                          {/* Drag Handle */}
+                          <div {...provided.dragHandleProps}>
+                            <GripVertical className="w-4 h-4 text-slate-300 hover:text-slate-500 cursor-grab" />
                           </div>
-                        )}
 
-                        {subtask.description && (
-                          <div className="text-xs text-slate-500 line-clamp-2 mt-1">
-                            {subtask.description}
-                          </div>
-                        )}
+                          {/* Status Toggle */}
+                          <button onClick={() => handleToggleStatus({ ...subtask, id: sid })} className="flex-shrink-0">
+                            {(() => {
+                              const StatusIcon = statusConfig[subtask.status]?.icon || Circle;
+                              const color = subtask.status === 'done'
+                                ? 'text-emerald-500'
+                                : subtask.status === 'blocked'
+                                  ? 'text-red-500'
+                                  : subtask.status === 'in_progress'
+                                    ? 'text-blue-500'
+                                    : 'text-slate-300';
+                              return <StatusIcon className={cn('w-5 h-5', color)} />;
+                            })()}
+                          </button>
 
-                        {/* Metadata Row */}
-                        <div className="flex items-center gap-2 flex-wrap">
-                          <Badge className={cn("text-xs", statusConfig[subtask.status]?.color || 'bg-slate-100')}>
-                            {statusConfig[subtask.status]?.label || 'Todo'}
-                          </Badge>
-                          <Badge className={cn("text-xs", priorityConfig[subtask.priority]?.color)}>
-                            {subtask.priority || 'medium'}
-                          </Badge>
-
-                          {/* Start Date */}
-                          {subtask.start_date && (
-                            <Badge variant="outline" className="text-xs">
-                              <Calendar className="w-3 h-3 mr-1" />
-                              Start: {format(new Date(subtask.start_date), 'MMM d')}
-                            </Badge>
-                          )}
-
-                          {/* Due Date */}
-                          {subtask.due_date && (
-                            <Badge variant="outline" className="text-xs">
-                              <Calendar className="w-3 h-3 mr-1" />
-                              Due: {format(new Date(subtask.due_date), 'MMM d')}
-                            </Badge>
-                          )}
-
-                          {/* Time Estimate */}
-                          {subtask.estimated_hours && (
-                            <Badge variant="outline" className="text-xs">
-                              <Clock className="w-3 h-3 mr-1" />
-                              {subtask.estimated_hours}h
-                            </Badge>
-                          )}
-
-                          {/* Effort Points */}
-                          {subtask.subtask_effort_points && (
-                            <Badge variant="outline" className="text-xs">
-                              <Zap className="w-3 h-3 mr-1" />
-                              {subtask.subtask_effort_points} pts
-                            </Badge>
-                          )}
-
-                          {/* Dependencies */}
-                          {subtask.blocked_by_task_ids && subtask.blocked_by_task_ids.length > 0 && (
-                            <Badge variant="outline" className="text-xs text-amber-600">
-                              Depends on {subtask.blocked_by_task_ids.length}
-                            </Badge>
-                          )}
-
-                          {/* Comments Count */}
-                          {subtask.subtask_comments && subtask.subtask_comments.length > 0 && (
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              className="h-6 px-2 text-xs"
-                              onClick={() => setCommentingId(commentingId === subtask.id ? null : subtask.id)}
-                            >
-                              <MessageSquare className="w-3 h-3 mr-1" />
-                              {subtask.subtask_comments.length}
-                            </Button>
-                          )}
-
-                          {/* Time Tracked */}
-                          {subtask.subtask_time_tracked > 0 && (
-                            <Badge variant="outline" className="text-xs text-green-600">
-                              <Clock className="w-3 h-3 mr-1" />
-                              {Math.floor(subtask.subtask_time_tracked / 60)}h {subtask.subtask_time_tracked % 60}m
-                            </Badge>
-                          )}
-                        </div>
-
-                        {/* Comments Section */}
-                        {commentingId === subtask.id && (
-                          <div className="space-y-2 mt-2 p-2 bg-slate-50 rounded">
-                            {subtask.subtask_comments?.map((comment, idx) => (
-                              <div key={idx} className="text-xs">
-                                <span className="font-medium">{comment.author}:</span> {comment.text}
-                              </div>
-                            ))}
-                            <div className="flex gap-2">
+                          {/* Content */}
+                          <div className="flex-1 min-w-0 space-y-2">
+                            {editingId === sid ? (
                               <Input
-                                placeholder="Add comment..."
-                                value={commentText}
-                                onChange={(e) => setCommentText(e.target.value)}
-                                className="h-7 text-xs"
+                                value={editTitle}
+                                onChange={(e) => setEditTitle(e.target.value)}
+                                onBlur={() => handleSaveInlineEdit(sid)}
                                 onKeyDown={(e) => {
-                                  if (e.key === 'Enter') handleAddComment({ ...subtask, id: sid });
+                                  if (e.key === 'Enter') handleSaveInlineEdit(sid);
+                                  if (e.key === 'Escape') setEditingId(null);
                                 }}
+                                autoFocus
+                                className="h-7 text-sm"
                               />
-                              <Button size="sm" onClick={() => handleAddComment({ ...subtask, id: sid })}>
-                                Add
-                              </Button>
-                            </div>
-                          </div>
-                        )}
-                      </div>
+                            ) : (
+                              <div
+                                className={cn(
+                                  "text-sm font-medium cursor-pointer hover:text-indigo-600",
+                                  subtask.status === 'done' && "line-through text-slate-500"
+                                )}
+                                onClick={() => handleInlineEdit({ ...subtask, id: sid })}
+                              >
+                                {subtask.title}
+                              </div>
+                            )}
 
-                      {/* Assignees */}
-                      <div className="flex items-center gap-2">
-                        {subtask.assignees && subtask.assignees.length > 0 && (
-                          <div className="flex -space-x-2">
-                            {subtask.assignees.slice(0, 3).map((email, idx) => {
-                              const user = users.find(u => u.email === email);
-                              const initials = user?.full_name
-                                ? user.full_name.split(' ').map(n => n[0]).join('').slice(0, 2)
-                                : email.slice(0, 2);
-                              return (
-                                <Avatar key={idx} className="w-7 h-7 border-2 border-white">
-                                  <AvatarFallback className="bg-indigo-100 text-indigo-700 text-xs">
-                                    {initials.toUpperCase()}
-                                  </AvatarFallback>
-                                </Avatar>
-                              );
-                            })}
-                            {subtask.assignees.length > 3 && (
-                              <Avatar className="w-7 h-7 border-2 border-white">
-                                <AvatarFallback className="bg-slate-100 text-slate-600 text-[9px]">
-                                  +{subtask.assignees.length - 3}
-                                </AvatarFallback>
-                              </Avatar>
+                            {subtask.description && (
+                              <div className="text-xs text-slate-500 line-clamp-2 mt-1">
+                                {subtask.description}
+                              </div>
+                            )}
+
+                            {/* Metadata Row */}
+                            <div className="flex items-center gap-2 flex-wrap">
+                              <Badge className={cn("text-xs", statusConfig[subtask.status]?.color || 'bg-slate-100')}>
+                                {statusConfig[subtask.status]?.label || 'Todo'}
+                              </Badge>
+                              <Badge className={cn("text-xs", priorityConfig[subtask.priority]?.color)}>
+                                {subtask.priority || 'medium'}
+                              </Badge>
+
+                              {/* Start Date */}
+                              {subtask.start_date && (
+                                <Badge variant="outline" className="text-xs">
+                                  <Calendar className="w-3 h-3 mr-1" />
+                                  Start: {format(new Date(subtask.start_date), 'MMM d')}
+                                </Badge>
+                              )}
+
+                              {/* Due Date */}
+                              {subtask.due_date && (
+                                <Badge variant="outline" className="text-xs">
+                                  <Calendar className="w-3 h-3 mr-1" />
+                                  Due: {format(new Date(subtask.due_date), 'MMM d')}
+                                </Badge>
+                              )}
+
+                              {/* Time Estimate */}
+                              {subtask.estimated_hours && (
+                                <Badge variant="outline" className="text-xs">
+                                  <Clock className="w-3 h-3 mr-1" />
+                                  {subtask.estimated_hours}h
+                                </Badge>
+                              )}
+
+                              {/* Effort Points */}
+                              {subtask.subtask_effort_points && (
+                                <Badge variant="outline" className="text-xs">
+                                  <Zap className="w-3 h-3 mr-1" />
+                                  {subtask.subtask_effort_points} pts
+                                </Badge>
+                              )}
+
+                              {/* Dependencies */}
+                              {subtask.blocked_by_task_ids && subtask.blocked_by_task_ids.length > 0 && (
+                                <Badge variant="outline" className="text-xs text-amber-600">
+                                  Depends on {subtask.blocked_by_task_ids.length}
+                                </Badge>
+                              )}
+
+                              {/* Comments Count */}
+                              {subtask.subtask_comments && subtask.subtask_comments.length > 0 && (
+                                <Button
+                                  variant="ghost"
+                                  size="sm"
+                                  className="h-6 px-2 text-xs"
+                                  onClick={() => setCommentingId(commentingId === subtask.id ? null : subtask.id)}
+                                >
+                                  <MessageSquare className="w-3 h-3 mr-1" />
+                                  {subtask.subtask_comments.length}
+                                </Button>
+                              )}
+
+                              {/* Time Tracked */}
+                              {subtask.subtask_time_tracked > 0 && (
+                                <Badge variant="outline" className="text-xs text-green-600">
+                                  <Clock className="w-3 h-3 mr-1" />
+                                  {Math.floor(subtask.subtask_time_tracked / 60)}h {subtask.subtask_time_tracked % 60}m
+                                </Badge>
+                              )}
+                            </div>
+
+                            {/* Comments Section */}
+                            {commentingId === subtask.id && (
+                              <div className="space-y-2 mt-2 p-2 bg-slate-50 rounded">
+                                {subtask.subtask_comments?.map((comment, idx) => (
+                                  <div key={idx} className="text-xs">
+                                    <span className="font-medium">{comment.author}:</span> {comment.text}
+                                  </div>
+                                ))}
+                                <div className="flex gap-2">
+                                  <Input
+                                    placeholder="Add comment..."
+                                    value={commentText}
+                                    onChange={(e) => setCommentText(e.target.value)}
+                                    className="h-7 text-xs"
+                                    onKeyDown={(e) => {
+                                      if (e.key === 'Enter') handleAddComment({ ...subtask, id: sid });
+                                    }}
+                                  />
+                                  <Button size="sm" onClick={() => handleAddComment({ ...subtask, id: sid })}>
+                                    Add
+                                  </Button>
+                                </div>
+                              </div>
                             )}
                           </div>
-                        )}
 
-                        {/* Timer */}
-                        {trackingId === sid ? (
-                          <Button
-                            size="icon"
-                            variant="outline"
-                            className="h-7 w-7"
-                            onClick={() => handleStopTimer({ ...subtask, id: sid })}
-                          >
-                            <Pause className="w-3 h-3 text-red-600" />
-                          </Button>
-                        ) : (
-                          <Button
-                            size="icon"
-                            variant="ghost"
-                            className="h-7 w-7 opacity-0 group-hover:opacity-100"
-                            onClick={() => handleStartTimer(sid)}
-                          >
-                            <Play className="w-3 h-3" />
-                          </Button>
-                        )}
+                          {/* Assignees */}
+                          <div className="flex items-center gap-2">
+                            {subtask.assignees && subtask.assignees.length > 0 && (
+                              <div className="flex -space-x-2">
+                                {subtask.assignees.slice(0, 3).map((email, idx) => {
+                                  const user = users.find(u => u.email === email);
+                                  const initials = user?.full_name
+                                    ? user.full_name.split(' ').map(n => n[0]).join('').slice(0, 2)
+                                    : email.slice(0, 2);
+                                  return (
+                                    <Avatar key={idx} className="w-7 h-7 border-2 border-white">
+                                      <AvatarFallback className="bg-indigo-100 text-indigo-700 text-xs">
+                                        {initials.toUpperCase()}
+                                      </AvatarFallback>
+                                    </Avatar>
+                                  );
+                                })}
+                                {subtask.assignees.length > 3 && (
+                                  <Avatar className="w-7 h-7 border-2 border-white">
+                                    <AvatarFallback className="bg-slate-100 text-slate-600 text-[9px]">
+                                      +{subtask.assignees.length - 3}
+                                    </AvatarFallback>
+                                  </Avatar>
+                                )}
+                              </div>
+                            )}
 
-                        {/* Actions Menu */}
-                        <DropdownMenu>
-                          <DropdownMenuTrigger asChild>
-                            <Button variant="ghost" size="icon" className="w-7 h-7 opacity-0 group-hover:opacity-100">
-                              <MoreHorizontal className="w-4 h-4" />
-                            </Button>
-                          </DropdownMenuTrigger>
-                          <DropdownMenuContent align="end">
-                            <DropdownMenuItem asChild>
-                              <Link to={createPageUrl(`EditTask?id=${sid}`)}>
-                                <Edit className="w-4 h-4 mr-2" />
-                                Edit Details
-                              </Link>
-                            </DropdownMenuItem>
-                            <DropdownMenuItem onClick={() => duplicateSubtaskMutation.mutate({ ...subtask, id: sid })}>
-                              <Copy className="w-4 h-4 mr-2" />
-                              Duplicate
-                            </DropdownMenuItem>
-                            <DropdownMenuItem onClick={() => convertToTaskMutation.mutate({ ...subtask, id: sid })}>
-                              <ExternalLink className="w-4 h-4 mr-2" />
-                              Convert to Task
-                            </DropdownMenuItem>
-                            <DropdownMenuItem onClick={() => setCommentingId(sid)}>
-                              <MessageSquare className="w-4 h-4 mr-2" />
-                              Add Comment
-                            </DropdownMenuItem>
-                            <DropdownMenuSeparator />
-                            <DropdownMenuItem
-                              className="text-red-600"
-                              onClick={() => deleteSubtaskMutation.mutate(sid)}
-                            >
-                              <Trash2 className="w-4 h-4 mr-2" />
-                              Delete
-                            </DropdownMenuItem>
-                          </DropdownMenuContent>
-                        </DropdownMenu>
-                      </div>
-                    </div>
-                  )}
+                            {/* Timer */}
+                            {trackingId === sid ? (
+                              <Button
+                                size="icon"
+                                variant="outline"
+                                className="h-7 w-7"
+                                onClick={() => handleStopTimer({ ...subtask, id: sid })}
+                              >
+                                <Pause className="w-3 h-3 text-red-600" />
+                              </Button>
+                            ) : (
+                              <Button
+                                size="icon"
+                                variant="ghost"
+                                className="h-7 w-7 opacity-0 group-hover:opacity-100"
+                                onClick={() => handleStartTimer(sid)}
+                              >
+                                <Play className="w-3 h-3" />
+                              </Button>
+                            )}
+
+                            {/* Actions Menu */}
+                            <DropdownMenu>
+                              <DropdownMenuTrigger asChild>
+                                <Button variant="ghost" size="icon" className="w-7 h-7 opacity-0 group-hover:opacity-100">
+                                  <MoreHorizontal className="w-4 h-4" />
+                                </Button>
+                              </DropdownMenuTrigger>
+                              <DropdownMenuContent align="end">
+                                <DropdownMenuItem asChild>
+                                  <Link to={createPageUrl(`EditTask?id=${sid}`)}>
+                                    <Edit className="w-4 h-4 mr-2" />
+                                    Edit Details
+                                  </Link>
+                                </DropdownMenuItem>
+                                <DropdownMenuItem onClick={() => duplicateSubtaskMutation.mutate({ ...subtask, id: sid })}>
+                                  <Copy className="w-4 h-4 mr-2" />
+                                  Duplicate
+                                </DropdownMenuItem>
+                                <DropdownMenuItem onClick={() => convertToTaskMutation.mutate({ ...subtask, id: sid })}>
+                                  <ExternalLink className="w-4 h-4 mr-2" />
+                                  Convert to Task
+                                </DropdownMenuItem>
+                                <DropdownMenuItem onClick={() => setCommentingId(sid)}>
+                                  <MessageSquare className="w-4 h-4 mr-2" />
+                                  Add Comment
+                                </DropdownMenuItem>
+                                <DropdownMenuSeparator />
+                                <DropdownMenuItem
+                                  className="text-red-600"
+                                  onClick={() => deleteSubtaskMutation.mutate(sid)}
+                                >
+                                  <Trash2 className="w-4 h-4 mr-2" />
+                                  Delete
+                                </DropdownMenuItem>
+                              </DropdownMenuContent>
+                            </DropdownMenu>
+                          </div>
+                        </div>
+                      )}
                     </Draggable>
                   );
                 })()
