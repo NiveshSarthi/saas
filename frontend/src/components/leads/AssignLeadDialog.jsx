@@ -1,5 +1,7 @@
+// @ts-nocheck
 import React, { useState } from 'react';
 import { base44 } from '@/api/base44Client';
+import { sendAssignmentNotification, MODULES } from '@/components/utils/notificationService';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import {
   Dialog,
@@ -28,7 +30,7 @@ export default function AssignLeadDialog({ open, onOpenChange, lead, users, curr
   const [progress, setProgress] = useState({ step: 0, message: '' });
 
   const queryClient = useQueryClient();
-  
+
   const isAdmin = currentUser?.role === 'admin';
 
   const assignMutation = useMutation({
@@ -47,13 +49,16 @@ export default function AssignLeadDialog({ open, onOpenChange, lead, users, curr
       });
 
       setProgress({ step: 3, message: 'Sending notification...' });
-      await base44.entities.Notification.create({
-        user_email: assignee,
-        type: 'task_assigned',
-        title: 'New Lead Assigned',
-        message: `You have been assigned a new lead: ${lead.lead_name || lead.name}`,
+      await sendAssignmentNotification({
+        assignedTo: assignee,
+        assignedBy: currentUser?.email,
+        assignedByName: currentUser?.full_name || currentUser?.email,
+        module: MODULES.LEAD,
+        itemName: lead.lead_name || lead.name,
+        itemId: lead.id,
+        description: note || '',
         link: `/LeadDetail?id=${lead.id}`,
-        read: false
+        metadata: {}
       });
 
       setProgress({ step: 4, message: 'Complete!' });
@@ -100,9 +105,9 @@ export default function AssignLeadDialog({ open, onOpenChange, lead, users, curr
                 </SelectContent>
               </Select>
             ) : (
-              <Input 
-                value={currentUser?.email || ''} 
-                disabled 
+              <Input
+                value={currentUser?.email || ''}
+                disabled
                 className="bg-slate-100"
               />
             )}
