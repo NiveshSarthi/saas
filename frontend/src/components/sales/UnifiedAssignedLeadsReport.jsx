@@ -389,7 +389,7 @@ export default function UnifiedAssignedLeadsReport({ user, allUsers, departments
       doc.text(assignedName.substring(0, 20), 125, y);
       doc.text((STATUS_CONFIG[lead.lead_status.toLowerCase()]?.label || lead.lead_status).substring(0, 15), 170, y);
       doc.text((CONTACT_STATUS_CONFIG[lead.contact_status]?.label || lead.contact_status).substring(0, 18), 205, y);
-      doc.text(lead.last_activity_date ? format(new Date(lead.last_activity_date), 'MMM d, yyyy').substring(0, 12) : '-', 250, y);
+      doc.text(lead.last_activity_date && !isNaN(new Date(lead.last_activity_date).getTime()) ? format(new Date(lead.last_activity_date), 'MMM d, yyyy').substring(0, 12) : '-', 250, y);
 
       y += 6;
     });
@@ -432,9 +432,9 @@ export default function UnifiedAssignedLeadsReport({ user, allUsers, departments
         reportingUser?.full_name || lead.reporting_to || '-',
         STATUS_CONFIG[lead.lead_status.toLowerCase()]?.label || lead.lead_status,
         CONTACT_STATUS_CONFIG[lead.contact_status]?.label || lead.contact_status,
-        lead.assignment_date ? format(new Date(lead.assignment_date), 'yyyy-MM-dd') : '-',
-        lead.last_activity_date ? format(new Date(lead.last_activity_date), 'yyyy-MM-dd') : '-',
-        lead.follow_up_date ? format(new Date(lead.follow_up_date), 'yyyy-MM-dd') : '-',
+        lead.assignment_date && !isNaN(new Date(lead.assignment_date).getTime()) ? format(new Date(lead.assignment_date), 'yyyy-MM-dd') : '-',
+        lead.last_activity_date && !isNaN(new Date(lead.last_activity_date).getTime()) ? format(new Date(lead.last_activity_date), 'yyyy-MM-dd') : '-',
+        lead.follow_up_date && !isNaN(new Date(lead.follow_up_date).getTime()) ? format(new Date(lead.follow_up_date), 'yyyy-MM-dd') : '-',
         lead.builder_project,
         lead.location
       ];
@@ -909,7 +909,7 @@ export default function UnifiedAssignedLeadsReport({ user, allUsers, departments
                           </Badge>
                         </TableCell>
                         <TableCell className="text-sm text-slate-600">
-                          {lead.assignment_date
+                          {lead.assignment_date && !isNaN(new Date(lead.assignment_date).getTime())
                             ? format(new Date(lead.assignment_date), 'MMM d, yyyy')
                             : '-'}
                         </TableCell>
@@ -917,7 +917,7 @@ export default function UnifiedAssignedLeadsReport({ user, allUsers, departments
                           {lead.last_activity_date ? (
                             <div className="flex items-center gap-1.5 text-sm">
                               <Calendar className="w-3 h-3 text-slate-400" />
-                              <span>{format(new Date(lead.last_activity_date), 'MMM d, yyyy')}</span>
+                              <span>{lead.last_activity_date && !isNaN(new Date(lead.last_activity_date).getTime()) ? format(new Date(lead.last_activity_date), 'MMM d, yyyy') : '-'}</span>
                             </div>
                           ) : (
                             <Badge className="bg-red-100 text-red-700 text-xs">No Activity</Badge>
@@ -928,12 +928,12 @@ export default function UnifiedAssignedLeadsReport({ user, allUsers, departments
                             <div className={`flex items-center gap-1.5 text-sm ${isOverdue ? 'text-red-600 font-bold' : 'text-slate-700'}`}>
                               {isOverdue ? (
                                 <Badge className="bg-red-600 text-white animate-pulse">
-                                  🚨 {format(new Date(lead.follow_up_date), 'MMM d')}
+                                  🚨 {lead.follow_up_date && !isNaN(new Date(lead.follow_up_date).getTime()) ? format(new Date(lead.follow_up_date), 'MMM d') : '-'}
                                 </Badge>
                               ) : (
                                 <>
                                   <Calendar className="w-3 h-3 text-slate-400" />
-                                  {format(new Date(lead.follow_up_date), 'MMM d, yyyy')}
+                                  {lead.follow_up_date && !isNaN(new Date(lead.follow_up_date).getTime()) ? format(new Date(lead.follow_up_date), 'MMM d, yyyy') : '-'}
                                 </>
                               )}
                             </div>

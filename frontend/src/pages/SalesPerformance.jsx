@@ -123,7 +123,7 @@ export default function SalesPerformance() {
       try {
         const userData = await base44.auth.me();
         setUser(userData);
-      } catch (e) {}
+      } catch (e) { }
     };
     fetchUser();
   }, []);
@@ -156,7 +156,7 @@ export default function SalesPerformance() {
 
   // Get sales department users
   const salesDeptIds = departments.filter(d => d.name?.toLowerCase().includes('sales')).map(d => d.id);
-  
+
   const allUsers = React.useMemo(() => [
     ...usersFromEntity,
     ...invitations
@@ -180,7 +180,7 @@ export default function SalesPerformance() {
   // Filter visible sales users based on hierarchy
   const visibleSalesUsers = React.useMemo(() => {
     if (!user) return [];
-    return getVisibleSalesUsers(user, allUsers, departments).filter(u => 
+    return getVisibleSalesUsers(user, allUsers, departments).filter(u =>
       u.department_id && salesDeptIds.includes(u.department_id)
     );
   }, [user, allUsers, departments, salesDeptIds]);
@@ -205,45 +205,45 @@ export default function SalesPerformance() {
 
   const builderVerifyMutation = useMutation({
     mutationFn: async ({ id, status, note, activity }) => {
-       const newLog = {
-          action: `builder_${status}`,
-          actor_email: user.email,
-          timestamp: new Date().toISOString(),
-          note: note || ''
-       };
-       
-       const updatedLogs = [...(activity.workflow_logs || []), newLog];
+      const newLog = {
+        action: `builder_${status}`,
+        actor_email: user.email,
+        timestamp: new Date().toISOString(),
+        note: note || ''
+      };
 
-       // Determine final approval_status based on both verifications
-       let finalApprovalStatus = activity.approval_status;
-       
-       const builderVerified = status === 'verified';
-       const roVerified = activity.ro_verification_status === 'verified';
-       
-       // If both are verified, mark as approved
-       if (builderVerified && roVerified) {
-         finalApprovalStatus = 'approved';
-       } else if (status === 'not_verified') {
-         finalApprovalStatus = 'changes_requested';
-       }
+      const updatedLogs = [...(activity.workflow_logs || []), newLog];
 
-       await base44.entities.SalesActivity.update(id, {
-         builder_verification_status: status,
-         builder_verified_by: user.email,
-         builder_verified_at: new Date().toISOString(),
-         builder_note: note,
-         approval_status: finalApprovalStatus,
-         workflow_logs: updatedLogs
-       });
+      // Determine final approval_status based on both verifications
+      let finalApprovalStatus = activity.approval_status;
 
-       // Notify sales member
-       await base44.entities.Notification.create({
-         user_email: activity.user_email,
-         type: 'status_changed',
-         title: `Builder ${status === 'verified' ? 'Verified' : 'Did Not Verify'} Your Activity`,
-         message: note || `Activity verification ${status} by builder. Status: ${finalApprovalStatus}`,
-         read: false
-       });
+      const builderVerified = status === 'verified';
+      const roVerified = activity.ro_verification_status === 'verified';
+
+      // If both are verified, mark as approved
+      if (builderVerified && roVerified) {
+        finalApprovalStatus = 'approved';
+      } else if (status === 'not_verified') {
+        finalApprovalStatus = 'changes_requested';
+      }
+
+      await base44.entities.SalesActivity.update(id, {
+        builder_verification_status: status,
+        builder_verified_by: user.email,
+        builder_verified_at: new Date().toISOString(),
+        builder_note: note,
+        approval_status: finalApprovalStatus,
+        workflow_logs: updatedLogs
+      });
+
+      // Notify sales member
+      await base44.entities.Notification.create({
+        user_email: activity.user_email,
+        type: 'status_changed',
+        title: `Builder ${status === 'verified' ? 'Verified' : 'Did Not Verify'} Your Activity`,
+        message: note || `Activity verification ${status} by builder. Status: ${finalApprovalStatus}`,
+        read: false
+      });
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['all-sales-activities'] });
@@ -255,46 +255,46 @@ export default function SalesPerformance() {
 
   const roVerifyMutation = useMutation({
     mutationFn: async ({ id, status, note, activity }) => {
-       const newLog = {
-          action: `ro_${status}`,
-          actor_email: user.email,
-          timestamp: new Date().toISOString(),
-          note: note || ''
-       };
-       
-       const updatedLogs = [...(activity.workflow_logs || []), newLog];
+      const newLog = {
+        action: `ro_${status}`,
+        actor_email: user.email,
+        timestamp: new Date().toISOString(),
+        note: note || ''
+      };
 
-       // Determine final approval_status based on both verifications
-       let finalApprovalStatus = activity.approval_status;
-       
-       // Check if builder verification exists and what its status is
-       const builderVerified = !activity.builder_email || activity.builder_verification_status === 'verified';
-       const roVerified = status === 'verified';
-       
-       // If both are verified (or builder not required), mark as approved
-       if (builderVerified && roVerified) {
-         finalApprovalStatus = 'approved';
-       } else if (status === 'not_verified') {
-         finalApprovalStatus = 'changes_requested';
-       }
+      const updatedLogs = [...(activity.workflow_logs || []), newLog];
 
-       await base44.entities.SalesActivity.update(id, {
-         ro_verification_status: status,
-         ro_verified_by: user.email,
-         ro_verified_at: new Date().toISOString(),
-         ro_note: note,
-         approval_status: finalApprovalStatus,
-         workflow_logs: updatedLogs
-       });
+      // Determine final approval_status based on both verifications
+      let finalApprovalStatus = activity.approval_status;
 
-       // Notify sales member
-       await base44.entities.Notification.create({
-         user_email: activity.user_email,
-         type: 'status_changed',
-         title: `Manager ${status === 'verified' ? 'Verified' : 'Did Not Verify'} Your Activity`,
-         message: note || `Activity verification ${status} by reporting officer. Status: ${finalApprovalStatus}`,
-         read: false
-       });
+      // Check if builder verification exists and what its status is
+      const builderVerified = !activity.builder_email || activity.builder_verification_status === 'verified';
+      const roVerified = status === 'verified';
+
+      // If both are verified (or builder not required), mark as approved
+      if (builderVerified && roVerified) {
+        finalApprovalStatus = 'approved';
+      } else if (status === 'not_verified') {
+        finalApprovalStatus = 'changes_requested';
+      }
+
+      await base44.entities.SalesActivity.update(id, {
+        ro_verification_status: status,
+        ro_verified_by: user.email,
+        ro_verified_at: new Date().toISOString(),
+        ro_note: note,
+        approval_status: finalApprovalStatus,
+        workflow_logs: updatedLogs
+      });
+
+      // Notify sales member
+      await base44.entities.Notification.create({
+        user_email: activity.user_email,
+        type: 'status_changed',
+        title: `Manager ${status === 'verified' ? 'Verified' : 'Did Not Verify'} Your Activity`,
+        message: note || `Activity verification ${status} by reporting officer. Status: ${finalApprovalStatus}`,
+        read: false
+      });
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['all-sales-activities'] });
@@ -306,43 +306,43 @@ export default function SalesPerformance() {
 
   const assignManagerMutation = useMutation({
     mutationFn: async ({ activity, managerEmail }) => {
-       // 1. Update the User's or UserInvitation's reporting officer
-       const targetUserFromEntity = usersFromEntity.find(u => u.email?.toLowerCase() === activity.user_email?.toLowerCase());
-       const targetInvitation = invitations.find(inv => inv.email?.toLowerCase() === activity.user_email?.toLowerCase());
-       
-       if (targetUserFromEntity) {
-         await base44.entities.User.update(targetUserFromEntity.id, { reports_to: managerEmail });
-       } else if (targetInvitation) {
-         await base44.entities.UserInvitation.update(targetInvitation.id, { reports_to: managerEmail });
-       }
+      // 1. Update the User's or UserInvitation's reporting officer
+      const targetUserFromEntity = usersFromEntity.find(u => u.email?.toLowerCase() === activity.user_email?.toLowerCase());
+      const targetInvitation = invitations.find(inv => inv.email?.toLowerCase() === activity.user_email?.toLowerCase());
 
-       // 2. Forward activity to new manager (set to pending)
-       const newLog = {
-          action: 'manager_assigned',
-          actor_email: user.email,
-          timestamp: new Date().toISOString(),
-          note: `Assigned to ${managerEmail}`
-       };
-       
-       await base44.entities.SalesActivity.update(activity.id, {
-         approval_status: 'pending',
-         workflow_logs: [...(activity.workflow_logs || []), newLog]
-       });
+      if (targetUserFromEntity) {
+        await base44.entities.User.update(targetUserFromEntity.id, { reports_to: managerEmail });
+      } else if (targetInvitation) {
+        await base44.entities.UserInvitation.update(targetInvitation.id, { reports_to: managerEmail });
+      }
 
-       // 3. Notify the assigned manager
-       await base44.entities.Notification.create({
-         user_email: managerEmail,
-         type: 'review_requested',
-         title: 'New Activity Assigned for Approval',
-         message: `Activity from ${activity.user_email} has been assigned to you for review.`,
-         read: false
-       });
+      // 2. Forward activity to new manager (set to pending)
+      const newLog = {
+        action: 'manager_assigned',
+        actor_email: user.email,
+        timestamp: new Date().toISOString(),
+        note: `Assigned to ${managerEmail}`
+      };
+
+      await base44.entities.SalesActivity.update(activity.id, {
+        approval_status: 'pending',
+        workflow_logs: [...(activity.workflow_logs || []), newLog]
+      });
+
+      // 3. Notify the assigned manager
+      await base44.entities.Notification.create({
+        user_email: managerEmail,
+        type: 'review_requested',
+        title: 'New Activity Assigned for Approval',
+        message: `Activity from ${activity.user_email} has been assigned to you for review.`,
+        read: false
+      });
     },
     onSuccess: () => {
-       queryClient.invalidateQueries({ queryKey: ['all-sales-activities'] });
-       queryClient.invalidateQueries({ queryKey: ['users'] });
-       queryClient.invalidateQueries({ queryKey: ['user-invitations'] });
-       toast.success('Manager assigned successfully! Activity forwarded for approval.');
+      queryClient.invalidateQueries({ queryKey: ['all-sales-activities'] });
+      queryClient.invalidateQueries({ queryKey: ['users'] });
+      queryClient.invalidateQueries({ queryKey: ['user-invitations'] });
+      toast.success('Manager assigned successfully! Activity forwarded for approval.');
     }
   });
 
@@ -450,11 +450,11 @@ export default function SalesPerformance() {
 
   const handleSave = () => {
     const shouldResetApproval = selectedActivity.approval_status === 'changes_requested';
-    
+
     let updatedLogs = selectedActivity.workflow_logs || [];
     if (shouldResetApproval) {
       updatedLogs = [
-        ...updatedLogs, 
+        ...updatedLogs,
         {
           action: 'resubmitted',
           actor_email: user.email,
@@ -475,15 +475,15 @@ export default function SalesPerformance() {
     });
 
     if (shouldResetApproval) {
-       // Log the resubmission to generic activity stream too
-       base44.entities.Activity.create({
-          action: 'status_changed',
-          task_id: selectedActivity.id,
-          actor_email: user.email,
-          new_value: 'pending',
-          old_value: 'changes_requested',
-          metadata: { type: 'sales_activity_resubmitted' }
-       });
+      // Log the resubmission to generic activity stream too
+      base44.entities.Activity.create({
+        action: 'status_changed',
+        task_id: selectedActivity.id,
+        actor_email: user.email,
+        new_value: 'pending',
+        old_value: 'changes_requested',
+        metadata: { type: 'sales_activity_resubmitted' }
+      });
     }
   };
 
@@ -582,9 +582,9 @@ export default function SalesPerformance() {
                 <p className="text-sm text-slate-500">Comprehensive performance insights and metrics</p>
               </div>
             </div>
-            <SalesKPIDashboard 
-              currentUser={user} 
-              users={allUsers} 
+            <SalesKPIDashboard
+              currentUser={user}
+              users={allUsers}
               departments={departments}
             />
           </div>
@@ -598,8 +598,8 @@ export default function SalesPerformance() {
 
         {!isSalesExec && (
           <TabsContent value="comparison">
-            <SalesMemberComparison 
-              users={allUsers} 
+            <SalesMemberComparison
+              users={allUsers}
               departments={departments}
               projects={projects}
             />
@@ -608,18 +608,18 @@ export default function SalesPerformance() {
 
         {!isSalesMgr && !isSalesExec && (
           <TabsContent value="targets">
-             <div className="space-y-8">
-                <div className="w-full">
-                   <TargetVsActual user={user} allUsers={salesUsers} />
-                </div>
+            <div className="space-y-8">
+              <div className="w-full">
+                <TargetVsActual user={user} allUsers={salesUsers} />
+              </div>
 
-                {user.role === 'admin' && (
-                   <div>
-                      <h2 className="text-lg font-semibold text-slate-900 mb-4">Assign Targets</h2>
-                      <SalesTargetsManager users={salesUsers} projects={projects} />
-                   </div>
-                )}
-             </div>
+              {user.role === 'admin' && (
+                <div>
+                  <h2 className="text-lg font-semibold text-slate-900 mb-4">Assign Targets</h2>
+                  <SalesTargetsManager users={salesUsers} projects={projects} />
+                </div>
+              )}
+            </div>
           </TabsContent>
         )}
 
@@ -631,167 +631,41 @@ export default function SalesPerformance() {
 
         {!isSalesExec && (
           <TabsContent value="approvals">
-          {/* Builder Verification Section */}
-          <div className="mb-6">
-            <div className="flex items-center gap-3 mb-4 p-4 bg-gradient-to-r from-orange-50 to-amber-50 rounded-xl border-2 border-orange-200">
-              <div className="p-2 bg-gradient-to-br from-orange-500 to-amber-500 rounded-lg shadow-lg">
-                <Building className="w-6 h-6 text-white" />
+            {/* Builder Verification Section */}
+            <div className="mb-6">
+              <div className="flex items-center gap-3 mb-4 p-4 bg-gradient-to-r from-orange-50 to-amber-50 rounded-xl border-2 border-orange-200">
+                <div className="p-2 bg-gradient-to-br from-orange-500 to-amber-500 rounded-lg shadow-lg">
+                  <Building className="w-6 h-6 text-white" />
+                </div>
+                <div>
+                  <h2 className="text-xl font-bold text-orange-900">Builder Verification</h2>
+                  <p className="text-sm text-orange-700">
+                    Independent builder verification for sales activities
+                  </p>
+                </div>
               </div>
-              <div>
-                <h2 className="text-xl font-bold text-orange-900">Builder Verification</h2>
-                <p className="text-sm text-orange-700">
-                  Independent builder verification for sales activities
-                </p>
-              </div>
-            </div>
-            <Card className="border-2 border-orange-300 bg-gradient-to-br from-orange-50/50 to-white shadow-lg">
-              <CardContent className="p-0">
-                <Table>
-                  <TableHeader>
-                     <TableRow>
-                       <TableHead>Sales Member</TableHead>
-                       <TableHead>Activity</TableHead>
-                       <TableHead>Customer</TableHead>
-                       <TableHead>Date</TableHead>
-                       <TableHead>Builder</TableHead>
-                       <TableHead>Actions</TableHead>
-                     </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {activities
-                      .filter(a => {
-                         if (!a.builder_email) return false;
-                         // Show to assigned builder or admin
-                         if (user.role === 'admin') return a.builder_verification_status === 'pending';
-                         return a.builder_verification_status === 'pending' && a.builder_email?.toLowerCase() === user.email?.toLowerCase();
-                      })
-                      .map(activity => (
-                        <TableRow key={activity.id}>
-                          <TableCell>
-                            <div className="flex items-center gap-2">
-                              <Avatar className="w-6 h-6">
-                                <AvatarFallback className="text-xs">{getInitials(getUserName(activity.user_email))}</AvatarFallback>
-                              </Avatar>
-                              <span className="text-sm font-medium">{getUserName(activity.user_email)}</span>
-                            </div>
-                          </TableCell>
-                          <TableCell>
-                            <Badge variant="outline">{activity.type === 'walk_in' ? 'Walk-In' : 'Closure'}</Badge>
-                          </TableCell>
-                          <TableCell>
-                            <div className="flex flex-col">
-                              <span className="font-medium">{activity.customer_name}</span>
-                              <span className="text-xs text-slate-500">{activity.customer_email}</span>
-                            </div>
-                          </TableCell>
-                          <TableCell>{format(parseISO(activity.date), 'MMM d, p')}</TableCell>
-                          <TableCell>
-                            <div className="flex items-center gap-2">
-                              <Avatar className="w-6 h-6">
-                                <AvatarFallback className="bg-orange-100 text-orange-600 text-xs">
-                                  {getInitials(getUserName(activity.builder_email))}
-                                </AvatarFallback>
-                              </Avatar>
-                              <span className="text-sm">{getUserName(activity.builder_email)}</span>
-                            </div>
-                          </TableCell>
-                          <TableCell>
-                            <div className="flex gap-2">
-                              <Button 
-                                size="sm" 
-                                variant="outline"
-                                className="h-8"
-                                onClick={() => handleView(activity)}
-                              >
-                                <Eye className="w-3 h-3 mr-1" />
-                                View
-                              </Button>
-                              <Button 
-                                size="sm" 
-                                className="bg-emerald-600 hover:bg-emerald-700 h-8"
-                                onClick={() => {
-                                  builderVerifyMutation.mutate({ id: activity.id, status: 'verified', activity });
-                                }}
-                              >
-                                <CheckCircle2 className="w-3 h-3 mr-1" />
-                                Verified
-                              </Button>
-                              <Button 
-                                size="sm" 
-                                variant="outline"
-                                className="h-8 border-red-300 text-red-600 hover:bg-red-50"
-                                onClick={() => {
-                                  const note = prompt("Optional note (why not verified):");
-                                  builderVerifyMutation.mutate({ id: activity.id, status: 'not_verified', note: note || '', activity });
-                                }}
-                              >
-                                Not Verified
-                              </Button>
-                            </div>
-                          </TableCell>
-                        </TableRow>
-                      ))}
-                      {activities.filter(a => {
-                         if (!a.builder_email) return false;
-                         if (user.role === 'admin') return a.builder_verification_status === 'pending';
-                         return a.builder_verification_status === 'pending' && a.builder_email?.toLowerCase() === user.email?.toLowerCase();
-                      }).length === 0 && (
-                        <TableRow>
-                          <TableCell colSpan={6} className="text-center py-4 text-slate-500">
-                            No activities pending builder verification
-                          </TableCell>
-                        </TableRow>
-                      )}
-                  </TableBody>
-                </Table>
-              </CardContent>
-            </Card>
-          </div>
-
-          {/* Reporting Officer Verification Section */}
-          <div className="mb-6">
-            <div className="flex items-center gap-3 mb-4 p-4 bg-gradient-to-r from-blue-50 to-indigo-50 rounded-xl border-2 border-blue-200">
-              <div className="p-2 bg-gradient-to-br from-blue-500 to-indigo-500 rounded-lg shadow-lg">
-                <CheckCircle2 className="w-6 h-6 text-white" />
-              </div>
-              <div>
-                <h2 className="text-xl font-bold text-blue-900">Reporting Officer Verification</h2>
-                <p className="text-sm text-blue-700">
-                  Independent manager verification for sales activities
-                </p>
-              </div>
-            </div>
-            <Card className="border-2 border-blue-200 shadow-lg">
-              <CardContent className="p-0">
-                <Table>
-                  <TableHeader>
-                     <TableRow>
-                       <TableHead>Sales Member</TableHead>
-                       <TableHead>Activity</TableHead>
-                       <TableHead>Customer</TableHead>
-                       <TableHead>Date</TableHead>
-                       {user.role === 'admin' && <TableHead>Pending With (RO)</TableHead>}
-                       <TableHead>Actions</TableHead>
-                     </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {activities
-                      .filter(a => {
-                         if (user.role === 'admin') {
-                           return a.ro_verification_status === 'pending';
-                         } else {
-                           const creator = allUsers.find(u => u.email?.toLowerCase() === a.user_email?.toLowerCase());
-                           const reportsTo = creator?.reports_to?.toLowerCase();
-                           const currentUserEmail = user?.email?.toLowerCase();
-
-                           return reportsTo && reportsTo === currentUserEmail && a.ro_verification_status === 'pending';
-                         }
-                      })
-                      .map(activity => {
-                        const creator = allUsers.find(u => u.email?.toLowerCase() === activity.user_email?.toLowerCase());
-                        const reportingOfficer = allUsers.find(u => u.email?.toLowerCase() === creator?.reports_to?.toLowerCase());
-                        
-                        return (
+              <Card className="border-2 border-orange-300 bg-gradient-to-br from-orange-50/50 to-white shadow-lg">
+                <CardContent className="p-0">
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead>Sales Member</TableHead>
+                        <TableHead>Activity</TableHead>
+                        <TableHead>Customer</TableHead>
+                        <TableHead>Date</TableHead>
+                        <TableHead>Builder</TableHead>
+                        <TableHead>Actions</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {activities
+                        .filter(a => {
+                          if (!a.builder_email) return false;
+                          // Show to assigned builder or admin
+                          if (user.role === 'admin') return a.builder_verification_status === 'pending';
+                          return a.builder_verification_status === 'pending' && a.builder_email?.toLowerCase() === user.email?.toLowerCase();
+                        })
+                        .map(activity => (
                           <TableRow key={activity.id}>
                             <TableCell>
                               <div className="flex items-center gap-2">
@@ -810,26 +684,21 @@ export default function SalesPerformance() {
                                 <span className="text-xs text-slate-500">{activity.customer_email}</span>
                               </div>
                             </TableCell>
-                            <TableCell>{format(parseISO(activity.date), 'MMM d, p')}</TableCell>
-                            {user.role === 'admin' && (
-                              <TableCell>
-                                <div className="flex items-center gap-2">
-                                  <Avatar className="w-7 h-7">
-                                    <AvatarFallback className="bg-amber-100 text-amber-600 text-xs">
-                                      {reportingOfficer?.full_name?.[0] || 'RO'}
-                                    </AvatarFallback>
-                                  </Avatar>
-                                  <div>
-                                    <p className="font-medium text-sm">{reportingOfficer?.full_name || 'Reporting Officer'}</p>
-                                    <p className="text-xs text-slate-500">{reportingOfficer?.email || creator?.reports_to || 'Unknown'}</p>
-                                  </div>
-                                </div>
-                              </TableCell>
-                            )}
+                            <TableCell>{activity.date ? format(parseISO(activity.date), 'MMM d, p') : '-'}</TableCell>
+                            <TableCell>
+                              <div className="flex items-center gap-2">
+                                <Avatar className="w-6 h-6">
+                                  <AvatarFallback className="bg-orange-100 text-orange-600 text-xs">
+                                    {getInitials(getUserName(activity.builder_email))}
+                                  </AvatarFallback>
+                                </Avatar>
+                                <span className="text-sm">{getUserName(activity.builder_email)}</span>
+                              </div>
+                            </TableCell>
                             <TableCell>
                               <div className="flex gap-2">
-                                <Button 
-                                  size="sm" 
+                                <Button
+                                  size="sm"
                                   variant="outline"
                                   className="h-8"
                                   onClick={() => handleView(activity)}
@@ -837,21 +706,23 @@ export default function SalesPerformance() {
                                   <Eye className="w-3 h-3 mr-1" />
                                   View
                                 </Button>
-                                <Button 
-                                  size="sm" 
+                                <Button
+                                  size="sm"
                                   className="bg-emerald-600 hover:bg-emerald-700 h-8"
-                                  onClick={() => roVerifyMutation.mutate({ id: activity.id, status: 'verified', activity })}
+                                  onClick={() => {
+                                    builderVerifyMutation.mutate({ id: activity.id, status: 'verified', activity });
+                                  }}
                                 >
                                   <CheckCircle2 className="w-3 h-3 mr-1" />
                                   Verified
                                 </Button>
-                                <Button 
-                                  size="sm" 
+                                <Button
+                                  size="sm"
                                   variant="outline"
                                   className="h-8 border-red-300 text-red-600 hover:bg-red-50"
                                   onClick={() => {
                                     const note = prompt("Optional note (why not verified):");
-                                    roVerifyMutation.mutate({ id: activity.id, status: 'not_verified', note: note || '', activity });
+                                    builderVerifyMutation.mutate({ id: activity.id, status: 'not_verified', note: note || '', activity });
                                   }}
                                 >
                                   Not Verified
@@ -859,121 +730,250 @@ export default function SalesPerformance() {
                               </div>
                             </TableCell>
                           </TableRow>
-                        );
-                      })}
+                        ))}
                       {activities.filter(a => {
-                         if (user.role === 'admin') {
-                           return a.ro_verification_status === 'pending';
-                         }
-                         const creator = allUsers.find(u => u.email?.toLowerCase() === a.user_email?.toLowerCase());
-                         return creator?.reports_to?.toLowerCase() === user?.email?.toLowerCase() && a.ro_verification_status === 'pending';
+                        if (!a.builder_email) return false;
+                        if (user.role === 'admin') return a.builder_verification_status === 'pending';
+                        return a.builder_verification_status === 'pending' && a.builder_email?.toLowerCase() === user.email?.toLowerCase();
                       }).length === 0 && (
-                        <TableRow>
-                          <TableCell colSpan={user.role === 'admin' ? 6 : 5} className="text-center py-8 text-slate-500">
-                            No pending verifications found
-                          </TableCell>
-                        </TableRow>
-                      )}
-                  </TableBody>
-                </Table>
-              </CardContent>
-            </Card>
-          </div>
+                          <TableRow>
+                            <TableCell colSpan={6} className="text-center py-4 text-slate-500">
+                              No activities pending builder verification
+                            </TableCell>
+                          </TableRow>
+                        )}
+                    </TableBody>
+                  </Table>
+                </CardContent>
+              </Card>
+            </div>
 
-          {/* Admin Section: Unassigned Activities */}
-          {user.role === 'admin' && (
+            {/* Reporting Officer Verification Section */}
             <div className="mb-6">
-              <div className="flex items-center gap-3 mb-4 p-4 bg-gradient-to-r from-red-50 to-rose-50 rounded-xl border-2 border-red-300">
-                <div className="p-2 bg-gradient-to-br from-red-500 to-rose-500 rounded-lg shadow-lg animate-pulse">
-                  <AlertCircle className="w-6 h-6 text-white" />
+              <div className="flex items-center gap-3 mb-4 p-4 bg-gradient-to-r from-blue-50 to-indigo-50 rounded-xl border-2 border-blue-200">
+                <div className="p-2 bg-gradient-to-br from-blue-500 to-indigo-500 rounded-lg shadow-lg">
+                  <CheckCircle2 className="w-6 h-6 text-white" />
                 </div>
                 <div>
-                  <h2 className="text-xl font-bold text-red-900 flex items-center gap-2">
-                    <span className="w-2 h-2 rounded-full bg-red-500 animate-pulse"/>
-                    Action Required: Missing Reporting Officer
-                  </h2>
-                  <p className="text-sm text-red-700">
-                    These activities need a reporting officer assignment
+                  <h2 className="text-xl font-bold text-blue-900">Reporting Officer Verification</h2>
+                  <p className="text-sm text-blue-700">
+                    Independent manager verification for sales activities
                   </p>
                 </div>
               </div>
-              <Card className="border-2 border-red-300 bg-gradient-to-br from-red-50/50 to-white shadow-lg">
+              <Card className="border-2 border-blue-200 shadow-lg">
                 <CardContent className="p-0">
                   <Table>
                     <TableHeader>
                       <TableRow>
                         <TableHead>Sales Member</TableHead>
                         <TableHead>Activity</TableHead>
-                        <TableHead>Activity Date</TableHead>
-                        <TableHead>Action Required</TableHead>
-                        <TableHead>Assign Manager</TableHead>
+                        <TableHead>Customer</TableHead>
+                        <TableHead>Date</TableHead>
+                        {user.role === 'admin' && <TableHead>Pending With (RO)</TableHead>}
+                        <TableHead>Actions</TableHead>
                       </TableRow>
                     </TableHeader>
                     <TableBody>
-                      {activities.filter(a => a.approval_status === 'pending_assignment').map(activity => (
-                         <TableRow key={activity.id}>
-                           <TableCell>
-                             <div className="flex items-center gap-2">
-                               <Avatar className="w-6 h-6">
-                                 <AvatarFallback className="text-xs">{getInitials(getUserName(activity.user_email))}</AvatarFallback>
-                               </Avatar>
-                               <div>
-                                 <div className="font-medium">{getUserName(activity.user_email)}</div>
-                                 <div className="text-xs text-slate-500">Has no reporting officer</div>
-                               </div>
-                             </div>
-                           </TableCell>
-                           <TableCell>
-                             <Badge variant="outline">{activity.type === 'walk_in' ? 'Walk-In' : 'Closure'}</Badge>
-                           </TableCell>
-                           <TableCell>{format(parseISO(activity.date), 'MMM d, p')}</TableCell>
-                           <TableCell className="text-amber-600 text-sm">
-                             Assign manager to forward this activity
-                           </TableCell>
-                           <TableCell>
-                             <div className="flex gap-2 items-center max-w-xs">
-                               <Select 
-                                 onValueChange={(managerEmail) => assignManagerMutation.mutate({ activity, managerEmail })}
-                                 disabled={assignManagerMutation.isPending}
-                               >
-                                 <SelectTrigger className="bg-white">
-                                   <SelectValue placeholder="Select Manager" />
-                                 </SelectTrigger>
-                                 <SelectContent>
-                                   {salesUsers.filter(u => u.email !== activity.user_email).map(u => (
-                                     <SelectItem key={u.email} value={u.email}>
-                                       {u.full_name || u.email}
-                                     </SelectItem>
-                                   ))}
-                                 </SelectContent>
-                               </Select>
-                               {assignManagerMutation.isPending && (
-                                 <Loader2 className="w-4 h-4 animate-spin text-indigo-600" />
-                               )}
-                             </div>
-                           </TableCell>
-                         </TableRow>
-                      ))}
-                      {activities.filter(a => a.approval_status === 'pending_assignment').length === 0 && (
-                         <TableRow>
-                           <TableCell colSpan={5} className="text-center py-4 text-slate-500">
-                             No unassigned activities
-                           </TableCell>
-                         </TableRow>
-                      )}
+                      {activities
+                        .filter(a => {
+                          if (user.role === 'admin') {
+                            return a.ro_verification_status === 'pending';
+                          } else {
+                            const creator = allUsers.find(u => u.email?.toLowerCase() === a.user_email?.toLowerCase());
+                            const reportsTo = creator?.reports_to?.toLowerCase();
+                            const currentUserEmail = user?.email?.toLowerCase();
+
+                            return reportsTo && reportsTo === currentUserEmail && a.ro_verification_status === 'pending';
+                          }
+                        })
+                        .map(activity => {
+                          const creator = allUsers.find(u => u.email?.toLowerCase() === activity.user_email?.toLowerCase());
+                          const reportingOfficer = allUsers.find(u => u.email?.toLowerCase() === creator?.reports_to?.toLowerCase());
+
+                          return (
+                            <TableRow key={activity.id}>
+                              <TableCell>
+                                <div className="flex items-center gap-2">
+                                  <Avatar className="w-6 h-6">
+                                    <AvatarFallback className="text-xs">{getInitials(getUserName(activity.user_email))}</AvatarFallback>
+                                  </Avatar>
+                                  <span className="text-sm font-medium">{getUserName(activity.user_email)}</span>
+                                </div>
+                              </TableCell>
+                              <TableCell>
+                                <Badge variant="outline">{activity.type === 'walk_in' ? 'Walk-In' : 'Closure'}</Badge>
+                              </TableCell>
+                              <TableCell>
+                                <div className="flex flex-col">
+                                  <span className="font-medium">{activity.customer_name}</span>
+                                  <span className="text-xs text-slate-500">{activity.customer_email}</span>
+                                </div>
+                              </TableCell>
+                              <TableCell>{activity.date ? format(parseISO(activity.date), 'MMM d, p') : '-'}</TableCell>
+                              {user.role === 'admin' && (
+                                <TableCell>
+                                  <div className="flex items-center gap-2">
+                                    <Avatar className="w-7 h-7">
+                                      <AvatarFallback className="bg-amber-100 text-amber-600 text-xs">
+                                        {reportingOfficer?.full_name?.[0] || 'RO'}
+                                      </AvatarFallback>
+                                    </Avatar>
+                                    <div>
+                                      <p className="font-medium text-sm">{reportingOfficer?.full_name || 'Reporting Officer'}</p>
+                                      <p className="text-xs text-slate-500">{reportingOfficer?.email || creator?.reports_to || 'Unknown'}</p>
+                                    </div>
+                                  </div>
+                                </TableCell>
+                              )}
+                              <TableCell>
+                                <div className="flex gap-2">
+                                  <Button
+                                    size="sm"
+                                    variant="outline"
+                                    className="h-8"
+                                    onClick={() => handleView(activity)}
+                                  >
+                                    <Eye className="w-3 h-3 mr-1" />
+                                    View
+                                  </Button>
+                                  <Button
+                                    size="sm"
+                                    className="bg-emerald-600 hover:bg-emerald-700 h-8"
+                                    onClick={() => roVerifyMutation.mutate({ id: activity.id, status: 'verified', activity })}
+                                  >
+                                    <CheckCircle2 className="w-3 h-3 mr-1" />
+                                    Verified
+                                  </Button>
+                                  <Button
+                                    size="sm"
+                                    variant="outline"
+                                    className="h-8 border-red-300 text-red-600 hover:bg-red-50"
+                                    onClick={() => {
+                                      const note = prompt("Optional note (why not verified):");
+                                      roVerifyMutation.mutate({ id: activity.id, status: 'not_verified', note: note || '', activity });
+                                    }}
+                                  >
+                                    Not Verified
+                                  </Button>
+                                </div>
+                              </TableCell>
+                            </TableRow>
+                          );
+                        })}
+                      {activities.filter(a => {
+                        if (user.role === 'admin') {
+                          return a.ro_verification_status === 'pending';
+                        }
+                        const creator = allUsers.find(u => u.email?.toLowerCase() === a.user_email?.toLowerCase());
+                        return creator?.reports_to?.toLowerCase() === user?.email?.toLowerCase() && a.ro_verification_status === 'pending';
+                      }).length === 0 && (
+                          <TableRow>
+                            <TableCell colSpan={user.role === 'admin' ? 6 : 5} className="text-center py-8 text-slate-500">
+                              No pending verifications found
+                            </TableCell>
+                          </TableRow>
+                        )}
                     </TableBody>
                   </Table>
                 </CardContent>
               </Card>
             </div>
-          )}
-        </TabsContent>
+
+            {/* Admin Section: Unassigned Activities */}
+            {user.role === 'admin' && (
+              <div className="mb-6">
+                <div className="flex items-center gap-3 mb-4 p-4 bg-gradient-to-r from-red-50 to-rose-50 rounded-xl border-2 border-red-300">
+                  <div className="p-2 bg-gradient-to-br from-red-500 to-rose-500 rounded-lg shadow-lg animate-pulse">
+                    <AlertCircle className="w-6 h-6 text-white" />
+                  </div>
+                  <div>
+                    <h2 className="text-xl font-bold text-red-900 flex items-center gap-2">
+                      <span className="w-2 h-2 rounded-full bg-red-500 animate-pulse" />
+                      Action Required: Missing Reporting Officer
+                    </h2>
+                    <p className="text-sm text-red-700">
+                      These activities need a reporting officer assignment
+                    </p>
+                  </div>
+                </div>
+                <Card className="border-2 border-red-300 bg-gradient-to-br from-red-50/50 to-white shadow-lg">
+                  <CardContent className="p-0">
+                    <Table>
+                      <TableHeader>
+                        <TableRow>
+                          <TableHead>Sales Member</TableHead>
+                          <TableHead>Activity</TableHead>
+                          <TableHead>Activity Date</TableHead>
+                          <TableHead>Action Required</TableHead>
+                          <TableHead>Assign Manager</TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {activities.filter(a => a.approval_status === 'pending_assignment').map(activity => (
+                          <TableRow key={activity.id}>
+                            <TableCell>
+                              <div className="flex items-center gap-2">
+                                <Avatar className="w-6 h-6">
+                                  <AvatarFallback className="text-xs">{getInitials(getUserName(activity.user_email))}</AvatarFallback>
+                                </Avatar>
+                                <div>
+                                  <div className="font-medium">{getUserName(activity.user_email)}</div>
+                                  <div className="text-xs text-slate-500">Has no reporting officer</div>
+                                </div>
+                              </div>
+                            </TableCell>
+                            <TableCell>
+                              <Badge variant="outline">{activity.type === 'walk_in' ? 'Walk-In' : 'Closure'}</Badge>
+                            </TableCell>
+                            <TableCell>{activity.date ? format(parseISO(activity.date), 'MMM d, p') : '-'}</TableCell>
+                            <TableCell className="text-amber-600 text-sm">
+                              Assign manager to forward this activity
+                            </TableCell>
+                            <TableCell>
+                              <div className="flex gap-2 items-center max-w-xs">
+                                <Select
+                                  onValueChange={(managerEmail) => assignManagerMutation.mutate({ activity, managerEmail })}
+                                  disabled={assignManagerMutation.isPending}
+                                >
+                                  <SelectTrigger className="bg-white">
+                                    <SelectValue placeholder="Select Manager" />
+                                  </SelectTrigger>
+                                  <SelectContent>
+                                    {salesUsers.filter(u => u.email !== activity.user_email).map(u => (
+                                      <SelectItem key={u.email} value={u.email}>
+                                        {u.full_name || u.email}
+                                      </SelectItem>
+                                    ))}
+                                  </SelectContent>
+                                </Select>
+                                {assignManagerMutation.isPending && (
+                                  <Loader2 className="w-4 h-4 animate-spin text-indigo-600" />
+                                )}
+                              </div>
+                            </TableCell>
+                          </TableRow>
+                        ))}
+                        {activities.filter(a => a.approval_status === 'pending_assignment').length === 0 && (
+                          <TableRow>
+                            <TableCell colSpan={5} className="text-center py-4 text-slate-500">
+                              No unassigned activities
+                            </TableCell>
+                          </TableRow>
+                        )}
+                      </TableBody>
+                    </Table>
+                  </CardContent>
+                </Card>
+              </div>
+            )}
+          </TabsContent>
         )}
 
         {user.role === 'admin' && (
           <TabsContent value="monitor">
             <div className="space-y-6">
-               <div className="flex items-center gap-3 mb-4 p-4 bg-gradient-to-r from-purple-50 to-indigo-50 rounded-xl border-2 border-purple-200">
+              <div className="flex items-center gap-3 mb-4 p-4 bg-gradient-to-r from-purple-50 to-indigo-50 rounded-xl border-2 border-purple-200">
                 <div className="p-2 bg-gradient-to-br from-purple-500 to-indigo-500 rounded-lg shadow-lg">
                   <AlertCircle className="w-6 h-6 text-white" />
                 </div>
@@ -981,108 +981,108 @@ export default function SalesPerformance() {
                   <h2 className="text-2xl font-bold text-purple-900">Verification Status Monitor</h2>
                   <p className="text-sm text-purple-700">Track dual verification progress</p>
                 </div>
-               </div>
+              </div>
 
-               <Card>
-                 <CardContent className="p-0">
-                   <Table>
-                     <TableHeader>
-                       <TableRow>
-                         <TableHead>Activity</TableHead>
-                         <TableHead>Builder Status</TableHead>
-                         <TableHead>RO Status</TableHead>
-                         <TableHead>Final Status</TableHead>
-                         <TableHead>Time Since Created</TableHead>
-                       </TableRow>
-                     </TableHeader>
-                     <TableBody>
-                       {activities
-                         .filter(a => 
-                           a.builder_verification_status !== 'verified' || 
-                           a.ro_verification_status !== 'verified'
-                         )
-                         .sort((a, b) => new Date(a.date) - new Date(b.date))
-                         .map(activity => {
-                           const createdDate = new Date(activity.date);
-                           const hoursPending = Math.floor((new Date() - createdDate) / (1000 * 60 * 60));
+              <Card>
+                <CardContent className="p-0">
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead>Activity</TableHead>
+                        <TableHead>Builder Status</TableHead>
+                        <TableHead>RO Status</TableHead>
+                        <TableHead>Final Status</TableHead>
+                        <TableHead>Time Since Created</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {activities
+                        .filter(a =>
+                          a.builder_verification_status !== 'verified' ||
+                          a.ro_verification_status !== 'verified'
+                        )
+                        .sort((a, b) => new Date(a.date) - new Date(b.date))
+                        .map(activity => {
+                          const createdDate = activity.date ? new Date(activity.date) : new Date();
+                          const hoursPending = Math.floor((new Date() - createdDate) / (1000 * 60 * 60));
 
-                           const builderStatus = activity.builder_email ? activity.builder_verification_status || 'pending' : 'N/A';
-                           const roStatus = activity.ro_verification_status || 'pending';
+                          const builderStatus = activity.builder_email ? activity.builder_verification_status || 'pending' : 'N/A';
+                          const roStatus = activity.ro_verification_status || 'pending';
 
-                           const bothVerified = builderStatus === 'verified' && roStatus === 'verified';
-                           const anyNotVerified = builderStatus === 'not_verified' || roStatus === 'not_verified';
+                          const bothVerified = builderStatus === 'verified' && roStatus === 'verified';
+                          const anyNotVerified = builderStatus === 'not_verified' || roStatus === 'not_verified';
 
-                           let finalStatus = 'Pending';
-                           let statusColor = 'bg-amber-100 text-amber-700';
+                          let finalStatus = 'Pending';
+                          let statusColor = 'bg-amber-100 text-amber-700';
 
-                           if (bothVerified) {
-                             finalStatus = 'Approved (Valid for KPI)';
-                             statusColor = 'bg-emerald-100 text-emerald-700';
-                           } else if (anyNotVerified) {
-                             finalStatus = 'Flagged – Needs Review';
-                             statusColor = 'bg-red-100 text-red-700';
-                           }
+                          if (bothVerified) {
+                            finalStatus = 'Approved (Valid for KPI)';
+                            statusColor = 'bg-emerald-100 text-emerald-700';
+                          } else if (anyNotVerified) {
+                            finalStatus = 'Flagged – Needs Review';
+                            statusColor = 'bg-red-100 text-red-700';
+                          }
 
-                           return (
-                             <TableRow key={activity.id}>
-                               <TableCell>
-                                 <div className="font-medium">
-                                   {activity.type === 'walk_in' ? 'Walk-In' : 'Closure'}
-                                 </div>
-                                 <div className="text-xs text-slate-500">by {getUserName(activity.user_email)}</div>
-                               </TableCell>
-                               <TableCell>
-                                 <Badge className={
-                                   builderStatus === 'verified' ? 'bg-emerald-100 text-emerald-700' :
-                                   builderStatus === 'not_verified' ? 'bg-red-100 text-red-700' :
-                                   builderStatus === 'N/A' ? 'bg-slate-100 text-slate-500' :
-                                   'bg-amber-100 text-amber-700'
-                                 }>
-                                   {builderStatus === 'verified' ? '✔ Verified' :
+                          return (
+                            <TableRow key={activity.id}>
+                              <TableCell>
+                                <div className="font-medium">
+                                  {activity.type === 'walk_in' ? 'Walk-In' : 'Closure'}
+                                </div>
+                                <div className="text-xs text-slate-500">by {getUserName(activity.user_email)}</div>
+                              </TableCell>
+                              <TableCell>
+                                <Badge className={
+                                  builderStatus === 'verified' ? 'bg-emerald-100 text-emerald-700' :
+                                    builderStatus === 'not_verified' ? 'bg-red-100 text-red-700' :
+                                      builderStatus === 'N/A' ? 'bg-slate-100 text-slate-500' :
+                                        'bg-amber-100 text-amber-700'
+                                }>
+                                  {builderStatus === 'verified' ? '✔ Verified' :
                                     builderStatus === 'not_verified' ? '❌ Not Verified' :
-                                    builderStatus === 'N/A' ? 'N/A' :
-                                    'Pending'}
-                                 </Badge>
-                               </TableCell>
-                               <TableCell>
-                                 <Badge className={
-                                   roStatus === 'verified' ? 'bg-emerald-100 text-emerald-700' :
-                                   roStatus === 'not_verified' ? 'bg-red-100 text-red-700' :
-                                   'bg-amber-100 text-amber-700'
-                                 }>
-                                   {roStatus === 'verified' ? '✔ Verified' :
+                                      builderStatus === 'N/A' ? 'N/A' :
+                                        'Pending'}
+                                </Badge>
+                              </TableCell>
+                              <TableCell>
+                                <Badge className={
+                                  roStatus === 'verified' ? 'bg-emerald-100 text-emerald-700' :
+                                    roStatus === 'not_verified' ? 'bg-red-100 text-red-700' :
+                                      'bg-amber-100 text-amber-700'
+                                }>
+                                  {roStatus === 'verified' ? '✔ Verified' :
                                     roStatus === 'not_verified' ? '❌ Not Verified' :
-                                    'Pending'}
-                                 </Badge>
-                               </TableCell>
-                               <TableCell>
-                                 <Badge className={statusColor}>
-                                   {finalStatus}
-                                 </Badge>
-                               </TableCell>
-                               <TableCell>
-                                 <div className="font-mono text-sm text-slate-600">
-                                   {hoursPending}h
-                                 </div>
-                               </TableCell>
-                             </TableRow>
-                           );
-                         })}
-                         {activities.filter(a => 
-                           a.builder_verification_status !== 'verified' || 
-                           a.ro_verification_status !== 'verified'
-                         ).length === 0 && (
-                           <TableRow>
-                             <TableCell colSpan={5} className="text-center py-8 text-emerald-600 font-medium">
-                               <CheckCircle2 className="w-6 h-6 mx-auto mb-2" />
-                               All activities fully verified!
-                             </TableCell>
-                           </TableRow>
-                         )}
-                     </TableBody>
-                   </Table>
-                 </CardContent>
-               </Card>
+                                      'Pending'}
+                                </Badge>
+                              </TableCell>
+                              <TableCell>
+                                <Badge className={statusColor}>
+                                  {finalStatus}
+                                </Badge>
+                              </TableCell>
+                              <TableCell>
+                                <div className="font-mono text-sm text-slate-600">
+                                  {hoursPending}h
+                                </div>
+                              </TableCell>
+                            </TableRow>
+                          );
+                        })}
+                      {activities.filter(a =>
+                        a.builder_verification_status !== 'verified' ||
+                        a.ro_verification_status !== 'verified'
+                      ).length === 0 && (
+                          <TableRow>
+                            <TableCell colSpan={5} className="text-center py-8 text-emerald-600 font-medium">
+                              <CheckCircle2 className="w-6 h-6 mx-auto mb-2" />
+                              All activities fully verified!
+                            </TableCell>
+                          </TableRow>
+                        )}
+                    </TableBody>
+                  </Table>
+                </CardContent>
+              </Card>
             </div>
           </TabsContent>
         )}
@@ -1091,235 +1091,235 @@ export default function SalesPerformance() {
           <TabsContent value="activities">
             {/* Detailed Activity Log Section */}
             <div>
-            <div className="flex items-center justify-between gap-3 mb-6 p-4 bg-gradient-to-r from-slate-50 to-slate-100 rounded-xl border-2 border-slate-200">
-              <div className="flex items-center gap-3">
-                <div className="p-2 bg-gradient-to-br from-slate-600 to-slate-700 rounded-lg shadow-lg">
-                  <Footprints className="w-6 h-6 text-white" />
+              <div className="flex items-center justify-between gap-3 mb-6 p-4 bg-gradient-to-r from-slate-50 to-slate-100 rounded-xl border-2 border-slate-200">
+                <div className="flex items-center gap-3">
+                  <div className="p-2 bg-gradient-to-br from-slate-600 to-slate-700 rounded-lg shadow-lg">
+                    <Footprints className="w-6 h-6 text-white" />
+                  </div>
+                  <div>
+                    <h2 className="text-2xl font-bold text-slate-900">Activity Logs</h2>
+                    <p className="text-sm text-slate-600">Complete history of all sales activities</p>
+                  </div>
                 </div>
-                <div>
-                  <h2 className="text-2xl font-bold text-slate-900">Activity Logs</h2>
-                  <p className="text-sm text-slate-600">Complete history of all sales activities</p>
-                </div>
+                {user.role === 'admin' && (
+                  <DownloadActivityReportDialog activities={activities} users={allUsers} />
+                )}
               </div>
-              {user.role === 'admin' && (
-                <DownloadActivityReportDialog activities={activities} users={allUsers} />
-              )}
-            </div>
-            
-            {/* Filter Chips */}
-            {Object.keys(advancedFilters).length > 0 && (
-              <div className="mb-6">
-                <FilterChips
-                  filters={advancedFilters}
-                  onRemoveFilter={handleRemoveFilter}
-                  onClearAll={handleClearAllFilters}
-                  moduleConfig={SALES_ACTIVITY_FILTERS}
-                />
-              </div>
-            )}
-            
-            {/* Filters */}
-            <Card className="mb-6">
-          <CardContent className="p-4">
-            <div className="flex flex-wrap gap-4">
-              <div className="flex-1 min-w-[200px]">
-                <div className="relative">
-                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
-                  <Input
-                    placeholder="Search by customer name, phone, email..."
-                    value={searchQuery}
-                    onChange={(e) => setSearchQuery(e.target.value)}
-                    className="pl-10"
+
+              {/* Filter Chips */}
+              {Object.keys(advancedFilters).length > 0 && (
+                <div className="mb-6">
+                  <FilterChips
+                    filters={advancedFilters}
+                    onRemoveFilter={handleRemoveFilter}
+                    onClearAll={handleClearAllFilters}
+                    moduleConfig={SALES_ACTIVITY_FILTERS}
                   />
                 </div>
-              </div>
-              <Button variant="outline" onClick={() => setShowAdvancedFilter(true)}>
-                <Filter className="w-4 h-4 mr-2" />
-                Advanced Filters
-              </Button>
-              <Select value={typeFilter} onValueChange={setTypeFilter}>
-                <SelectTrigger className="w-[150px]">
-                  <SelectValue placeholder="Activity Type" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">All Types</SelectItem>
-                  <SelectItem value="walk_in">Walk-Ins</SelectItem>
-                  <SelectItem value="closure">Closures</SelectItem>
-                </SelectContent>
-              </Select>
-              <Select value={memberFilter} onValueChange={setMemberFilter}>
-                <SelectTrigger className="w-[200px]">
-                  <SelectValue placeholder="Team Member" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">All Members</SelectItem>
-                  {visibleSalesUsers.map(u => (
-                     <SelectItem key={u.email} value={u.email}>{u.full_name || u.email}</SelectItem>
-                   ))}
-                </SelectContent>
-              </Select>
-            </div>
-          </CardContent>
-        </Card>
+              )}
 
-        {/* Activities Table - Redesigned */}
-        <Card className="border-2 shadow-xl">
-          <CardHeader className="bg-gradient-to-r from-slate-50 to-indigo-50 border-b-2">
-            <div className="flex items-center justify-between">
-              <CardTitle className="text-xl flex items-center gap-2">
-                <div className="p-2 bg-gradient-to-br from-slate-600 to-slate-700 rounded-lg">
-                  <Footprints className="w-5 h-5 text-white" />
-                </div>
-                All Activities ({filteredActivities.length})
-              </CardTitle>
+              {/* Filters */}
+              <Card className="mb-6">
+                <CardContent className="p-4">
+                  <div className="flex flex-wrap gap-4">
+                    <div className="flex-1 min-w-[200px]">
+                      <div className="relative">
+                        <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+                        <Input
+                          placeholder="Search by customer name, phone, email..."
+                          value={searchQuery}
+                          onChange={(e) => setSearchQuery(e.target.value)}
+                          className="pl-10"
+                        />
+                      </div>
+                    </div>
+                    <Button variant="outline" onClick={() => setShowAdvancedFilter(true)}>
+                      <Filter className="w-4 h-4 mr-2" />
+                      Advanced Filters
+                    </Button>
+                    <Select value={typeFilter} onValueChange={setTypeFilter}>
+                      <SelectTrigger className="w-[150px]">
+                        <SelectValue placeholder="Activity Type" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="all">All Types</SelectItem>
+                        <SelectItem value="walk_in">Walk-Ins</SelectItem>
+                        <SelectItem value="closure">Closures</SelectItem>
+                      </SelectContent>
+                    </Select>
+                    <Select value={memberFilter} onValueChange={setMemberFilter}>
+                      <SelectTrigger className="w-[200px]">
+                        <SelectValue placeholder="Team Member" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="all">All Members</SelectItem>
+                        {visibleSalesUsers.map(u => (
+                          <SelectItem key={u.email} value={u.email}>{u.full_name || u.email}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                </CardContent>
+              </Card>
+
+              {/* Activities Table - Redesigned */}
+              <Card className="border-2 shadow-xl">
+                <CardHeader className="bg-gradient-to-r from-slate-50 to-indigo-50 border-b-2">
+                  <div className="flex items-center justify-between">
+                    <CardTitle className="text-xl flex items-center gap-2">
+                      <div className="p-2 bg-gradient-to-br from-slate-600 to-slate-700 rounded-lg">
+                        <Footprints className="w-5 h-5 text-white" />
+                      </div>
+                      All Activities ({filteredActivities.length})
+                    </CardTitle>
+                  </div>
+                </CardHeader>
+                <CardContent className="p-0">
+                  <ScrollArea className="h-[600px]">
+                    <Table>
+                      <TableHeader>
+                        <TableRow className="bg-slate-50 hover:bg-slate-50">
+                          <TableHead className="font-bold">Type</TableHead>
+                          <TableHead className="font-bold">Sales Member</TableHead>
+                          <TableHead className="font-bold">Customer</TableHead>
+                          <TableHead className="font-bold">Source</TableHead>
+                          <TableHead className="font-bold">Builder Approval</TableHead>
+                          <TableHead className="font-bold">RO Approval</TableHead>
+                          <TableHead className="font-bold">Lead Status</TableHead>
+                          <TableHead className="font-bold">Date</TableHead>
+                          <TableHead className="text-right font-bold">Actions</TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {filteredActivities.map((activity) => (
+                          <TableRow key={activity.id} className="hover:bg-indigo-50/30 transition-colors">
+                            <TableCell>
+                              <Badge className={activity.type === 'walk_in' ? 'bg-gradient-to-r from-blue-500 to-cyan-500 text-white shadow-sm' : 'bg-gradient-to-r from-emerald-500 to-green-500 text-white shadow-sm'}>
+                                {activity.type === 'walk_in' ? '🚶 Walk-In' : '✅ Closure'}
+                              </Badge>
+                            </TableCell>
+                            <TableCell>
+                              <div className="flex flex-col">
+                                <div className="flex items-center gap-2">
+                                  <Avatar className="w-7 h-7 border-2 border-white shadow-sm">
+                                    <AvatarFallback className="text-xs bg-gradient-to-br from-indigo-500 to-purple-500 text-white font-semibold">
+                                      {getInitials(getUserName(activity.user_email))}
+                                    </AvatarFallback>
+                                  </Avatar>
+                                  <span className="text-sm font-semibold text-slate-900">{getUserName(activity.user_email)}</span>
+                                </div>
+                                {activity.created_on_behalf_of && (
+                                  <span className="text-xs text-amber-600 ml-9 font-medium">📝 On behalf of</span>
+                                )}
+                              </div>
+                            </TableCell>
+                            <TableCell>
+                              <div>
+                                <p className="font-semibold text-slate-900">{activity.customer_name || '-'}</p>
+                                {activity.customer_phone && (
+                                  <p className="text-xs text-slate-500 flex items-center gap-1">
+                                    <Phone className="w-3 h-3" />
+                                    {activity.customer_phone}
+                                  </p>
+                                )}
+                              </div>
+                            </TableCell>
+                            <TableCell>
+                              <Badge variant="outline" className="font-medium">
+                                {sourceLabels[activity.source] || '-'}
+                              </Badge>
+                            </TableCell>
+                            <TableCell>
+                              {activity.builder_email ? (
+                                activity.builder_verification_status === 'verified' ? (
+                                  <Badge className="bg-gradient-to-r from-emerald-100 to-green-100 text-emerald-700 border border-emerald-300 shadow-sm">
+                                    ✓ Verified
+                                  </Badge>
+                                ) : activity.builder_verification_status === 'not_verified' ? (
+                                  <Badge className="bg-gradient-to-r from-red-100 to-rose-100 text-red-700 border border-red-300 shadow-sm">
+                                    ✗ Not Verified
+                                  </Badge>
+                                ) : (
+                                  <Badge className="bg-gradient-to-r from-amber-100 to-orange-100 text-amber-700 border border-amber-300 shadow-sm animate-pulse">
+                                    ⏳ Pending
+                                  </Badge>
+                                )
+                              ) : (
+                                <Badge variant="outline" className="bg-slate-50 text-slate-500 border-slate-200">
+                                  N/A
+                                </Badge>
+                              )}
+                            </TableCell>
+                            <TableCell>
+                              {activity.ro_verification_status === 'verified' ? (
+                                <Badge className="bg-gradient-to-r from-emerald-100 to-green-100 text-emerald-700 border border-emerald-300 shadow-sm">
+                                  ✓ Verified
+                                </Badge>
+                              ) : activity.ro_verification_status === 'not_verified' ? (
+                                <Badge className="bg-gradient-to-r from-red-100 to-rose-100 text-red-700 border border-red-300 shadow-sm">
+                                  ✗ Not Verified
+                                </Badge>
+                              ) : (
+                                <Badge className="bg-gradient-to-r from-amber-100 to-orange-100 text-amber-700 border border-amber-300 shadow-sm animate-pulse">
+                                  ⏳ Pending
+                                </Badge>
+                              )}
+                            </TableCell>
+                            <TableCell>
+                              {activity.status && (
+                                <Badge className={statusLabels[activity.status]?.color + ' shadow-sm'}>
+                                  {statusLabels[activity.status]?.label}
+                                </Badge>
+                              )}
+                            </TableCell>
+                            <TableCell>
+                              <div className="flex items-center gap-1.5 text-sm">
+                                <CalendarIcon className="w-3.5 h-3.5 text-slate-400" />
+                                <span className="font-medium">{activity.date ? format(parseISO(activity.date), 'MMM d, yyyy') : '-'}</span>
+                              </div>
+                              <span className="text-xs text-slate-500">{activity.date ? format(parseISO(activity.date), 'h:mm a') : '-'}</span>
+                            </TableCell>
+                            <TableCell className="text-right">
+                              <div className="flex justify-end gap-1">
+                                <Button variant="ghost" size="icon" className="h-8 w-8 hover:bg-indigo-100 hover:text-indigo-600" onClick={() => handleView(activity)}>
+                                  <Eye className="w-4 h-4" />
+                                </Button>
+                                <Button variant="ghost" size="icon" className="h-8 w-8 hover:bg-blue-100 hover:text-blue-600" onClick={() => handleEdit(activity)}>
+                                  <Edit className="w-4 h-4" />
+                                </Button>
+                                <Button
+                                  variant="ghost"
+                                  size="icon"
+                                  className="h-8 w-8 text-red-500 hover:bg-red-100 hover:text-red-700"
+                                  onClick={() => {
+                                    setSelectedActivity(activity);
+                                    setDeleteDialogOpen(true);
+                                  }}
+                                >
+                                  <Trash2 className="w-4 h-4" />
+                                </Button>
+                              </div>
+                            </TableCell>
+                          </TableRow>
+                        ))}
+                        {filteredActivities.length === 0 && (
+                          <TableRow>
+                            <TableCell colSpan={9} className="text-center py-12">
+                              <div className="flex flex-col items-center gap-3">
+                                <div className="p-4 bg-slate-100 rounded-full">
+                                  <Footprints className="w-8 h-8 text-slate-400" />
+                                </div>
+                                <p className="text-slate-500 font-medium">No activities found</p>
+                              </div>
+                            </TableCell>
+                          </TableRow>
+                        )}
+                      </TableBody>
+                    </Table>
+                  </ScrollArea>
+                </CardContent>
+              </Card>
             </div>
-          </CardHeader>
-          <CardContent className="p-0">
-            <ScrollArea className="h-[600px]">
-              <Table>
-                <TableHeader>
-                  <TableRow className="bg-slate-50 hover:bg-slate-50">
-                    <TableHead className="font-bold">Type</TableHead>
-                    <TableHead className="font-bold">Sales Member</TableHead>
-                    <TableHead className="font-bold">Customer</TableHead>
-                    <TableHead className="font-bold">Source</TableHead>
-                    <TableHead className="font-bold">Builder Approval</TableHead>
-                    <TableHead className="font-bold">RO Approval</TableHead>
-                    <TableHead className="font-bold">Lead Status</TableHead>
-                    <TableHead className="font-bold">Date</TableHead>
-                    <TableHead className="text-right font-bold">Actions</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {filteredActivities.map((activity) => (
-                    <TableRow key={activity.id} className="hover:bg-indigo-50/30 transition-colors">
-                      <TableCell>
-                        <Badge className={activity.type === 'walk_in' ? 'bg-gradient-to-r from-blue-500 to-cyan-500 text-white shadow-sm' : 'bg-gradient-to-r from-emerald-500 to-green-500 text-white shadow-sm'}>
-                          {activity.type === 'walk_in' ? '🚶 Walk-In' : '✅ Closure'}
-                        </Badge>
-                      </TableCell>
-                      <TableCell>
-                        <div className="flex flex-col">
-                          <div className="flex items-center gap-2">
-                            <Avatar className="w-7 h-7 border-2 border-white shadow-sm">
-                              <AvatarFallback className="text-xs bg-gradient-to-br from-indigo-500 to-purple-500 text-white font-semibold">
-                                {getInitials(getUserName(activity.user_email))}
-                              </AvatarFallback>
-                            </Avatar>
-                            <span className="text-sm font-semibold text-slate-900">{getUserName(activity.user_email)}</span>
-                          </div>
-                          {activity.created_on_behalf_of && (
-                            <span className="text-xs text-amber-600 ml-9 font-medium">📝 On behalf of</span>
-                          )}
-                        </div>
-                      </TableCell>
-                      <TableCell>
-                        <div>
-                          <p className="font-semibold text-slate-900">{activity.customer_name || '-'}</p>
-                          {activity.customer_phone && (
-                            <p className="text-xs text-slate-500 flex items-center gap-1">
-                              <Phone className="w-3 h-3" />
-                              {activity.customer_phone}
-                            </p>
-                          )}
-                        </div>
-                      </TableCell>
-                      <TableCell>
-                        <Badge variant="outline" className="font-medium">
-                          {sourceLabels[activity.source] || '-'}
-                        </Badge>
-                      </TableCell>
-                      <TableCell>
-                        {activity.builder_email ? (
-                          activity.builder_verification_status === 'verified' ? (
-                            <Badge className="bg-gradient-to-r from-emerald-100 to-green-100 text-emerald-700 border border-emerald-300 shadow-sm">
-                              ✓ Verified
-                            </Badge>
-                          ) : activity.builder_verification_status === 'not_verified' ? (
-                            <Badge className="bg-gradient-to-r from-red-100 to-rose-100 text-red-700 border border-red-300 shadow-sm">
-                              ✗ Not Verified
-                            </Badge>
-                          ) : (
-                            <Badge className="bg-gradient-to-r from-amber-100 to-orange-100 text-amber-700 border border-amber-300 shadow-sm animate-pulse">
-                              ⏳ Pending
-                            </Badge>
-                          )
-                        ) : (
-                          <Badge variant="outline" className="bg-slate-50 text-slate-500 border-slate-200">
-                            N/A
-                          </Badge>
-                        )}
-                      </TableCell>
-                      <TableCell>
-                        {activity.ro_verification_status === 'verified' ? (
-                          <Badge className="bg-gradient-to-r from-emerald-100 to-green-100 text-emerald-700 border border-emerald-300 shadow-sm">
-                            ✓ Verified
-                          </Badge>
-                        ) : activity.ro_verification_status === 'not_verified' ? (
-                          <Badge className="bg-gradient-to-r from-red-100 to-rose-100 text-red-700 border border-red-300 shadow-sm">
-                            ✗ Not Verified
-                          </Badge>
-                        ) : (
-                          <Badge className="bg-gradient-to-r from-amber-100 to-orange-100 text-amber-700 border border-amber-300 shadow-sm animate-pulse">
-                            ⏳ Pending
-                          </Badge>
-                        )}
-                      </TableCell>
-                      <TableCell>
-                        {activity.status && (
-                          <Badge className={statusLabels[activity.status]?.color + ' shadow-sm'}>
-                            {statusLabels[activity.status]?.label}
-                          </Badge>
-                        )}
-                      </TableCell>
-                      <TableCell>
-                        <div className="flex items-center gap-1.5 text-sm">
-                          <CalendarIcon className="w-3.5 h-3.5 text-slate-400" />
-                          <span className="font-medium">{format(parseISO(activity.date), 'MMM d, yyyy')}</span>
-                        </div>
-                        <span className="text-xs text-slate-500">{format(parseISO(activity.date), 'h:mm a')}</span>
-                      </TableCell>
-                      <TableCell className="text-right">
-                        <div className="flex justify-end gap-1">
-                          <Button variant="ghost" size="icon" className="h-8 w-8 hover:bg-indigo-100 hover:text-indigo-600" onClick={() => handleView(activity)}>
-                            <Eye className="w-4 h-4" />
-                          </Button>
-                          <Button variant="ghost" size="icon" className="h-8 w-8 hover:bg-blue-100 hover:text-blue-600" onClick={() => handleEdit(activity)}>
-                            <Edit className="w-4 h-4" />
-                          </Button>
-                          <Button 
-                            variant="ghost" 
-                            size="icon" 
-                            className="h-8 w-8 text-red-500 hover:bg-red-100 hover:text-red-700"
-                            onClick={() => {
-                              setSelectedActivity(activity);
-                              setDeleteDialogOpen(true);
-                            }}
-                          >
-                            <Trash2 className="w-4 h-4" />
-                          </Button>
-                        </div>
-                      </TableCell>
-                    </TableRow>
-                  ))}
-                  {filteredActivities.length === 0 && (
-                    <TableRow>
-                      <TableCell colSpan={9} className="text-center py-12">
-                        <div className="flex flex-col items-center gap-3">
-                          <div className="p-4 bg-slate-100 rounded-full">
-                            <Footprints className="w-8 h-8 text-slate-400" />
-                          </div>
-                          <p className="text-slate-500 font-medium">No activities found</p>
-                        </div>
-                      </TableCell>
-                    </TableRow>
-                  )}
-                </TableBody>
-              </Table>
-            </ScrollArea>
-          </CardContent>
-        </Card>
-      </div>
           </TabsContent>
         )}
       </Tabs>
@@ -1347,15 +1347,14 @@ export default function SalesPerformance() {
                       {selectedActivity.type === 'walk_in' ? 'Walk-In' : 'Closure'}
                     </Badge>
                     <p className="text-sm text-slate-600 mt-1 font-medium">
-                      {format(parseISO(selectedActivity.date), 'MMMM do, yyyy · h:mm a')}
+                      {selectedActivity.date ? format(parseISO(selectedActivity.date), 'MMMM do, yyyy · h:mm a') : '-'}
                     </p>
                   </div>
                 </div>
-                <Badge variant="outline" className={`${
-                  selectedActivity.approval_status === 'approved' ? 'border-emerald-500 text-emerald-700 bg-emerald-50' :
+                <Badge variant="outline" className={`${selectedActivity.approval_status === 'approved' ? 'border-emerald-500 text-emerald-700 bg-emerald-50' :
                   selectedActivity.approval_status === 'pending' ? 'border-amber-500 text-amber-700 bg-amber-50' :
-                  'border-slate-300 text-slate-600'
-                }`}>
+                    'border-slate-300 text-slate-600'
+                  }`}>
                   {selectedActivity.approval_status?.replace('_', ' ').toUpperCase() || 'PENDING'}
                 </Badge>
               </div>

@@ -27,16 +27,16 @@ export default function AssignedLeadsSection({ user, allUsers }) {
     queryKey: ['assigned-leads', user?.email],
     queryFn: async () => {
       if (!user) return [];
-      
+
       // Get subordinate emails if user is a reporting officer
       const subordinateEmails = allUsers
         .filter(u => u.reports_to?.toLowerCase() === user.email?.toLowerCase())
         .map(u => u.email);
-      
+
       // Fetch leads assigned to user or their subordinates
       const allLeads = await base44.entities.Lead.list('-created_date', 1000);
-      
-      return allLeads.filter(lead => 
+
+      return allLeads.filter(lead =>
         lead.assigned_to === user.email || subordinateEmails.includes(lead.assigned_to)
       );
     },
@@ -157,10 +157,10 @@ export default function AssignedLeadsSection({ user, allUsers }) {
                     <TableCell>
                       <Badge className={
                         lead.contact_status === 'not_contacted' ? 'bg-red-100 text-red-700' :
-                        lead.contact_status === 'contacted' ? 'bg-blue-100 text-blue-700' :
-                        lead.contact_status === 'interested' ? 'bg-green-100 text-green-700' :
-                        lead.contact_status === 'not_interested' ? 'bg-slate-100 text-slate-700' :
-                        'bg-amber-100 text-amber-700'
+                          lead.contact_status === 'contacted' ? 'bg-blue-100 text-blue-700' :
+                            lead.contact_status === 'interested' ? 'bg-green-100 text-green-700' :
+                              lead.contact_status === 'not_interested' ? 'bg-slate-100 text-slate-700' :
+                                'bg-amber-100 text-amber-700'
                       }>
                         {lead.contact_status?.replace('_', ' ').replace(/\b\w/g, c => c.toUpperCase())}
                       </Badge>
@@ -176,7 +176,7 @@ export default function AssignedLeadsSection({ user, allUsers }) {
                       </div>
                     </TableCell>
                     <TableCell className="text-sm">
-                      {lead.follow_up_date ? (
+                      {lead.follow_up_date && !isNaN(new Date(lead.follow_up_date).getTime()) ? (
                         <div className="flex items-center gap-1">
                           <Calendar className="w-3 h-3 text-slate-400" />
                           {format(new Date(lead.follow_up_date), 'MMM d')}
@@ -184,20 +184,20 @@ export default function AssignedLeadsSection({ user, allUsers }) {
                       ) : '-'}
                     </TableCell>
                     <TableCell className="text-sm text-slate-500">
-                      {format(new Date(lead.created_date), 'MMM d, yyyy')}
+                      {lead.created_date && !isNaN(new Date(lead.created_date).getTime()) ? format(new Date(lead.created_date), 'MMM d, yyyy') : '-'}
                     </TableCell>
                     <TableCell className="text-right">
                       <div className="flex justify-end gap-2">
-                        <Button 
-                          variant="ghost" 
+                        <Button
+                          variant="ghost"
                           size="sm"
                           onClick={() => setViewingLead(lead)}
                         >
                           <Eye className="w-4 h-4 mr-1" />
                           View
                         </Button>
-                        <Button 
-                          variant="ghost" 
+                        <Button
+                          variant="ghost"
                           size="sm"
                           onClick={() => setViewingLead(lead)}
                         >
