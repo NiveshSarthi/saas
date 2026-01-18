@@ -458,6 +458,7 @@ export default function Backlog() {
                         <div className="flex-1 min-w-0">
                           <Link
                             to={createPageUrl(`TaskDetail?id=${task.id || task._id}`)}
+                            state={{ returnPath: 'Backlog' }}
                             className="font-medium text-slate-900 hover:text-indigo-600"
                           >
                             {task.title}

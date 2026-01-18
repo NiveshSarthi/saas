@@ -30,7 +30,8 @@ export default function KanbanBoard({
   onAddTask,
   users = [],
   wipLimits = {},
-  className
+  className,
+  returnPath
 }) {
   const [swimlaneBy, setSwimlaneBy] = useState('none');
 
@@ -238,6 +239,7 @@ export default function KanbanBoard({
                                     <TaskCard
                                       task={task}
                                       isDragging={snapshot.isDragging}
+                                      returnPath={returnPath}
                                     />
                                   </div>
                                 )}
