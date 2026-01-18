@@ -14,33 +14,33 @@ import {
 import { Button } from '@/components/ui/button';
 
 const actions = [
-  { 
-    label: 'New Task', 
-    icon: Plus, 
-    href: 'NewTask', 
+  {
+    label: 'New Task',
+    icon: Plus,
+    href: 'NewTask',
     color: 'bg-indigo-500 hover:bg-indigo-600',
     description: 'Create a task'
   },
-  { 
-    label: 'Schedule Meeting', 
-    icon: Video, 
-    href: 'ScheduleMeeting', 
+  {
+    label: 'Schedule Meeting',
+    icon: Video,
+    href: 'ScheduleMeeting',
     color: 'bg-green-500 hover:bg-green-600',
     description: 'Set up a call'
   },
-  { 
-    label: 'New Project', 
-    icon: FolderPlus, 
-    href: 'NewProject', 
+  {
+    label: 'New Project',
+    icon: FolderPlus,
+    href: 'NewProject',
     color: 'bg-purple-500 hover:bg-purple-600',
     description: 'Start a project',
     hiddenForSalesExec: true,
     hiddenForSalesManager: true
   },
-  { 
-    label: 'View Calendar', 
-    icon: Calendar, 
-    href: 'Calendar', 
+  {
+    label: 'View Calendar',
+    icon: Calendar,
+    href: 'TaskCalendar',
     color: 'bg-blue-500 hover:bg-blue-600',
     description: 'Check schedule'
   },
@@ -53,7 +53,7 @@ export default function QuickActions({ isSalesExec, isSalesManager }) {
         <Zap className="w-4 h-4 text-amber-500" />
         <h3 className="font-semibold text-sm sm:text-base text-slate-900 dark:text-white">Quick Actions</h3>
       </div>
-      
+
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 sm:gap-3">
         {actions
           .filter(action => {

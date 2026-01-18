@@ -27,7 +27,7 @@ const priorityConfig = {
   low: { color: 'text-slate-400' },
 };
 
-export default function SprintKanban({ tasks, onTaskMove, onRemoveTask }) {
+export default function SprintKanban({ tasks, onTaskMove, onRemoveTask, sprintId }) {
   const [draggedTask, setDraggedTask] = useState(null);
   const [dragOverColumn, setDragOverColumn] = useState(null);
 
@@ -112,6 +112,7 @@ export default function SprintKanban({ tasks, onTaskMove, onRemoveTask }) {
                   <div className="flex items-start justify-between gap-2 mb-2">
                     <Link
                       to={createPageUrl(`TaskDetail?id=${task.id || task._id}`)}
+                      state={{ returnPath: `SprintBoard?id=${sprintId}` }}
                       className="font-medium text-sm text-slate-900 hover:text-indigo-600 flex-1"
                     >
                       {task.title}
@@ -128,7 +129,10 @@ export default function SprintKanban({ tasks, onTaskMove, onRemoveTask }) {
                       </DropdownMenuTrigger>
                       <DropdownMenuContent align="end">
                         <DropdownMenuItem asChild>
-                          <Link to={createPageUrl(`TaskDetail?id=${task.id || task._id}`)}>
+                          <Link
+                            to={createPageUrl(`TaskDetail?id=${task.id || task._id}`)}
+                            state={{ returnPath: `SprintBoard?id=${sprintId}` }}
+                          >
                             <ExternalLink className="w-4 h-4 mr-2" />
                             View Details
                           </Link>

@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { base44 } from '@/api/base44Client';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { createPageUrl } from '@/utils';
 import { cn } from '@/lib/utils';
 import { format } from 'date-fns';
@@ -38,6 +38,7 @@ import TaskGroupManager from '@/components/tasks/TaskGroupManager';
 import ProjectCalendarView from '@/components/projects/ProjectCalendarView';
 
 export default function ProjectBoard() {
+  const navigate = useNavigate();
   const [viewMode, setViewMode] = useState('board');
   const [showFilters, setShowFilters] = useState(false);
   const [filters, setFilters] = useState({
@@ -127,7 +128,7 @@ export default function ProjectBoard() {
   };
 
   const handleAddTask = (status) => {
-    window.location.href = createPageUrl(`NewTask?project=${projectId}&status=${status}`);
+    navigate(createPageUrl(`NewTask?project=${projectId}&status=${status}`), { state: { returnPath: `ProjectBoard?id=${projectId}` } });
   };
 
   // Apply filters
@@ -402,13 +403,14 @@ export default function ProjectBoard() {
               onAddTask={handleAddTask}
               users={users}
               className="h-full"
+              returnPath={`ProjectBoard?id=${projectId}`}
             />
           )}
 
           {viewMode === 'list' && (
             <div className="h-full overflow-y-auto pr-2 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 content-start">
               {filteredTasks.map(task => (
-                <TaskCard key={task.id} task={task} />
+                <TaskCard key={task.id} task={task} returnPath={`ProjectBoard?id=${projectId}`} />
               ))}
             </div>
           )}

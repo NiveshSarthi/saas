@@ -42,7 +42,7 @@ const taskTypeConfig = {
   subtask: { color: 'bg-slate-100 text-slate-700' },
 };
 
-export default function TaskCard({ task, isDragging = false, onStatusChange }) {
+export default function TaskCard({ task, isDragging = false, onStatusChange, returnPath }) {
   const getInitials = (email) => {
     if (!email) return '?';
     return email.slice(0, 2).toUpperCase();
@@ -92,6 +92,7 @@ export default function TaskCard({ task, isDragging = false, onStatusChange }) {
   return (
     <Link
       to={createPageUrl(`TaskDetail?id=${task.id || task._id}`)}
+      state={returnPath ? { returnPath } : undefined}
       className="block"
     >
       <div className={cn(

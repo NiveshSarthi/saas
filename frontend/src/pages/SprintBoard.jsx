@@ -369,7 +369,10 @@ export default function SprintBoard() {
                 return (
                   <tr key={task.id || task._id} className="border-b border-slate-100 hover:bg-slate-50 transition-colors">
                     <td className="p-4">
-                      <Link to={createPageUrl(`TaskDetail?id=${task.id || task._id}`)}>
+                      <Link
+                        to={createPageUrl(`TaskDetail?id=${task.id || task._id}`)}
+                        state={{ returnPath: `SprintBoard?id=${sprintId}` }}
+                      >
                         <div className="font-medium text-slate-900 hover:text-indigo-600 transition-colors line-clamp-2">
                           {task.title}
                         </div>
@@ -680,6 +683,7 @@ export default function SprintBoard() {
               tasks={sprintTasks}
               onTaskMove={handleTaskMove}
               onRemoveTask={handleRemoveTask}
+              sprintId={sprintId}
             />
           ) : (
             <TaskListView

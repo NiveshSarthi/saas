@@ -8,6 +8,8 @@ import authRoutes from './routes/auth.js';
 import entityRoutes from './routes/entities.js';
 import functionRoutes from './routes/functions.js';
 import userRoutes from './routes/userRoutes.js';
+import accountsRoutes from './routes/accounts.js';
+import visitRoutes from './routes/visits.js';
 // Database Connection
 import { MongoMemoryServer } from 'mongodb-memory-server';
 
@@ -97,6 +99,8 @@ connectDB();
 
 // Routes
 app.use('/auth', authRoutes);
+app.use('/api/accounts', accountsRoutes);
+app.use('/api/visits', visitRoutes);
 app.use('/api/users', userRoutes); // Secure user management API
 app.use('/rest/v1', entityRoutes); // Emulate Base44 entity API
 app.use('/functions/v1', functionRoutes); // Emulate Base44 function API

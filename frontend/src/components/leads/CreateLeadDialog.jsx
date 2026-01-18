@@ -251,7 +251,7 @@ export default function CreateLeadDialog({ open, onOpenChange, currentUser }) {
           <Button variant="outline" onClick={() => onOpenChange(false)}>
             Cancel
           </Button>
-          <Button 
+          <Button
             onClick={handleSubmit}
             disabled={createLeadMutation.isPending}
           >
