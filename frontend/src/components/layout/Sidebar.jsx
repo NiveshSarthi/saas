@@ -36,7 +36,8 @@ import {
   DollarSign,
   HeadphonesIcon,
   Clock,
-  UserPlus
+  UserPlus,
+  FileText
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { ScrollArea } from '@/components/ui/scroll-area';
@@ -117,6 +118,7 @@ export default function Sidebar({ projects = [], currentPage, user, collapsed, o
   ];
 
   const adminItems = [
+    { name: 'Gate Pass Approvals', icon: Target, page: 'AdminVisitApprovals' },
     { name: 'Timesheet Approval', icon: Clock, page: 'TimesheetApproval' },
     { name: 'Freelancer Reports', icon: BarChart3, page: 'FreelancerReports' },
     { name: 'Roles', icon: Shield, page: 'RoleManagement' },
@@ -380,69 +382,82 @@ export default function Sidebar({ projects = [], currentPage, user, collapsed, o
                 </div>
                 <CollapsibleContent className="space-y-1">
                   <Link
-                    to={createPageUrl('Accounts')}
+                    to={createPageUrl('AccountsReports')}
                     onClick={() => window.innerWidth < 1024 && onToggle()}
                     className={cn(
                       "flex items-center gap-3 px-3 py-2.5 rounded-lg transition-all duration-200",
-                      currentPage === 'Accounts'
-                        ? "bg-indigo-600 text-white shadow-lg shadow-indigo-500/25"
-                        : "text-slate-400 hover:text-white hover:bg-slate-800"
-                    )}
-                  >
-                    <Wallet className="w-5 h-5 flex-shrink-0" />
-                    <span className="font-medium">Overview</span>
-                  </Link>
-                  <Link
-                    to={createPageUrl('Receivables')}
-                    onClick={() => window.innerWidth < 1024 && onToggle()}
-                    className={cn(
-                      "flex items-center gap-3 px-3 py-2.5 rounded-lg transition-all duration-200",
-                      currentPage === 'Receivables'
-                        ? "bg-indigo-600 text-white shadow-lg shadow-indigo-500/25"
-                        : "text-slate-400 hover:text-white hover:bg-slate-800"
-                    )}
-                  >
-                    <TrendingUp className="w-5 h-5 flex-shrink-0" />
-                    <span className="font-medium">Receivables</span>
-                  </Link>
-                  <Link
-                    to={createPageUrl('Payables')}
-                    onClick={() => window.innerWidth < 1024 && onToggle()}
-                    className={cn(
-                      "flex items-center gap-3 px-3 py-2.5 rounded-lg transition-all duration-200",
-                      currentPage === 'Payables'
-                        ? "bg-indigo-600 text-white shadow-lg shadow-indigo-500/25"
-                        : "text-slate-400 hover:text-white hover:bg-slate-800"
-                    )}
-                  >
-                    <TrendingDown className="w-5 h-5 flex-shrink-0" />
-                    <span className="font-medium">Payables</span>
-                  </Link>
-                  <Link
-                    to={createPageUrl('MarketingExpenses')}
-                    onClick={() => window.innerWidth < 1024 && onToggle()}
-                    className={cn(
-                      "flex items-center gap-3 px-3 py-2.5 rounded-lg transition-all duration-200",
-                      currentPage === 'MarketingExpenses'
-                        ? "bg-indigo-600 text-white shadow-lg shadow-indigo-500/25"
-                        : "text-slate-400 hover:text-white hover:bg-slate-800"
-                    )}
-                  >
-                    <Target className="w-5 h-5 flex-shrink-0" />
-                    <span className="font-medium">Marketing Expenses</span>
-                  </Link>
-                  <Link
-                    to={createPageUrl('CashFlowForecast')}
-                    onClick={() => window.innerWidth < 1024 && onToggle()}
-                    className={cn(
-                      "flex items-center gap-3 px-3 py-2.5 rounded-lg transition-all duration-200",
-                      currentPage === 'CashFlowForecast'
+                      currentPage === 'AccountsReports'
                         ? "bg-indigo-600 text-white shadow-lg shadow-indigo-500/25"
                         : "text-slate-400 hover:text-white hover:bg-slate-800"
                     )}
                   >
                     <BarChart3 className="w-5 h-5 flex-shrink-0" />
-                    <span className="font-medium">Cash Flow Forecast</span>
+                    <span className="font-medium">Reports</span>
+                  </Link>
+                  <Link
+                    to={createPageUrl('AccountsCharts')}
+                    onClick={() => window.innerWidth < 1024 && onToggle()}
+                    className={cn(
+                      "flex items-center gap-3 px-3 py-2.5 rounded-lg transition-all duration-200",
+                      currentPage === 'AccountsCharts'
+                        ? "bg-indigo-600 text-white shadow-lg shadow-indigo-500/25"
+                        : "text-slate-400 hover:text-white hover:bg-slate-800"
+                    )}
+                  >
+                    <List className="w-5 h-5 flex-shrink-0" />
+                    <span className="font-medium">Chart of Accounts</span>
+                  </Link>
+                  <Link
+                    to={createPageUrl('AccountsInvoices')}
+                    onClick={() => window.innerWidth < 1024 && onToggle()}
+                    className={cn(
+                      "flex items-center gap-3 px-3 py-2.5 rounded-lg transition-all duration-200",
+                      currentPage === 'AccountsInvoices'
+                        ? "bg-indigo-600 text-white shadow-lg shadow-indigo-500/25"
+                        : "text-slate-400 hover:text-white hover:bg-slate-800"
+                    )}
+                  >
+                    <FileText className="w-5 h-5 flex-shrink-0" />
+                    <span className="font-medium">Invoices</span>
+                  </Link>
+                  <Link
+                    to={createPageUrl('AccountsBills')}
+                    onClick={() => window.innerWidth < 1024 && onToggle()}
+                    className={cn(
+                      "flex items-center gap-3 px-3 py-2.5 rounded-lg transition-all duration-200",
+                      currentPage === 'AccountsBills'
+                        ? "bg-indigo-600 text-white shadow-lg shadow-indigo-500/25"
+                        : "text-slate-400 hover:text-white hover:bg-slate-800"
+                    )}
+                  >
+                    <DollarSign className="w-5 h-5 flex-shrink-0" />
+                    <span className="font-medium">Expenses & Bills</span>
+                  </Link>
+                  <Link
+                    to={createPageUrl('AccountsVendors')}
+                    onClick={() => window.innerWidth < 1024 && onToggle()}
+                    className={cn(
+                      "flex items-center gap-3 px-3 py-2.5 rounded-lg transition-all duration-200",
+                      currentPage === 'AccountsVendors'
+                        ? "bg-indigo-600 text-white shadow-lg shadow-indigo-500/25"
+                        : "text-slate-400 hover:text-white hover:bg-slate-800"
+                    )}
+                  >
+                    <Building2 className="w-5 h-5 flex-shrink-0" />
+                    <span className="font-medium">Vendors</span>
+                  </Link>
+                  <Link
+                    to={createPageUrl('AccountsClients')}
+                    onClick={() => window.innerWidth < 1024 && onToggle()}
+                    className={cn(
+                      "flex items-center gap-3 px-3 py-2.5 rounded-lg transition-all duration-200",
+                      currentPage === 'AccountsClients'
+                        ? "bg-indigo-600 text-white shadow-lg shadow-indigo-500/25"
+                        : "text-slate-400 hover:text-white hover:bg-slate-800"
+                    )}
+                  >
+                    <Users className="w-5 h-5 flex-shrink-0" />
+                    <span className="font-medium">Clients</span>
                   </Link>
                 </CollapsibleContent>
               </Collapsible>

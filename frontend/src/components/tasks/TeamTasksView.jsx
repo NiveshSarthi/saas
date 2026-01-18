@@ -1518,7 +1518,10 @@ export default function TeamTasksView() {
                       )}
                     </TableCell>
                     <TableCell className="text-right">
-                      <Link to={createPageUrl(`TaskDetail?id=${task.id || task._id}`)}>
+                      <Link
+                        to={createPageUrl(`TaskDetail?id=${task.id || task._id}`)}
+                        state={{ returnPath: 'TeamTasks', backLabel: 'Back to Team Tasks' }}
+                      >
                         <Button variant="ghost" size="sm" className="h-8 px-3 font-medium text-slate-600 hover:text-white hover:bg-gradient-to-r hover:from-indigo-600 hover:to-purple-600 hover:shadow-lg transition-all">
                           View
                         </Button>

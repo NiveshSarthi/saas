@@ -1,8 +1,15 @@
 import AIFinanceInsights from './pages/AIFinanceInsights';
 import Accounts from './pages/Accounts';
+import AccountsCharts from './pages/AccountsCharts';
+import AccountsVendors from './pages/AccountsVendors';
+import AccountsClients from './pages/AccountsClients';
+import AccountsInvoices from './pages/AccountsInvoices';
+import AccountsBills from './pages/AccountsBills';
+import AccountsReports from './pages/AccountsReports';
 import Analytics from './pages/Analytics';
 import Attendance from './pages/Attendance';
 import AttendanceRules from './pages/AttendanceRules';
+import AdminVisitApprovals from './pages/AdminVisitApprovals';
 import AuditLogs from './pages/AuditLogs';
 import Backlog from './pages/Backlog';
 import BudgetComparison from './pages/BudgetComparison';
@@ -80,9 +87,16 @@ import __Layout from './Layout.jsx';
 export const PAGES = {
     "AIFinanceInsights": AIFinanceInsights,
     "Accounts": Accounts,
+    "AccountsCharts": AccountsCharts,
+    "AccountsVendors": AccountsVendors,
+    "AccountsClients": AccountsClients,
+    "AccountsInvoices": AccountsInvoices,
+    "AccountsBills": AccountsBills,
+    "AccountsReports": AccountsReports,
     "Analytics": Analytics,
     "Attendance": Attendance,
     "AttendanceRules": AttendanceRules,
+    "AdminVisitApprovals": AdminVisitApprovals,
     "AuditLogs": AuditLogs,
     "Backlog": Backlog,
     "BudgetComparison": BudgetComparison,

@@ -136,7 +136,11 @@ export default function Reports() {
     queryFn: () => base44.entities.MarketingCategory.list('name', 100),
   });
 
-  // Filter tasks based on selections
+  const { data: marketingGoals = [] } = useQuery({
+    queryKey: ['marketing-goals-reports'],
+    queryFn: () => base44.entities.MarketingGoal.list(),
+  });
+
   const filteredTasks = tasks.filter(t => {
     if (selectedProject !== 'all' && t.project_id !== selectedProject) return false;
     if (selectedUser !== 'all' && t.assignee_email !== selectedUser) return false;
@@ -632,6 +636,7 @@ export default function Reports() {
           categories={marketingCategories}
           users={users}
           departments={departments}
+          marketingGoals={marketingGoals}
         />
       )}
 

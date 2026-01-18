@@ -238,7 +238,7 @@ export default function TaskList() {
   };
 
   const handleTaskClick = (task) => {
-    navigate(createPageUrl(`TaskDetail?id=${task.id || task._id}`));
+    navigate(createPageUrl(`TaskDetail?id=${task.id || task._id}`), { state: { returnPath: 'TaskList' } });
   };
 
   if (isLoading) {

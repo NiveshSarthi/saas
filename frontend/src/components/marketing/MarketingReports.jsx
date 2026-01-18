@@ -48,7 +48,7 @@ const STATUS_LABELS = {
   trash: 'Trash'
 };
 
-export default function MarketingReports({ tasks = [], videos = [], categories = [], users = [], departments = [] }) {
+export default function MarketingReports({ tasks = [], videos = [], categories = [], users = [], departments = [], marketingGoals = [] }) {
   // Combine tasks and videos for a unified view
   const unifiedTasks = useMemo(() => {
     // 1. Process legacy tasks (MarketingTask)
@@ -742,6 +742,71 @@ export default function MarketingReports({ tasks = [], videos = [], categories =
 
     y += cardHeight + 8;
 
+    // Video Production Status (Requested feature - active vs planned)
+    if (selectedType === 'video' || selectedVideoSubcategory !== 'all') {
+      // Filter video tasks
+      const videoTasks = filteredTasks.filter(t => t.task_type === 'video');
+
+      // Calculate explicit counts based on requirements
+      // Shoot/Active: Goals with a defined shoot_date
+      const totalShoot = marketingGoals.filter(g => g.shoot_date).length;
+
+      // Planned: Goals without a shoot_date
+      const totalPlanned = marketingGoals.filter(g => !g.shoot_date).length;
+
+      // Section title
+      doc.setTextColor(79, 70, 229);
+      doc.setFontSize(11);
+      doc.setFont(undefined, 'bold');
+      doc.text('Video Production Status', 14, y);
+      y += 8;
+
+      const statusCardWidth = 50;
+      const statusCardHeight = 22;
+      const statusGap = 4;
+
+      // Shoot (Active) Card
+      doc.setFillColor(236, 254, 255); // Cyan-50
+      doc.roundedRect(14, y, statusCardWidth, statusCardHeight, 3, 3, 'F');
+      // Border
+      doc.setDrawColor(165, 243, 252); // Cyan-200
+      doc.roundedRect(14, y, statusCardWidth, statusCardHeight, 3, 3, 'S');
+
+      doc.setTextColor(22, 78, 99); // Cyan-900
+      doc.setFontSize(8);
+      doc.setFont(undefined, 'bold');
+      doc.text('SHOOT (ACTIVE)', 18, y + 6);
+
+      doc.setTextColor(8, 145, 178); // Cyan-600
+      doc.setFontSize(16);
+      doc.text(totalShoot.toString(), 18, y + 14);
+
+      doc.setFontSize(7);
+      doc.setFont(undefined, 'normal');
+      doc.text('Active Production', 18, y + 18);
+
+      // Planned Card
+      doc.setFillColor(240, 253, 244); // Green-50
+      doc.roundedRect(14 + statusCardWidth + statusGap, y, statusCardWidth, statusCardHeight, 3, 3, 'F');
+      doc.setDrawColor(187, 247, 208); // Green-200
+      doc.roundedRect(14 + statusCardWidth + statusGap, y, statusCardWidth, statusCardHeight, 3, 3, 'S');
+
+      doc.setTextColor(20, 83, 45); // Green-900
+      doc.setFontSize(8);
+      doc.setFont(undefined, 'bold');
+      doc.text('PLANNED', 18 + statusCardWidth + statusGap, y + 6);
+
+      doc.setTextColor(22, 163, 74); // Green-600
+      doc.setFontSize(16);
+      doc.text(totalPlanned.toString(), 18 + statusCardWidth + statusGap, y + 14);
+
+      doc.setFontSize(7);
+      doc.setFont(undefined, 'normal');
+      doc.text('Idea / Scripting', 18 + statusCardWidth + statusGap, y + 18);
+
+      y += statusCardHeight + 10;
+    }
+
     // Video Subcategory Performance Cards
     if (selectedType === 'video' || selectedVideoSubcategory !== 'all') {
       // Calculate targets based on date range
@@ -1327,6 +1392,37 @@ export default function MarketingReports({ tasks = [], videos = [], categories =
           </div>
         </CardContent>
       </Card>
+
+      {/* Video Production Status (Visible only for Video Content) */}
+      {(selectedType === 'video' || selectedVideoSubcategory !== 'all') && (() => {
+        // Shoot/Active: Goals with a defined shoot_date
+        const totalShoot = marketingGoals.filter(g => g.shoot_date).length;
+        // Planned: Goals without a shoot_date
+        const totalPlanned = marketingGoals.filter(g => !g.shoot_date).length;
+
+        return (
+          <Card className="mb-6">
+            <CardHeader>
+              <CardTitle>Video Production Status</CardTitle>
+              <CardDescription>Pipeline overview</CardDescription>
+            </CardHeader>
+            <CardContent>
+              <div className="grid grid-cols-2 gap-4">
+                <div className="bg-cyan-50 rounded-lg p-4 border border-cyan-200">
+                  <div className="text-xs text-slate-500 font-bold mb-1">Shoot (Active)</div>
+                  <div className="text-3xl font-bold text-slate-900">{totalShoot}</div>
+                  <div className="text-xs text-slate-400 mt-1">Active Production</div>
+                </div>
+                <div className="bg-green-50 rounded-lg p-4 border border-green-200">
+                  <div className="text-xs text-slate-500 font-bold mb-1">Planned</div>
+                  <div className="text-3xl font-bold text-slate-900">{totalPlanned}</div>
+                  <div className="text-xs text-slate-400 mt-1">Idea / Scripting</div>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+        );
+      })()}
 
       {/* Video Production Targets */}
       <Card>

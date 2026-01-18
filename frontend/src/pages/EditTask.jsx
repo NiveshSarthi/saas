@@ -2,7 +2,7 @@
 import React, { useState, useEffect } from 'react';
 import { base44 } from '@/api/base44Client';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { Link, useNavigate } from 'react-router-dom';
+import { Link, useNavigate, useLocation } from 'react-router-dom';
 import { createPageUrl } from '@/utils';
 import { format } from 'date-fns';
 import {
@@ -51,6 +51,7 @@ import { notifyMultipleAssignees, sendAssignmentNotification, MODULES } from '@/
 
 export default function EditTask() {
   const navigate = useNavigate();
+  const location = useLocation();
   const urlParams = new URLSearchParams(window.location.search);
   const taskId = urlParams.get('id');
 
@@ -287,7 +288,11 @@ export default function EditTask() {
         qc.invalidateQueries({ queryKey: ['project-tasks-for-ai', formData?.project_id] });
       } catch (e) { }
 
-      navigate(createPageUrl(`TaskDetail?id=${task.id || task._id}`));
+      if (window.history.length > 1) {
+        navigate(-1);
+      } else {
+        navigate(createPageUrl(`TaskDetail?id=${task.id || task._id}`), { state: location.state });
+      }
     },
   });
 

@@ -13,10 +13,10 @@ const SOURCE_CONFIG = {
 
 export default function LeadSourceBadge({ source }) {
   if (!source) return null;
-  
+
   const config = SOURCE_CONFIG[source] || SOURCE_CONFIG.website;
   const Icon = config.icon;
-  
+
   return (
     <Badge variant="outline" className={config.color}>
       <Icon className="w-3 h-3 mr-1" />
