@@ -393,6 +393,8 @@ const marketingTaskSchema = new mongoose.Schema({
     campaign_name: String,
     related_task_id: String,
     task_type: String, // video, post, blog
+    video_subcategory: String, // Added: awareness_video, campaign_video, egc_videos
+    level_of_editing: String,  // Added: B, A, A+
     description: String,
     status: String, // idea, scripting, shooting, editing, review, published
     assignee_email: String,
@@ -579,6 +581,9 @@ const marketingGoalSchema = new mongoose.Schema({
     title: { type: String, required: true },
     description: String,
     goal_type: { type: String, enum: ['daily', 'weekly', 'biweekly', 'custom'], default: 'custom' },
+    content_type: { type: String, enum: ['video', 'post', 'blog', 'flyer', 'poster', 'article', 'other'] }, // Added
+    video_category: { type: String, enum: ['awareness_video', 'campaign_video', 'egc_videos'] },        // Added
+    shoot_date: Date,                                                                                   // Added
     target_date: Date,                    // For custom dates
     recurrence_days: [Number],            // For weekly: [0,1,2...] (Sunday=0)
     start_date: Date,

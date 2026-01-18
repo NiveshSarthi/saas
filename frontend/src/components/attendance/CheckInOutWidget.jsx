@@ -19,7 +19,119 @@ export default function CheckInOutWidget({ user, todayRecord, onUpdate }) {
   const [locationPermissionDenied, setLocationPermissionDenied] = useState(false);
   const queryClient = useQueryClient();
 
-  // ... (existing code)
+  // Fetch departments to identify Sales users
+  const { data: departments = [] } = useQuery({
+    queryKey: ['departments'],
+    queryFn: () => base44.entities.Department.list(),
+    enabled: !!user
+  });
+
+  const isSalesUser = React.useMemo(() => {
+    if (!user || departments.length === 0) return false;
+    const dept = departments.find(d => d.id === user.department_id);
+    return dept?.name?.toLowerCase().includes('sales') || user.role_id === 'sales_rep' || user.role_id === 'sales';
+  }, [user, departments]);
+
+  // Fetch active site visit
+  const { data: activeVisit } = useQuery({
+    queryKey: ['active-visit', user?.email],
+    queryFn: async () => {
+      const visits = await base44.entities.SiteVisit.filter({
+        user_email: user?.email,
+        status: 'ongoing'
+      });
+      return visits && visits.length > 0 ? visits[0] : null;
+    },
+    enabled: !!user?.email
+  });
+
+  // Fetch settings
+  const { data: settings } = useQuery({
+    queryKey: ['attendance-settings'],
+    queryFn: async () => {
+      const res = await base44.entities.AttendanceSettings.list();
+      return res[0];
+    }
+  });
+
+  // Fetch work days (holidays)
+  const { data: workDays = [] } = useQuery({
+    queryKey: ['work-days-widget'],
+    queryFn: () => base44.entities.WorkDay.list()
+  });
+
+  // Helpers
+  const getIPAddress = async () => {
+    try {
+      const res = await fetch('https://api.ipify.org?format=json');
+      const data = await res.json();
+      return data.ip;
+    } catch (e) {
+      return '0.0.0.0';
+    }
+  };
+
+  const getDeviceInfo = () => {
+    return navigator.userAgent;
+  };
+
+  const calculateDistance = (lat1, lon1, lat2, lon2) => {
+    if (!lat1 || !lon1 || !lat2 || !lon2) return 0;
+    const R = 6371e3; // metres
+    const φ1 = lat1 * Math.PI / 180;
+    const φ2 = lat2 * Math.PI / 180;
+    const Δφ = (lat2 - lat1) * Math.PI / 180;
+    const Δλ = (lon2 - lon1) * Math.PI / 180;
+    const a = Math.sin(Δφ / 2) * Math.sin(Δφ / 2) +
+      Math.cos(φ1) * Math.cos(φ2) *
+      Math.sin(Δλ / 2) * Math.sin(Δλ / 2);
+    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+    return R * c;
+  };
+
+  const isWorkDay = (date, settings, workDaysList = []) => {
+    const day = date.getDay();
+    const dateStr = format(date, 'yyyy-MM-dd');
+    const isHoliday = workDaysList.find(wd => wd.date === dateStr && wd.is_holiday);
+    if (isHoliday) return false;
+    return !(settings?.week_off_days || []).includes(day);
+  };
+
+  const isLateCheckIn = (date, settings) => {
+    if (!settings?.work_start_time) return false;
+    const [hours, minutes] = settings.work_start_time.split(':').map(Number);
+    const workStart = new Date(date);
+    workStart.setHours(hours, minutes, 0, 0);
+    const buffer = settings.late_threshold_minutes || 15;
+    workStart.setMinutes(workStart.getMinutes() + buffer);
+    return date > workStart;
+  };
+
+  // State calculations
+  const isWeekOff = React.useMemo(() => {
+    if (!settings) return false;
+    return !isWorkDay(new Date(), settings, workDays);
+  }, [settings, workDays]);
+
+  const canCheckIn = React.useMemo(() => {
+    if (!settings) return true;
+    if (todayRecord && !settings.allow_multiple_checkins) return false;
+    if (todayRecord && todayRecord.status === 'checked_in') return false; // Already checked in
+    // If checked out, can we check in again? Only if multiple allowed.
+    if (todayRecord && todayRecord.check_out && !settings.allow_multiple_checkins) return false;
+    return true;
+  }, [settings, todayRecord]);
+
+  const canCheckOut = React.useMemo(() => {
+    return todayRecord && todayRecord.status === 'checked_in' && !todayRecord.check_out;
+  }, [todayRecord]);
+
+  // Update time
+  useEffect(() => {
+    const timer = setInterval(() => setCurrentTime(new Date()), 1000);
+    return () => clearInterval(timer);
+  }, []);
+
 
   const getLocation = () => {
     return new Promise((resolve) => {

@@ -70,6 +70,9 @@ export default function MarketingCalendarPage() {
         title: '',
         description: '',
         goal_type: 'custom',
+        content_type: '',       // Added
+        video_category: '',     // Added
+        shoot_date: '',         // Added
         target_date: '',
         start_date: '',
         end_date: '',
@@ -253,6 +256,9 @@ export default function MarketingCalendarPage() {
                 description: goal.description || '',
                 goal_type: goal.goal_type || 'custom',
                 target_date: goal.target_date ? format(parseISO(goal.target_date), 'yyyy-MM-dd') : '',
+                content_type: goal.content_type || '',           // Added
+                video_category: goal.video_category || '',       // Added
+                shoot_date: goal.shoot_date ? format(parseISO(goal.shoot_date), 'yyyy-MM-dd') : '', // Added
                 start_date: goal.start_date ? format(parseISO(goal.start_date), 'yyyy-MM-dd') : '',
                 end_date: goal.end_date ? format(parseISO(goal.end_date), 'yyyy-MM-dd') : '',
                 recurrence_days: goal.recurrence_days || [],
@@ -264,6 +270,9 @@ export default function MarketingCalendarPage() {
                 title: '',
                 description: '',
                 goal_type: 'custom',
+                content_type: '',      // Added
+                video_category: '',    // Added
+                shoot_date: '',        // Added
                 target_date: date ? format(date, 'yyyy-MM-dd') : format(new Date(), 'yyyy-MM-dd'),
                 start_date: '',
                 end_date: '',
@@ -315,8 +324,8 @@ export default function MarketingCalendarPage() {
             <div
                 onClick={(e) => { e.stopPropagation(); handleOpenModal(goal); }}
                 className={`group flex items-center gap-1 px-2 py-1 rounded-md text-xs font-medium cursor-pointer transition-all ${isDone
-                        ? 'bg-green-100 text-green-700 line-through opacity-70'
-                        : 'hover:opacity-80'
+                    ? 'bg-green-100 text-green-700 line-through opacity-70'
+                    : 'hover:opacity-80'
                     }`}
                 style={{
                     backgroundColor: isDone ? undefined : `${goal.color}20`,
@@ -327,13 +336,21 @@ export default function MarketingCalendarPage() {
                 <button
                     onClick={(e) => { e.stopPropagation(); handleToggleDone(goal); }}
                     className={`w-4 h-4 rounded-full border-2 flex items-center justify-center flex-shrink-0 transition-colors ${isDone
-                            ? 'bg-green-500 border-green-500 text-white'
-                            : 'border-current hover:bg-current/10'
+                        ? 'bg-green-500 border-green-500 text-white'
+                        : 'border-current hover:bg-current/10'
                         }`}
                 >
                     {isDone && <Check className="w-3 h-3" />}
                 </button>
-                <span className="truncate">{goal.title}</span>
+                <div className="flex flex-col min-w-0">
+                    <span className="truncate">{goal.title}</span>
+                    {goal.content_type === 'video' && !compact && (
+                        <span className="text-[10px] opacity-80 flex items-center gap-1">
+                            🎥 {goal.video_category ? goal.video_category.replace('_', ' ') : 'Video'}
+                            {goal.shoot_date && ` • Shoot: ${format(parseISO(goal.shoot_date), 'MM/dd')}`}
+                        </span>
+                    )}
+                </div>
             </div>
         );
     };
@@ -528,8 +545,8 @@ export default function MarketingCalendarPage() {
                                                 key={goal.id || goal._id}
                                                 onClick={(e) => { e.stopPropagation(); handleOpenModal(goal); }}
                                                 className={`p-4 rounded-lg border-l-4 cursor-pointer transition-all ${goal.status === 'done'
-                                                        ? 'bg-green-50 border-green-500 opacity-70'
-                                                        : 'bg-white hover:shadow-md'
+                                                    ? 'bg-green-50 border-green-500 opacity-70'
+                                                    : 'bg-white hover:shadow-md'
                                                     }`}
                                                 style={{ borderLeftColor: goal.status === 'done' ? undefined : goal.color }}
                                             >
@@ -537,8 +554,8 @@ export default function MarketingCalendarPage() {
                                                     <button
                                                         onClick={(e) => { e.stopPropagation(); handleToggleDone(goal); }}
                                                         className={`mt-1 w-5 h-5 rounded-full border-2 flex items-center justify-center flex-shrink-0 ${goal.status === 'done'
-                                                                ? 'bg-green-500 border-green-500 text-white'
-                                                                : 'border-slate-300 hover:border-indigo-500'
+                                                            ? 'bg-green-500 border-green-500 text-white'
+                                                            : 'border-slate-300 hover:border-indigo-500'
                                                             }`}
                                                     >
                                                         {goal.status === 'done' && <Check className="w-3 h-3" />}
@@ -554,6 +571,17 @@ export default function MarketingCalendarPage() {
                                                             <Badge variant="outline" className="text-xs">
                                                                 {goal.goal_type}
                                                             </Badge>
+                                                            {goal.content_type && (
+                                                                <Badge variant="secondary" className="text-xs">
+                                                                    {goal.content_type}
+                                                                    {goal.content_type === 'video' && goal.video_category && ` : ${goal.video_category.replace('_', ' ')}`}
+                                                                </Badge>
+                                                            )}
+                                                            {goal.shoot_date && (
+                                                                <Badge variant="outline" className="text-xs border-amber-200 bg-amber-50 text-amber-700">
+                                                                    Shoot: {format(parseISO(goal.shoot_date), 'MMM d')}
+                                                                </Badge>
+                                                            )}
                                                         </div>
                                                     </div>
                                                 </div>
@@ -643,8 +671,8 @@ export default function MarketingCalendarPage() {
                                                     key={goal.id || goal._id}
                                                     onClick={() => handleOpenModal(goal)}
                                                     className={`p-4 rounded-lg border-l-4 cursor-pointer transition-all ${goal.status === 'done'
-                                                            ? 'bg-green-50 border-green-500'
-                                                            : 'bg-white hover:shadow-md'
+                                                        ? 'bg-green-50 border-green-500'
+                                                        : 'bg-white hover:shadow-md'
                                                         }`}
                                                     style={{ borderLeftColor: goal.status === 'done' ? undefined : goal.color }}
                                                 >
@@ -652,8 +680,8 @@ export default function MarketingCalendarPage() {
                                                         <button
                                                             onClick={(e) => { e.stopPropagation(); handleToggleDone(goal); }}
                                                             className={`w-5 h-5 rounded-full border-2 flex items-center justify-center ${goal.status === 'done'
-                                                                    ? 'bg-green-500 border-green-500 text-white'
-                                                                    : 'border-slate-300 hover:border-indigo-500'
+                                                                ? 'bg-green-500 border-green-500 text-white'
+                                                                : 'border-slate-300 hover:border-indigo-500'
                                                                 }`}
                                                         >
                                                             {goal.status === 'done' && <Check className="w-3 h-3" />}
@@ -666,6 +694,11 @@ export default function MarketingCalendarPage() {
                                                         <Badge variant="outline" className="text-xs">
                                                             {goal.goal_type}
                                                         </Badge>
+                                                        {goal.content_type && (
+                                                            <Badge variant="secondary" className="text-xs">
+                                                                {goal.content_type}
+                                                            </Badge>
+                                                        )}
                                                     </div>
                                                 </div>
                                             ))}
@@ -690,113 +723,172 @@ export default function MarketingCalendarPage() {
                         </DialogDescription>
                     </DialogHeader>
 
-                    <form onSubmit={handleSubmit} className="space-y-4">
-                        <div className="space-y-2">
-                            <Label htmlFor="title">Goal Title *</Label>
-                            <Input
-                                id="title"
-                                placeholder="e.g., Post 3 reels on Instagram"
-                                value={formData.title}
-                                onChange={(e) => setFormData({ ...formData, title: e.target.value })}
-                                required
-                            />
-                        </div>
-
-                        <div className="space-y-2">
-                            <Label htmlFor="description">Description</Label>
-                            <Textarea
-                                id="description"
-                                placeholder="Additional details..."
-                                rows={2}
-                                value={formData.description}
-                                onChange={(e) => setFormData({ ...formData, description: e.target.value })}
-                            />
-                        </div>
-
-                        <div className="grid grid-cols-2 gap-4">
+                    <form onSubmit={handleSubmit}>
+                        <div className="space-y-4">
                             <div className="space-y-2">
-                                <Label>Goal Type</Label>
-                                <Select
-                                    value={formData.goal_type}
-                                    onValueChange={(v) => setFormData({ ...formData, goal_type: v })}
-                                >
-                                    <SelectTrigger>
-                                        <SelectValue />
-                                    </SelectTrigger>
-                                    <SelectContent>
-                                        <SelectItem value="custom">One-time</SelectItem>
-                                        <SelectItem value="daily">Daily</SelectItem>
-                                        <SelectItem value="weekly">Weekly</SelectItem>
-                                        <SelectItem value="biweekly">Biweekly</SelectItem>
-                                    </SelectContent>
-                                </Select>
-                            </div>
-
-                            <div className="space-y-2">
-                                <Label>Target Date *</Label>
+                                <Label htmlFor="title">Goal Title *</Label>
                                 <Input
-                                    type="date"
-                                    value={formData.target_date}
-                                    onChange={(e) => setFormData({ ...formData, target_date: e.target.value })}
+                                    id="title"
+                                    placeholder="e.g., Post 3 reels on Instagram"
+                                    value={formData.title}
+                                    onChange={(e) => setFormData({ ...formData, title: e.target.value })}
                                     required
                                 />
                             </div>
-                        </div>
 
-                        {/* Weekly recurrence days */}
-                        {formData.goal_type === 'weekly' && (
                             <div className="space-y-2">
-                                <Label>Repeat on days</Label>
-                                <div className="flex flex-wrap gap-2">
-                                    {DAYS_OF_WEEK.map((day) => (
-                                        <Button
-                                            key={day.value}
-                                            type="button"
-                                            variant={formData.recurrence_days?.includes(day.value) ? 'default' : 'outline'}
-                                            size="sm"
-                                            onClick={() => handleDayRecurrenceToggle(day.value)}
-                                            className={formData.recurrence_days?.includes(day.value) ? 'bg-indigo-600' : ''}
+                                <Label htmlFor="description">Description</Label>
+                                <Textarea
+                                    id="description"
+                                    placeholder="Additional details..."
+                                    rows={2}
+                                    value={formData.description}
+                                    onChange={(e) => setFormData({ ...formData, description: e.target.value })}
+                                />
+                            </div>
+
+                            <div className="grid grid-cols-2 gap-4">
+                                <div className="space-y-2">
+                                    <Label>Goal Type</Label>
+                                    <Select
+                                        value={formData.goal_type}
+                                        onValueChange={(v) => setFormData({ ...formData, goal_type: v })}
+                                    >
+                                        <SelectTrigger>
+                                            <SelectValue />
+                                        </SelectTrigger>
+                                        <SelectContent>
+                                            <SelectItem value="custom">One-time</SelectItem>
+                                            <SelectItem value="daily">Daily</SelectItem>
+                                            <SelectItem value="weekly">Weekly</SelectItem>
+                                            <SelectItem value="biweekly">Biweekly</SelectItem>
+                                        </SelectContent>
+                                    </Select>
+                                </div>
+
+                                <div className="space-y-2">
+                                    <Label>Target Date *</Label>
+                                    <Input
+                                        type="date"
+                                        value={formData.target_date}
+                                        onChange={(e) => setFormData({ ...formData, target_date: e.target.value })}
+                                        required
+                                    />
+                                </div>
+                            </div>
+
+                            {/* Content Type & Video Category */}
+                            <div className="grid grid-cols-2 gap-4">
+                                <div className="space-y-2">
+                                    <Label>Content Type</Label>
+                                    <Select
+                                        value={formData.content_type}
+                                        onValueChange={(v) => setFormData({ ...formData, content_type: v })}
+                                    >
+                                        <SelectTrigger>
+                                            <SelectValue placeholder="Select type" />
+                                        </SelectTrigger>
+                                        <SelectContent>
+                                            <SelectItem value="video">Video</SelectItem>
+                                            <SelectItem value="post">Post</SelectItem>
+                                            <SelectItem value="blog">Blog</SelectItem>
+                                            <SelectItem value="flyer">Flyer</SelectItem>
+                                            <SelectItem value="poster">Poster</SelectItem>
+                                            <SelectItem value="article">Article</SelectItem>
+                                            <SelectItem value="other">Other</SelectItem>
+                                        </SelectContent>
+                                    </Select>
+                                </div>
+
+                                {formData.content_type === 'video' && (
+                                    <div className="space-y-2">
+                                        <Label>Video Category</Label>
+                                        <Select
+                                            value={formData.video_category}
+                                            onValueChange={(v) => setFormData({ ...formData, video_category: v })}
                                         >
-                                            {day.label.slice(0, 3)}
-                                        </Button>
-                                    ))}
-                                </div>
+                                            <SelectTrigger>
+                                                <SelectValue placeholder="Category" />
+                                            </SelectTrigger>
+                                            <SelectContent>
+                                                <SelectItem value="awareness_video">Awareness Video</SelectItem>
+                                                <SelectItem value="campaign_video">Campaign Video</SelectItem>
+                                                <SelectItem value="egc_videos">EGC Videos</SelectItem>
+                                            </SelectContent>
+                                        </Select>
+                                    </div>
+                                )}
                             </div>
-                        )}
 
-                        {/* End date for recurring goals */}
-                        {formData.goal_type !== 'custom' && (
+                            {formData.content_type === 'video' && (
+                                <div className="space-y-2">
+                                    <Label>Shoot Date</Label>
+                                    <Input
+                                        type="date"
+                                        value={formData.shoot_date}
+                                        onChange={(e) => setFormData({ ...formData, shoot_date: e.target.value })}
+                                    />
+                                </div>
+                            )}
+
+                            {/* Weekly recurrence days */}
+                            {formData.goal_type === 'weekly' && (
+                                <div className="space-y-2">
+                                    <Label>Repeat on days</Label>
+                                    <div className="flex flex-wrap gap-2">
+                                        {DAYS_OF_WEEK.map((day) => (
+                                            <Button
+                                                key={day.value}
+                                                type="button"
+                                                variant={formData.recurrence_days?.includes(day.value) ? 'default' : 'outline'}
+                                                size="sm"
+                                                onClick={() => handleDayRecurrenceToggle(day.value)}
+                                                className={formData.recurrence_days?.includes(day.value) ? 'bg-indigo-600' : ''}
+                                            >
+                                                {day.label.slice(0, 3)}
+                                            </Button>
+                                        ))}
+                                    </div>
+                                </div>
+                            )}
+
+                            {/* End date for recurring goals */}
+                            {formData.goal_type !== 'custom' && (
+                                <div className="space-y-2">
+                                    <Label>End Date (optional)</Label>
+                                    <Input
+                                        type="date"
+                                        value={formData.end_date}
+                                        onChange={(e) => setFormData({ ...formData, end_date: e.target.value })}
+                                    />
+                                </div>
+                            )}
+
                             <div className="space-y-2">
-                                <Label>End Date (optional)</Label>
-                                <Input
-                                    type="date"
-                                    value={formData.end_date}
-                                    onChange={(e) => setFormData({ ...formData, end_date: e.target.value })}
-                                />
-                            </div>
-                        )}
-
-                        <div className="space-y-2">
-                            <Label>Color</Label>
-                            <div className="flex items-center gap-2">
-                                <div
-                                    className="w-8 h-8 rounded-lg border-2"
-                                    style={{ backgroundColor: formData.color }}
-                                />
-                                <div className="flex gap-1 flex-wrap">
-                                    {COLOR_PALETTE.map((color) => (
-                                        <button
-                                            key={color}
-                                            type="button"
-                                            className={`w-6 h-6 rounded-md transition-transform hover:scale-110 ${formData.color === color ? 'ring-2 ring-offset-1 ring-slate-800' : ''
-                                                }`}
-                                            style={{ backgroundColor: color }}
-                                            onClick={() => setFormData({ ...formData, color })}
-                                        />
-                                    ))}
+                                <Label>Color</Label>
+                                <div className="flex items-center gap-2">
+                                    <div
+                                        className="w-8 h-8 rounded-lg border-2"
+                                        style={{ backgroundColor: formData.color }}
+                                    />
+                                    <div className="flex gap-1 flex-wrap">
+                                        {COLOR_PALETTE.map((color) => (
+                                            <button
+                                                key={color}
+                                                type="button"
+                                                className={`w-6 h-6 rounded-md transition-transform hover:scale-110 ${formData.color === color ? 'ring-2 ring-offset-1 ring-slate-800' : ''
+                                                    }`}
+                                                style={{ backgroundColor: color }}
+                                                onClick={() => setFormData({ ...formData, color })}
+                                            />
+                                        ))}
+                                    </div>
                                 </div>
                             </div>
+
                         </div>
+
+
 
                         <DialogFooter>
                             <Button type="button" variant="outline" onClick={handleCloseModal}>
@@ -812,7 +904,7 @@ export default function MarketingCalendarPage() {
                         </DialogFooter>
                     </form>
                 </DialogContent>
-            </Dialog>
-        </div>
+            </Dialog >
+        </div >
     );
 }
