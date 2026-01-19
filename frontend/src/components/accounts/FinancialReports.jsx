@@ -161,8 +161,8 @@ export default function FinancialReports() {
                         <BarChart3 className="w-7 h-7" />
                     </div>
                     <div>
-                        <h2 className="text-xl font-black text-slate-900 uppercase tracking-tighter italic">Financial Intelligence</h2>
-                        <div className="flex items-center gap-2 text-[10px] font-black text-slate-400 uppercase tracking-widest mt-1">
+                        <h2 className="text-xl font-bold text-slate-900 uppercase tracking-tight">Financial Intelligence</h2>
+                        <div className="flex items-center gap-2 text-[10px] font-semibold text-slate-400 uppercase tracking-wide mt-1">
                             <Calendar className="w-3.5 h-3.5 text-indigo-400" />
                             Real-time Reporting & Tax Analytics
                         </div>
@@ -171,7 +171,7 @@ export default function FinancialReports() {
 
                 <div className="flex gap-2 w-full sm:w-auto overflow-x-auto pb-2 sm:pb-0 pr-2">
                     <select
-                        className="h-11 px-5 bg-slate-100 border-0 rounded-xl text-xs font-black uppercase tracking-widest text-slate-700 outline-none focus:ring-2 focus:ring-indigo-500 transition-all cursor-pointer shadow-inner min-w-[180px]"
+                        className="h-11 px-5 bg-slate-100 border-0 rounded-xl text-xs font-bold uppercase tracking-wide text-slate-700 outline-none focus:ring-2 focus:ring-indigo-500 transition-all cursor-pointer shadow-inner min-w-[180px]"
                         value={dateRange}
                         onChange={(e) => setDateRange(e.target.value)}
                     >
@@ -179,10 +179,10 @@ export default function FinancialReports() {
                         <option value="last_month">Previous Billing Cycle</option>
                         <option value="all_time">Lifetime Aggregates</option>
                     </select>
-                    <Button variant="outline" className="h-11 rounded-xl border-slate-200 text-slate-500 font-black text-[10px] tracking-widest uppercase hover:bg-slate-50 active:scale-95 transition-all shadow-sm flex-shrink-0" onClick={exportToExcel}>
+                    <Button variant="outline" className="h-11 rounded-xl border-slate-200 text-slate-500 font-bold text-[10px] tracking-wide uppercase hover:bg-slate-50 active:scale-95 transition-all shadow-sm flex-shrink-0" onClick={exportToExcel}>
                         <Download className="w-4 h-4 mr-2" /> .XLSX
                     </Button>
-                    <Button className="h-11 rounded-xl bg-slate-900 hover:bg-indigo-600 text-white font-black uppercase tracking-widest shadow-2xl shadow-indigo-50 active:scale-95 transition-all px-8 flex-shrink-0" onClick={exportToPDF}>
+                    <Button className="h-11 rounded-xl bg-slate-900 hover:bg-indigo-600 text-white font-bold uppercase tracking-wide shadow-xl shadow-indigo-50 active:scale-95 transition-all px-8 flex-shrink-0" onClick={exportToPDF}>
                         <FileText className="w-4 h-4 mr-2" /> PDF Statement
                     </Button>
                 </div>
@@ -192,7 +192,7 @@ export default function FinancialReports() {
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
                 <Card className="lg:col-span-2 border-0 shadow-2xl rounded-[48px] bg-white/80 backdrop-blur-xl overflow-hidden border border-white/40">
                     <CardHeader className="p-10 border-b border-slate-50 bg-slate-50/20">
-                        <CardTitle className="text-[11px] font-black text-slate-400 uppercase tracking-[0.2em] flex items-center gap-4">
+                        <CardTitle className="text-[11px] font-bold text-slate-400 uppercase tracking-wide flex items-center gap-4">
                             <div className="w-2.5 h-2.5 rounded-full bg-indigo-500 shadow-lg shadow-indigo-300 animate-pulse" />
                             Operating Profit & Loss Statement
                         </CardTitle>
@@ -207,14 +207,14 @@ export default function FinancialReports() {
                                                 <TrendingUp className="w-6 h-6 text-emerald-500" />
                                             </div>
                                             <div>
-                                                <div className="font-black text-slate-800 text-lg uppercase tracking-tight">Revenue Inflow (Gross)</div>
-                                                <div className="text-[10px] text-slate-400 font-bold uppercase tracking-widest mt-1">Total value of all finalized invoices</div>
+                                                <div className="font-bold text-slate-800 text-lg uppercase tracking-tight">Revenue Inflow (Gross)</div>
+                                                <div className="text-[10px] text-slate-400 font-semibold uppercase tracking-wide mt-1">Total value of all finalized invoices</div>
                                             </div>
                                         </div>
                                     </TableCell>
                                     <TableCell className="py-8 text-right pr-10">
-                                        <div className="font-black text-slate-900 text-2xl tracking-tighter italic">₹{reportData.income.toLocaleString()}</div>
-                                        <div className="inline-flex items-center px-2 py-0.5 rounded-full bg-slate-100 text-[9px] font-black text-slate-500 uppercase tracking-tighter mt-2">{reportData.invoiceCount} Valid Records</div>
+                                        <div className="font-bold text-slate-900 text-2xl tracking-tight">₹{reportData.income.toLocaleString()}</div>
+                                        <div className="inline-flex items-center px-2 py-0.5 rounded-full bg-slate-100 text-[9px] font-bold text-slate-500 uppercase tracking-wide mt-2">{reportData.invoiceCount} Valid Records</div>
                                     </TableCell>
                                 </TableRow>
                                 <TableRow className="hover:bg-transparent border-slate-50 border-b">
@@ -224,14 +224,14 @@ export default function FinancialReports() {
                                                 <TrendingDown className="w-6 h-6 text-rose-500" />
                                             </div>
                                             <div>
-                                                <div className="font-black text-slate-800 text-lg uppercase tracking-tight">Operational Capital Burn</div>
-                                                <div className="text-[10px] text-slate-400 font-bold uppercase tracking-widest mt-1">Aggregate of bills, payroll & growth</div>
+                                                <div className="font-bold text-slate-800 text-lg uppercase tracking-tight">Operational Capital Burn</div>
+                                                <div className="text-[10px] text-slate-400 font-semibold uppercase tracking-wide mt-1">Aggregate of bills, payroll & growth</div>
                                             </div>
                                         </div>
                                     </TableCell>
                                     <TableCell className="py-8 text-right pr-10">
-                                        <div className="font-black text-slate-900 text-2xl tracking-tighter italic">₹{reportData.totalExpenses.toLocaleString()}</div>
-                                        <div className="text-[10px] text-rose-500 font-black uppercase tracking-widest mt-2 underline decoration-2 decoration-rose-100">Cumulative Liability</div>
+                                        <div className="font-bold text-slate-900 text-2xl tracking-tight">₹{reportData.totalExpenses.toLocaleString()}</div>
+                                        <div className="text-[10px] text-rose-500 font-bold uppercase tracking-wide mt-2 underline decoration-2 decoration-rose-100">Cumulative Liability</div>
                                     </TableCell>
                                 </TableRow>
                                 <TableRow className="hover:bg-indigo-50/50 border-0 transition-all bg-indigo-50/20">
@@ -241,16 +241,16 @@ export default function FinancialReports() {
                                                 <PieChart className="w-7 h-7 text-white" />
                                             </div>
                                             <div>
-                                                <div className="font-black text-slate-900 text-xl uppercase tracking-widest italic decoration-indigo-400 decoration-4 underline underline-offset-8">Net EBITDA Surplus</div>
-                                                <div className="text-[10px] text-indigo-500 font-black uppercase tracking-widest mt-3">Bottom-line realization</div>
+                                                <div className="font-bold text-slate-900 text-xl uppercase tracking-wide decoration-indigo-400 decoration-4 underline underline-offset-8">Net EBITDA Surplus</div>
+                                                <div className="text-[10px] text-indigo-500 font-bold uppercase tracking-wide mt-3">Bottom-line realization</div>
                                             </div>
                                         </div>
                                     </TableCell>
                                     <TableCell className="py-10 text-right pr-10">
-                                        <div className={`text-5xl font-black italic tracking-tighter ${reportData.netProfit >= 0 ? 'text-indigo-600' : 'text-rose-600'}`}>
+                                        <div className={`text-5xl font-bold tracking-tight ${reportData.netProfit >= 0 ? 'text-indigo-600' : 'text-rose-600'}`}>
                                             ₹{reportData.netProfit.toLocaleString()}
                                         </div>
-                                        <div className="text-[10px] text-slate-400 font-bold uppercase tracking-widest mt-2">Before Tax & Depreciation</div>
+                                        <div className="text-[10px] text-slate-400 font-medium uppercase tracking-wide mt-2">Before Tax & Depreciation</div>
                                     </TableCell>
                                 </TableRow>
                             </TableBody>
@@ -262,7 +262,7 @@ export default function FinancialReports() {
                 <Card className="border-0 shadow-3xl rounded-[48px] bg-slate-900 text-white overflow-hidden flex flex-col border border-white/5 relative">
                     <div className="absolute top-0 right-0 w-32 h-32 bg-indigo-500/10 blur-[60px] rounded-full -mr-16 -mt-16" />
                     <CardHeader className="p-10 border-b border-white/5">
-                        <CardTitle className="text-[10px] font-black text-indigo-400 uppercase tracking-[0.3em] flex items-center gap-4">
+                        <CardTitle className="text-[10px] font-bold text-indigo-400 uppercase tracking-widest flex items-center gap-4">
                             <Info className="w-4 h-4" />
                             Tax Compliance Shield
                         </CardTitle>
@@ -270,27 +270,27 @@ export default function FinancialReports() {
                     <CardContent className="p-10 flex-1 flex flex-col justify-between space-y-12 relative z-10">
                         <div className="space-y-10">
                             <div className="group cursor-default">
-                                <p className="text-[10px] font-black text-slate-500 uppercase tracking-widest mb-3 group-hover:text-indigo-400 transition-colors">Cumulative Output Tax</p>
+                                <p className="text-[10px] font-bold text-slate-500 uppercase tracking-wide mb-3 group-hover:text-indigo-400 transition-colors">Cumulative Output Tax</p>
                                 <div className="flex items-baseline gap-2">
-                                    <h4 className="text-5xl font-black italic tracking-tighter text-emerald-400">₹{reportData.taxCollected.toLocaleString()}</h4>
-                                    <span className="text-xs text-slate-500 font-bold italic">GSTIN</span>
+                                    <h4 className="text-5xl font-bold tracking-tight text-emerald-400">₹{reportData.taxCollected.toLocaleString()}</h4>
+                                    <span className="text-xs text-slate-500 font-semibold">GSTIN</span>
                                 </div>
-                                <p className="text-[9px] text-slate-500 font-black uppercase mt-2 tracking-widest opacity-60">Settlement liability towards GOI</p>
+                                <p className="text-[9px] text-slate-500 font-semibold uppercase mt-2 tracking-wide opacity-60">Settlement liability towards GOI</p>
                             </div>
                             <div className="group cursor-default">
-                                <p className="text-[10px] font-black text-slate-500 uppercase tracking-widest mb-3 group-hover:text-indigo-400 transition-colors">Eligible Input Tax Credit</p>
+                                <p className="text-[10px] font-bold text-slate-500 uppercase tracking-wide mb-3 group-hover:text-indigo-400 transition-colors">Eligible Input Tax Credit</p>
                                 <div className="flex items-baseline gap-2">
-                                    <h4 className="text-5xl font-black italic tracking-tighter text-slate-700">₹0</h4>
-                                    <span className="text-xs text-slate-800 font-bold italic">RECOVER</span>
+                                    <h4 className="text-5xl font-bold tracking-tight text-slate-700">₹0</h4>
+                                    <span className="text-xs text-slate-800 font-semibold">RECOVER</span>
                                 </div>
-                                <p className="text-[9px] text-slate-500 font-black uppercase mt-2 tracking-widest opacity-60">Potential settlement offset via bills</p>
+                                <p className="text-[9px] text-slate-500 font-semibold uppercase mt-2 tracking-wide opacity-60">Potential settlement offset via bills</p>
                             </div>
                         </div>
 
                         <div className="pt-10 border-t border-white/10 mt-auto">
                             <div className="flex items-center justify-between">
-                                <span className="text-[11px] font-black text-slate-400 uppercase tracking-widest italic underline decoration-slate-700 underline-offset-4 decoration-2">Ledger Health</span>
-                                <div className="flex items-center px-4 py-2 rounded-2xl bg-emerald-500/10 border border-emerald-500/20 text-emerald-500 text-[10px] font-black tracking-widest uppercase">
+                                <span className="text-[11px] font-bold text-slate-400 uppercase tracking-wide underline decoration-slate-700 underline-offset-4 decoration-2">Ledger Health</span>
+                                <div className="flex items-center px-4 py-2 rounded-2xl bg-emerald-500/10 border border-emerald-500/20 text-emerald-500 text-[10px] font-bold tracking-wide uppercase">
                                     <div className="w-2 h-2 rounded-full bg-emerald-500 mr-2 shadow-lg shadow-emerald-500/50" />
                                     Good Standing
                                 </div>
@@ -306,13 +306,13 @@ export default function FinancialReports() {
             {/* Expense Breakdown List */}
             <Card className="border-0 shadow-2xl rounded-[48px] bg-white/50 backdrop-blur-xl overflow-hidden border border-white">
                 <CardHeader className="p-10 border-b border-slate-50 bg-slate-50/30 flex flex-row items-center justify-between">
-                    <CardTitle className="text-[11px] font-black text-slate-400 uppercase tracking-[0.2em] flex items-center gap-4">
+                    <CardTitle className="text-[11px] font-bold text-slate-400 uppercase tracking-wide flex items-center gap-4">
                         <div className="p-2 bg-indigo-50 rounded-lg"><ArrowRight className="w-4 h-4 text-indigo-500" /></div>
                         Expense Ledger Dissection
                     </CardTitle>
                     <div className="flex items-center gap-4 bg-white px-5 py-2 rounded-2xl shadow-sm border border-slate-100">
                         <Filter className="w-4 h-4 text-slate-300" />
-                        <span className="text-[10px] font-black text-slate-900 uppercase tracking-widest">Detail Matrix View</span>
+                        <span className="text-[10px] font-bold text-slate-900 uppercase tracking-wide">Detail Matrix View</span>
                     </div>
                 </CardHeader>
                 <CardContent className="p-0">
@@ -320,24 +320,24 @@ export default function FinancialReports() {
                         <TableBody>
                             <TableRow className="hover:bg-white border-slate-50/50 transition-all group border-b last:border-0 hover:shadow-lg hover:shadow-slate-100">
                                 <TableCell className="py-8 pl-10">
-                                    <div className="font-black text-slate-800 text-base uppercase tracking-tight italic group-hover:text-indigo-600 transition-colors">Vendor Liabilities (Purchase Ledger)</div>
-                                    <div className="text-[10px] text-slate-400 font-bold uppercase tracking-widest mt-1">Settlements pending or paid to external vendors</div>
+                                    <div className="font-bold text-slate-800 text-base uppercase tracking-tight group-hover:text-indigo-600 transition-colors">Vendor Liabilities (Purchase Ledger)</div>
+                                    <div className="text-[10px] text-slate-400 font-semibold uppercase tracking-wide mt-1">Settlements pending or paid to external vendors</div>
                                 </TableCell>
-                                <TableCell className="py-8 text-right pr-10 font-black text-slate-900 text-2xl italic tracking-tighter">₹{reportData.vendorExpenses.toLocaleString()}</TableCell>
+                                <TableCell className="py-8 text-right pr-10 font-bold text-slate-900 text-2xl tracking-tight">₹{reportData.vendorExpenses.toLocaleString()}</TableCell>
                             </TableRow>
                             <TableRow className="hover:bg-white border-slate-50/50 transition-all group border-b last:border-0 hover:shadow-lg hover:shadow-slate-100">
                                 <TableCell className="py-8 pl-10">
-                                    <div className="font-black text-slate-800 text-base uppercase tracking-tight italic group-hover:text-indigo-600 transition-colors">Financial Human Resource (Payroll)</div>
-                                    <div className="text-[10px] text-slate-400 font-bold uppercase tracking-widest mt-1">Net salary disbursement for all locked records</div>
+                                    <div className="font-bold text-slate-800 text-base uppercase tracking-tight group-hover:text-indigo-600 transition-colors">Financial Human Resource (Payroll)</div>
+                                    <div className="text-[10px] text-slate-400 font-semibold uppercase tracking-wide mt-1">Net salary disbursement for all locked records</div>
                                 </TableCell>
-                                <TableCell className="py-8 text-right pr-10 font-black text-slate-900 text-2xl italic tracking-tighter">₹{reportData.salaryExpenses.toLocaleString()}</TableCell>
+                                <TableCell className="py-8 text-right pr-10 font-bold text-slate-900 text-2xl tracking-tight">₹{reportData.salaryExpenses.toLocaleString()}</TableCell>
                             </TableRow>
                             <TableRow className="hover:bg-white border-slate-50/50 transition-all group border-b last:border-0 hover:shadow-lg hover:shadow-slate-100">
                                 <TableCell className="py-8 pl-10">
-                                    <div className="font-black text-slate-800 text-base uppercase tracking-tight italic group-hover:text-indigo-600 transition-colors">Growth Capital Burn (Marketing)</div>
-                                    <div className="text-[10px] text-slate-400 font-bold uppercase tracking-widest mt-1">Investment in campaigns and acquisition channels</div>
+                                    <div className="font-bold text-slate-800 text-base uppercase tracking-tight group-hover:text-indigo-600 transition-colors">Growth Capital Burn (Marketing)</div>
+                                    <div className="text-[10px] text-slate-400 font-semibold uppercase tracking-wide mt-1">Investment in campaigns and acquisition channels</div>
                                 </TableCell>
-                                <TableCell className="py-8 text-right pr-10 font-black text-slate-900 text-2xl italic tracking-tighter">₹{reportData.marketingExpenses.toLocaleString()}</TableCell>
+                                <TableCell className="py-8 text-right pr-10 font-bold text-slate-900 text-2xl tracking-tight">₹{reportData.marketingExpenses.toLocaleString()}</TableCell>
                             </TableRow>
                         </TableBody>
                     </Table>

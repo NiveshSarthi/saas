@@ -295,13 +295,13 @@ export default function ClientManagement() {
                                         </div>
                                     </TableCell>
                                     <TableCell className="text-right py-4">
-                                        <div className="font-black text-slate-900 text-lg">₹{(client.balance || 0).toLocaleString()}</div>
-                                        <div className="text-[10px] uppercase font-bold text-slate-400 tracking-tighter">Due: {client.payment_terms || 'Net 30'}</div>
+                                        <div className="font-bold text-slate-900 text-lg">₹{(client.balance || 0).toLocaleString()}</div>
+                                        <div className="text-[10px] uppercase font-bold text-slate-400 tracking-wide">Due: {client.payment_terms || 'Net 30'}</div>
                                     </TableCell>
                                     <TableCell className="py-4">
                                         <div className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-bold capitalize border ${client.status === 'active'
-                                                ? 'bg-green-50 text-green-700 border-green-200'
-                                                : 'bg-slate-50 text-slate-600 border-slate-200'
+                                            ? 'bg-green-50 text-green-700 border-green-200'
+                                            : 'bg-slate-50 text-slate-600 border-slate-200'
                                             }`}>
                                             <div className={`w-1.5 h-1.5 rounded-full mr-2 ${client.status === 'active' ? 'bg-green-500 animate-pulse' : 'bg-slate-400'}`} />
                                             {client.status}
