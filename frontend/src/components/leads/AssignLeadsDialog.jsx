@@ -23,6 +23,7 @@ export default function AssignLeadsDialog({
   selectedLeads,
   leads,
   salesUsers,
+  departments = [],
   onSuccess
 }) {
   const [selectedUserEmails, setSelectedUserEmails] = useState([]);
@@ -100,6 +101,7 @@ export default function AssignLeadsDialog({
             <Label>Assign to Team Member</Label>
             <UserMultiSelect
               users={salesUsers}
+              departments={departments}
               selectedEmails={selectedUserEmails}
               onChange={setSelectedUserEmails}
               singleSelect={true}

@@ -131,9 +131,10 @@ export default function UserMultiSelect({
                     {dept.users.map((user, idx) => {
                       const isSelected = safeSelectedEmails.includes(user.email);
                       return (
-                        <div
+                        <CommandItem
                           key={user.email || user.id || `user-${idx}`}
-                          onClick={() => toggleSelection(user.email)}
+                          onSelect={() => toggleSelection(user.email)}
+                          value={`${user.full_name} ${user.email}`}
                           className={cn(
                             "flex items-center px-2 py-2 cursor-pointer rounded-md hover:bg-slate-100 transition-colors",
                             isSelected && "bg-indigo-50 hover:bg-indigo-100"
@@ -156,7 +157,7 @@ export default function UserMultiSelect({
                             <span className="font-medium text-sm text-slate-900">{user.full_name || user.email.split('@')[0]}</span>
                             {user.full_name && <span className="text-xs text-slate-500">{user.email}</span>}
                           </div>
-                        </div>
+                        </CommandItem>
                       );
                     })}
                   </React.Fragment>

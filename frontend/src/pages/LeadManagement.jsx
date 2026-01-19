@@ -165,6 +165,12 @@ export default function LeadManagement() {
     refetchOnReconnect: false,
   });
 
+  const { data: departments = [] } = useQuery({
+    queryKey: ['departments'],
+    queryFn: () => base44.entities.Department.list('name'),
+    enabled: !!user,
+  });
+
   const { data: savedFilters = [] } = useQuery({
     queryKey: ['saved-filters', 'leads'],
     queryFn: () => base44.entities.SavedFilter.filter({ module: 'leads' }),
@@ -1212,6 +1218,7 @@ export default function LeadManagement() {
           selectedLeads={selectedLeads}
           leads={leads}
           salesUsers={users}
+          departments={departments}
           onSuccess={() => {
             setSelectedLeads([]);
             setShowAssignDialog(false);

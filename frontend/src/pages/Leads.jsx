@@ -146,10 +146,10 @@ export default function Leads() {
   // Apply sales hierarchy permissions - show only assigned leads for non-admins
   const leads = React.useMemo(() => {
     if (!user) return [];
-    
+
     // Admin sees all leads
     if (user.role === 'admin') return allLeadsRaw;
-    
+
     // Non-admins only see leads assigned to them
     return allLeadsRaw.filter(lead => {
       if (!lead.assigned_to) return false;
@@ -160,7 +160,7 @@ export default function Leads() {
   // Filter visible sales users based on hierarchy
   const visibleSalesUsers = React.useMemo(() => {
     if (!user) return [];
-    return getVisibleSalesUsers(user, users, departments).filter(u => 
+    return getVisibleSalesUsers(user, users, departments).filter(u =>
       u.department_id && salesDeptIds.includes(u.department_id)
     );
   }, [user, users, departments, salesDeptIds]);
@@ -210,17 +210,17 @@ export default function Leads() {
     // Apply advanced filters first
     if (!applyAdvancedFilters(lead)) return false;
     if (contactStatusFilter !== 'all' && lead.contact_status !== contactStatusFilter) return false;
-    
+
     // Member filter
     if (filterMember !== 'all' && lead.assigned_to !== filterMember) return false;
-    
+
     // Date filter
     if (dateFilter !== 'all' && lead.created_date) {
       const leadDate = new Date(lead.created_date);
       leadDate.setHours(0, 0, 0, 0);
       const today = new Date();
       today.setHours(0, 0, 0, 0);
-      
+
       if (dateFilter === 'today') {
         if (leadDate.getTime() !== today.getTime()) return false;
       } else if (dateFilter === 'yesterday') {
@@ -237,7 +237,7 @@ export default function Leads() {
         if (leadDate < monthAgo) return false;
       }
     }
-    
+
     if (searchQuery) {
       const query = searchQuery.toLowerCase();
       return (
@@ -287,7 +287,7 @@ export default function Leads() {
   const startIndex = (currentPage - 1) * itemsPerPage;
   const endIndex = startIndex + itemsPerPage;
   const paginatedLeads = filteredLeads.slice(startIndex, endIndex);
-  
+
   // Reset to page 1 when filters change
   React.useEffect(() => {
     setCurrentPage(1);
@@ -298,20 +298,20 @@ export default function Leads() {
     notContacted: visibleLeads.filter(l => !l.contact_status || l.contact_status === 'not_contacted').length,
     contacted: visibleLeads.filter(l => l.contact_status === 'contacted').length,
     connected: visibleLeads.filter(l => l.contact_status === 'connected').length,
-    others: visibleLeads.filter(l => 
-      l.contact_status && 
-      l.contact_status !== 'not_contacted' && 
-      l.contact_status !== 'contacted' && 
+    others: visibleLeads.filter(l =>
+      l.contact_status &&
+      l.contact_status !== 'not_contacted' &&
+      l.contact_status !== 'contacted' &&
       l.contact_status !== 'connected'
     ).length,
     assigned: visibleLeads.filter(l => l.assigned_to).length
   };
 
   const exportToCSV = () => {
-    const leadsToExport = selectedLeads.length > 0 
+    const leadsToExport = selectedLeads.length > 0
       ? filteredLeads.filter(l => selectedLeads.includes(l.id))
       : filteredLeads;
-      
+
     const csv = [
       ['Lead Name', 'Phone', 'Email', 'Status', 'Priority', 'Source', 'Assigned To', 'Created Date'].join(','),
       ...leadsToExport.map(l => [
@@ -332,7 +332,7 @@ export default function Leads() {
     a.href = url;
     a.download = `leads-${format(new Date(), 'yyyy-MM-dd')}.csv`;
     a.click();
-    
+
     if (selectedLeads.length > 0) {
       toast.success(`${selectedLeads.length} selected lead(s) exported to CSV`);
     } else {
@@ -349,7 +349,7 @@ export default function Leads() {
       const start = Math.min(lastClickedIndex, index);
       const end = Math.max(lastClickedIndex, index);
       const rangeIds = filteredLeads.slice(start, end + 1).map(l => l.id);
-      
+
       setSelectedLeads(prev => {
         const newSelection = [...prev];
         rangeIds.forEach(id => {
@@ -361,15 +361,15 @@ export default function Leads() {
       });
     } else if (event?.ctrlKey || event?.metaKey) {
       // Ctrl/Cmd+Click: Toggle individual selection
-      setSelectedLeads(prev => 
-        prev.includes(leadId) 
+      setSelectedLeads(prev =>
+        prev.includes(leadId)
           ? prev.filter(id => id !== leadId)
           : [...prev, leadId]
       );
     } else {
       // Regular click: Toggle single selection
-      setSelectedLeads(prev => 
-        prev.includes(leadId) 
+      setSelectedLeads(prev =>
+        prev.includes(leadId)
           ? prev.filter(id => id !== leadId)
           : [...prev, leadId]
       );
@@ -389,7 +389,7 @@ export default function Leads() {
     mutationFn: async ({ leadId, contact_status, feedback }) => {
       const lead = leads.find(l => l.id === leadId);
       const activityLog = [...(lead.activity_log || [])];
-      
+
       activityLog.push({
         action: 'contact_status_changed',
         actor_email: user?.email,
@@ -658,24 +658,24 @@ export default function Leads() {
                   </span>
                 </div>
                 <div className="flex gap-3">
-                  <Button 
-                    size="sm" 
+                  <Button
+                    size="sm"
                     onClick={() => setShowAssignDialog(true)}
                     className="bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-700 hover:to-purple-700 shadow-md"
                   >
                     <Users className="w-4 h-4 mr-2" />
                     Assign
                   </Button>
-                  <Button 
-                    size="sm" 
+                  <Button
+                    size="sm"
                     variant="destructive"
                     onClick={() => setDeletingLead({ isBulk: true })}
                   >
                     <Trash2 className="w-4 h-4 mr-2" />
                     Delete
                   </Button>
-                  <Button 
-                    size="sm" 
+                  <Button
+                    size="sm"
                     variant="outline"
                     onClick={() => setSelectedLeads([])}
                     className="border-indigo-300 hover:bg-indigo-100"
@@ -725,7 +725,7 @@ export default function Leads() {
                           />
                         </TableCell>
                         <TableCell>
-                          <div 
+                          <div
                             onClick={() => {
                               navigate(createPageUrl('LeadDetail') + `?id=${lead.id}`);
                             }}
@@ -769,19 +769,18 @@ export default function Leads() {
                                 {statusConfig[lead.status]?.label || lead.status}
                               </Badge>
                             )}
-                            <Badge className={`flex items-center gap-1 w-fit text-xs ${
-                              !lead.contact_status || lead.contact_status === 'not_contacted' ? 'bg-slate-100 text-slate-700' :
-                              lead.contact_status === 'connected' ? 'bg-green-100 text-green-700' :
-                              lead.contact_status === 'follow_up' ? 'bg-blue-100 text-blue-700' :
-                              lead.contact_status === 'not_interested' ? 'bg-red-100 text-red-700' :
-                              lead.contact_status === 'not_picked' ? 'bg-amber-100 text-amber-700' :
-                              lead.contact_status === 'switched_off' ? 'bg-orange-100 text-orange-700' :
-                              lead.contact_status === 'wrong_number' ? 'bg-rose-100 text-rose-700' :
-                              'bg-slate-100 text-slate-700'
-                            }`}>
+                            <Badge className={`flex items-center gap-1 w-fit text-xs ${!lead.contact_status || lead.contact_status === 'not_contacted' ? 'bg-slate-100 text-slate-700' :
+                                lead.contact_status === 'connected' ? 'bg-green-100 text-green-700' :
+                                  lead.contact_status === 'follow_up' ? 'bg-blue-100 text-blue-700' :
+                                    lead.contact_status === 'not_interested' ? 'bg-red-100 text-red-700' :
+                                      lead.contact_status === 'not_picked' ? 'bg-amber-100 text-amber-700' :
+                                        lead.contact_status === 'switched_off' ? 'bg-orange-100 text-orange-700' :
+                                          lead.contact_status === 'wrong_number' ? 'bg-rose-100 text-rose-700' :
+                                            'bg-slate-100 text-slate-700'
+                              }`}>
                               <span className="w-1.5 h-1.5 rounded-full bg-current" />
                               {!lead.contact_status || lead.contact_status === 'not_contacted' ? 'Not Contacted' :
-                               lead.contact_status?.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase())}
+                                lead.contact_status?.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase())}
                             </Badge>
                           </div>
                         </TableCell>
@@ -834,7 +833,7 @@ export default function Leads() {
                                 Call Lead
                               </DropdownMenuItem>
                               <DropdownMenuSeparator />
-                              <DropdownMenuItem 
+                              <DropdownMenuItem
                                 onClick={() => {
                                   setSelectedLeads([lead.id]);
                                   setShowAssignDialog(true);
@@ -844,7 +843,7 @@ export default function Leads() {
                                 Assign Lead
                               </DropdownMenuItem>
                               <DropdownMenuSeparator />
-                              <DropdownMenuItem 
+                              <DropdownMenuItem
                                 onClick={() => setDeletingLead(lead)}
                                 className="text-red-600"
                               >
@@ -859,7 +858,7 @@ export default function Leads() {
                   })}
                 </TableBody>
               </Table>
-              
+
               {/* Pagination Controls */}
               {totalPages > 1 && (
                 <div className="flex items-center justify-between px-6 py-4 border-t border-slate-200">
@@ -886,7 +885,7 @@ export default function Leads() {
                       } else {
                         pageNum = currentPage - 2 + i;
                       }
-                      
+
                       return (
                         <Button
                           key={pageNum}
@@ -916,256 +915,254 @@ export default function Leads() {
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
             {paginatedLeads.length > 0 ? (
               paginatedLeads.map((lead, index) => {
-              const StatusIcon = statusConfig[lead.status]?.icon || AlertCircle;
-              return (
-                <Card key={lead.id} className="bg-white/90 backdrop-blur-sm border-slate-200 hover:shadow-2xl hover:border-indigo-300 hover:-translate-y-1 transition-all duration-300 relative group">
-                {!isSalesMember && (
-                 <div className="absolute top-3 left-3 z-10">
-                   <input
-                     type="checkbox"
-                     checked={selectedLeads.includes(lead.id)}
-                     onChange={(e) => handleSelectLead(lead.id, index, e)}
-                     className="w-4 h-4 rounded border-slate-300 bg-white cursor-pointer"
-                   />
-                 </div>
-                )}
-                
-                  <CardHeader className="pb-4 bg-gradient-to-r from-slate-50 to-blue-50 border-b border-slate-100">
-                    <div 
-                      onClick={() => {
-                        navigate(createPageUrl('LeadDetail') + `?id=${lead.id}`);
-                      }}
-                      className={`flex items-center gap-4 ${!isSalesMember ? 'ml-8' : ''} hover:opacity-80 transition-opacity cursor-pointer`}
-                    >
-                      <Avatar className="w-14 h-14 border-3 border-white shadow-lg ring-2 ring-indigo-100">
-                        <AvatarFallback className="bg-gradient-to-br from-indigo-500 via-purple-500 to-pink-500 text-white font-bold text-lg">
-                          {getInitials(lead.lead_name)}
-                        </AvatarFallback>
-                      </Avatar>
-                      <div className="flex-1 min-w-0">
-                        {lead.title && (
-                          <div className="text-xs font-semibold text-indigo-600 mb-1 truncate">{lead.title}</div>
-                        )}
-                        <CardTitle className="text-lg font-bold text-slate-900 truncate hover:text-indigo-600">{lead.lead_name}</CardTitle>
-                        {lead.company && (
-                          <p className="text-sm text-slate-600 truncate flex items-center gap-1 mt-0.5">
-                            <Building className="w-3 h-3" />
-                            {lead.company}
-                          </p>
-                        )}
+                const StatusIcon = statusConfig[lead.status]?.icon || AlertCircle;
+                return (
+                  <Card key={lead.id} className="bg-white/90 backdrop-blur-sm border-slate-200 hover:shadow-2xl hover:border-indigo-300 hover:-translate-y-1 transition-all duration-300 relative group">
+                    {!isSalesMember && (
+                      <div className="absolute top-3 left-3 z-10">
+                        <input
+                          type="checkbox"
+                          checked={selectedLeads.includes(lead.id)}
+                          onChange={(e) => handleSelectLead(lead.id, index, e)}
+                          className="w-4 h-4 rounded border-slate-300 bg-white cursor-pointer"
+                        />
                       </div>
-                    </div>
-                  </CardHeader>
-                
-                  <CardContent className="space-y-4 p-5">
-                    {/* Contact Info */}
-                    <div className="space-y-2.5">
-                      <div className="flex items-center gap-3 text-sm bg-blue-50 p-3 rounded-lg border border-blue-100">
-                        <div className="p-2 bg-blue-500 rounded-lg shadow-sm">
-                          <PhoneIcon className="w-4 h-4 text-white" />
-                        </div>
-                        <span className="font-semibold text-slate-800">{lead.phone}</span>
-                      </div>
-                      {lead.email && (
-                        <div className="flex items-center gap-3 text-sm bg-purple-50 p-3 rounded-lg border border-purple-100">
-                          <div className="p-2 bg-purple-500 rounded-lg shadow-sm">
-                            <Mail className="w-4 h-4 text-white" />
-                          </div>
-                          <span className="text-slate-700 truncate font-medium">{lead.email}</span>
-                        </div>
-                      )}
-                    </div>
-                  
-                  {/* Status Badges */}
-                  <div className="flex flex-wrap gap-2">
-                    {lead.status && (
-                      <Badge className={`${statusConfig[lead.status]?.color || 'bg-slate-100 text-slate-700'} flex items-center gap-1.5`}>
-                        <span className="w-2 h-2 rounded-full bg-current animate-pulse" />
-                        {statusConfig[lead.status]?.label || lead.status}
-                      </Badge>
                     )}
-                    <Badge className={`flex items-center gap-1.5 ${
-                      !lead.contact_status || lead.contact_status === 'not_contacted' ? 'bg-slate-100 text-slate-700' :
-                      lead.contact_status === 'connected' ? 'bg-green-100 text-green-700' :
-                      lead.contact_status === 'follow_up' ? 'bg-blue-100 text-blue-700' :
-                      lead.contact_status === 'not_interested' ? 'bg-red-100 text-red-700' :
-                      lead.contact_status === 'not_picked' ? 'bg-amber-100 text-amber-700' :
-                      lead.contact_status === 'switched_off' ? 'bg-orange-100 text-orange-700' :
-                      lead.contact_status === 'wrong_number' ? 'bg-rose-100 text-rose-700' :
-                      lead.contact_status === 'out_of_network' ? 'bg-purple-100 text-purple-700' :
-                      'bg-slate-100 text-slate-700'
-                    }`}>
-                      <span className="w-2 h-2 rounded-full bg-current" />
-                      {!lead.contact_status || lead.contact_status === 'not_contacted' ? 'Not Contacted' :
-                       lead.contact_status?.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase())}
-                    </Badge>
-                    {lead.priority && (
-                      <Badge className={`flex items-center gap-1.5 ${
-                        lead.priority === 'urgent' ? 'border-red-500 text-red-700 bg-red-50 border' :
-                        lead.priority === 'high' ? 'border-orange-500 text-orange-700 bg-orange-50 border' :
-                        lead.priority === 'medium' ? 'border-blue-500 text-blue-700 bg-blue-50 border' :
-                        'border-slate-300 text-slate-600 border'
-                      }`}>
-                        {lead.priority}
-                      </Badge>
-                    )}
-                  </div>
-                  
-                  {/* Import Batch Name */}
-                  {lead.import_batch_name && (
-                    <div className="flex items-center gap-2 text-xs p-2 bg-indigo-50 border border-indigo-200 rounded">
-                      <div className="w-2 h-2 rounded-full bg-indigo-500" />
-                      <span className="font-medium text-indigo-700">{lead.import_batch_name}</span>
-                      {lead.import_date && (
-                        <span className="text-indigo-500">• {format(new Date(lead.import_date), 'dd MMM yyyy')}</span>
-                      )}
-                    </div>
-                  )}
 
-                    {/* Location/Address */}
-                    {lead.location && (
-                      <div className="flex items-start gap-3 text-sm p-3 bg-slate-50 rounded-lg border border-slate-200">
-                        <div className="p-1.5 bg-slate-200 rounded">
-                          <Building className="w-4 h-4 text-slate-600" />
+                    <CardHeader className="pb-4 bg-gradient-to-r from-slate-50 to-blue-50 border-b border-slate-100">
+                      <div
+                        onClick={() => {
+                          navigate(createPageUrl('LeadDetail') + `?id=${lead.id}`);
+                        }}
+                        className={`flex items-center gap-4 ${!isSalesMember ? 'ml-8' : ''} hover:opacity-80 transition-opacity cursor-pointer`}
+                      >
+                        <Avatar className="w-14 h-14 border-3 border-white shadow-lg ring-2 ring-indigo-100">
+                          <AvatarFallback className="bg-gradient-to-br from-indigo-500 via-purple-500 to-pink-500 text-white font-bold text-lg">
+                            {getInitials(lead.lead_name)}
+                          </AvatarFallback>
+                        </Avatar>
+                        <div className="flex-1 min-w-0">
+                          {lead.title && (
+                            <div className="text-xs font-semibold text-indigo-600 mb-1 truncate">{lead.title}</div>
+                          )}
+                          <CardTitle className="text-lg font-bold text-slate-900 truncate hover:text-indigo-600">{lead.lead_name}</CardTitle>
+                          {lead.company && (
+                            <p className="text-sm text-slate-600 truncate flex items-center gap-1 mt-0.5">
+                              <Building className="w-3 h-3" />
+                              {lead.company}
+                            </p>
+                          )}
                         </div>
-                        <span className="text-slate-700 line-clamp-2 font-medium">{lead.location}</span>
                       </div>
-                    )}
-                  
-                    {/* Follow-up Date */}
-                    {lead.follow_up_date && (
-                      <div className="flex items-center gap-3 text-sm bg-amber-50 p-3 rounded-lg border-2 border-amber-300">
-                        <div className="p-1.5 bg-amber-500 rounded-lg shadow-sm">
-                          <Calendar className="w-4 h-4 text-white" />
+                    </CardHeader>
+
+                    <CardContent className="space-y-4 p-5">
+                      {/* Contact Info */}
+                      <div className="space-y-2.5">
+                        <div className="flex items-center gap-3 text-sm bg-blue-50 p-3 rounded-lg border border-blue-100">
+                          <div className="p-2 bg-blue-500 rounded-lg shadow-sm">
+                            <PhoneIcon className="w-4 h-4 text-white" />
+                          </div>
+                          <span className="font-semibold text-slate-800">{lead.phone}</span>
                         </div>
-                        <div>
-                          <div className="text-xs text-amber-700 font-medium">Follow-up</div>
-                          <div className="font-bold text-amber-900">{format(new Date(lead.follow_up_date), 'MMM d, yyyy')}</div>
-                        </div>
-                      </div>
-                    )}
-                  
-                    {/* Assigned User */}
-                    <div className="pt-4 border-t-2 border-slate-100">
-                      {lead.assigned_to ? (
-                        <div className="space-y-3">
-                          <div className="flex items-center gap-3 p-3 bg-gradient-to-r from-indigo-50 to-purple-50 rounded-lg border border-indigo-200">
-                            <Avatar className="w-9 h-9 border-2 border-white shadow-sm">
-                              <AvatarFallback className="text-xs font-bold bg-gradient-to-br from-indigo-500 to-purple-600 text-white">
-                                {getInitials(getUserName(lead.assigned_to))}
-                              </AvatarFallback>
-                            </Avatar>
-                            <div className="overflow-hidden flex-1">
-                              <p className="text-xs font-medium text-indigo-600 uppercase tracking-wide">Assigned to</p>
-                              <p className="text-sm font-bold text-slate-900 truncate">
-                                {getUserName(lead.assigned_to).split('—')[0].trim()}
-                              </p>
+                        {lead.email && (
+                          <div className="flex items-center gap-3 text-sm bg-purple-50 p-3 rounded-lg border border-purple-100">
+                            <div className="p-2 bg-purple-500 rounded-lg shadow-sm">
+                              <Mail className="w-4 h-4 text-white" />
                             </div>
-                            <Button 
-                              variant="ghost" 
-                              size="icon"
-                              onClick={() => {
-                                navigate(createPageUrl('LeadDetail') + `?id=${lead.id}`);
-                              }}
-                              className="h-9 w-9 hover:bg-indigo-100"
-                            >
-                              <Eye className="w-4 h-4 text-indigo-600" />
-                            </Button>
+                            <span className="text-slate-700 truncate font-medium">{lead.email}</span>
                           </div>
-                          <div className="grid grid-cols-2 gap-2">
-                            <Button 
-                              variant="outline" 
-                              size="sm"
-                              onClick={() => setStatusUpdateLead(lead)}
-                              className="border-indigo-300 hover:bg-indigo-50 hover:border-indigo-400 text-indigo-700 font-medium h-10"
-                            >
-                              <AlertCircle className="w-4 h-4 mr-1.5" />
-                              Update
-                            </Button>
-                            <Button 
-                              variant="outline" 
-                              size="sm"
-                              onClick={() => window.location.href = `tel:${lead.phone}`}
-                              className="border-green-300 hover:bg-green-50 hover:border-green-400 text-green-700 font-medium h-10"
-                            >
-                              <PhoneIcon className="w-4 h-4 mr-1.5" />
-                              Call
-                            </Button>
+                        )}
+                      </div>
+
+                      {/* Status Badges */}
+                      <div className="flex flex-wrap gap-2">
+                        {lead.status && (
+                          <Badge className={`${statusConfig[lead.status]?.color || 'bg-slate-100 text-slate-700'} flex items-center gap-1.5`}>
+                            <span className="w-2 h-2 rounded-full bg-current animate-pulse" />
+                            {statusConfig[lead.status]?.label || lead.status}
+                          </Badge>
+                        )}
+                        <Badge className={`flex items-center gap-1.5 ${!lead.contact_status || lead.contact_status === 'not_contacted' ? 'bg-slate-100 text-slate-700' :
+                            lead.contact_status === 'connected' ? 'bg-green-100 text-green-700' :
+                              lead.contact_status === 'follow_up' ? 'bg-blue-100 text-blue-700' :
+                                lead.contact_status === 'not_interested' ? 'bg-red-100 text-red-700' :
+                                  lead.contact_status === 'not_picked' ? 'bg-amber-100 text-amber-700' :
+                                    lead.contact_status === 'switched_off' ? 'bg-orange-100 text-orange-700' :
+                                      lead.contact_status === 'wrong_number' ? 'bg-rose-100 text-rose-700' :
+                                        lead.contact_status === 'out_of_network' ? 'bg-purple-100 text-purple-700' :
+                                          'bg-slate-100 text-slate-700'
+                          }`}>
+                          <span className="w-2 h-2 rounded-full bg-current" />
+                          {!lead.contact_status || lead.contact_status === 'not_contacted' ? 'Not Contacted' :
+                            lead.contact_status?.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase())}
+                        </Badge>
+                        {lead.priority && (
+                          <Badge className={`flex items-center gap-1.5 ${lead.priority === 'urgent' ? 'border-red-500 text-red-700 bg-red-50 border' :
+                              lead.priority === 'high' ? 'border-orange-500 text-orange-700 bg-orange-50 border' :
+                                lead.priority === 'medium' ? 'border-blue-500 text-blue-700 bg-blue-50 border' :
+                                  'border-slate-300 text-slate-600 border'
+                            }`}>
+                            {lead.priority}
+                          </Badge>
+                        )}
+                      </div>
+
+                      {/* Import Batch Name */}
+                      {lead.import_batch_name && (
+                        <div className="flex items-center gap-2 text-xs p-2 bg-indigo-50 border border-indigo-200 rounded">
+                          <div className="w-2 h-2 rounded-full bg-indigo-500" />
+                          <span className="font-medium text-indigo-700">{lead.import_batch_name}</span>
+                          {lead.import_date && (
+                            <span className="text-indigo-500">• {format(new Date(lead.import_date), 'dd MMM yyyy')}</span>
+                          )}
+                        </div>
+                      )}
+
+                      {/* Location/Address */}
+                      {lead.location && (
+                        <div className="flex items-start gap-3 text-sm p-3 bg-slate-50 rounded-lg border border-slate-200">
+                          <div className="p-1.5 bg-slate-200 rounded">
+                            <Building className="w-4 h-4 text-slate-600" />
                           </div>
-                          <DropdownMenu>
-                            <DropdownMenuTrigger asChild>
-                              <Button variant="outline" size="sm" className="w-full h-9 mt-2">
-                                <MoreHorizontal className="w-4 h-4" />
+                          <span className="text-slate-700 line-clamp-2 font-medium">{lead.location}</span>
+                        </div>
+                      )}
+
+                      {/* Follow-up Date */}
+                      {lead.follow_up_date && (
+                        <div className="flex items-center gap-3 text-sm bg-amber-50 p-3 rounded-lg border-2 border-amber-300">
+                          <div className="p-1.5 bg-amber-500 rounded-lg shadow-sm">
+                            <Calendar className="w-4 h-4 text-white" />
+                          </div>
+                          <div>
+                            <div className="text-xs text-amber-700 font-medium">Follow-up</div>
+                            <div className="font-bold text-amber-900">{format(new Date(lead.follow_up_date), 'MMM d, yyyy')}</div>
+                          </div>
+                        </div>
+                      )}
+
+                      {/* Assigned User */}
+                      <div className="pt-4 border-t-2 border-slate-100">
+                        {lead.assigned_to ? (
+                          <div className="space-y-3">
+                            <div className="flex items-center gap-3 p-3 bg-gradient-to-r from-indigo-50 to-purple-50 rounded-lg border border-indigo-200">
+                              <Avatar className="w-9 h-9 border-2 border-white shadow-sm">
+                                <AvatarFallback className="text-xs font-bold bg-gradient-to-br from-indigo-500 to-purple-600 text-white">
+                                  {getInitials(getUserName(lead.assigned_to))}
+                                </AvatarFallback>
+                              </Avatar>
+                              <div className="overflow-hidden flex-1">
+                                <p className="text-xs font-medium text-indigo-600 uppercase tracking-wide">Assigned to</p>
+                                <p className="text-sm font-bold text-slate-900 truncate">
+                                  {getUserName(lead.assigned_to).split('—')[0].trim()}
+                                </p>
+                              </div>
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                onClick={() => {
+                                  navigate(createPageUrl('LeadDetail') + `?id=${lead.id}`);
+                                }}
+                                className="h-9 w-9 hover:bg-indigo-100"
+                              >
+                                <Eye className="w-4 h-4 text-indigo-600" />
                               </Button>
-                            </DropdownMenuTrigger>
-                            <DropdownMenuContent align="end">
-                              <DropdownMenuItem onClick={() => {
-                                navigate(createPageUrl('LeadDetail') + `?id=${lead.id}`);
-                              }}>
-                                <Eye className="w-4 h-4 mr-2" />
-                                View Details
-                              </DropdownMenuItem>
-                              <DropdownMenuSeparator />
-                              <DropdownMenuItem 
+                            </div>
+                            <div className="grid grid-cols-2 gap-2">
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                onClick={() => setStatusUpdateLead(lead)}
+                                className="border-indigo-300 hover:bg-indigo-50 hover:border-indigo-400 text-indigo-700 font-medium h-10"
+                              >
+                                <AlertCircle className="w-4 h-4 mr-1.5" />
+                                Update
+                              </Button>
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                onClick={() => window.location.href = `tel:${lead.phone}`}
+                                className="border-green-300 hover:bg-green-50 hover:border-green-400 text-green-700 font-medium h-10"
+                              >
+                                <PhoneIcon className="w-4 h-4 mr-1.5" />
+                                Call
+                              </Button>
+                            </div>
+                            <DropdownMenu>
+                              <DropdownMenuTrigger asChild>
+                                <Button variant="outline" size="sm" className="w-full h-9 mt-2">
+                                  <MoreHorizontal className="w-4 h-4" />
+                                </Button>
+                              </DropdownMenuTrigger>
+                              <DropdownMenuContent align="end">
+                                <DropdownMenuItem onClick={() => {
+                                  navigate(createPageUrl('LeadDetail') + `?id=${lead.id}`);
+                                }}>
+                                  <Eye className="w-4 h-4 mr-2" />
+                                  View Details
+                                </DropdownMenuItem>
+                                <DropdownMenuSeparator />
+                                <DropdownMenuItem
+                                  onClick={() => {
+                                    setSelectedLeads([lead.id]);
+                                    setShowAssignDialog(true);
+                                  }}
+                                >
+                                  <UserPlus className="w-4 h-4 mr-2 text-indigo-600" />
+                                  Reassign Lead
+                                </DropdownMenuItem>
+                                <DropdownMenuSeparator />
+                                <DropdownMenuItem
+                                  onClick={() => setDeletingLead(lead)}
+                                  className="text-red-600"
+                                >
+                                  <Trash2 className="w-4 h-4 mr-2" />
+                                  Delete Lead
+                                </DropdownMenuItem>
+                              </DropdownMenuContent>
+                            </DropdownMenu>
+                          </div>
+                        ) : (
+                          <div className="space-y-3 p-3 bg-slate-50 rounded-lg border border-slate-200">
+                            <div className="flex items-center gap-2">
+                              <div className="w-2 h-2 rounded-full bg-slate-400"></div>
+                              <span className="text-sm font-medium text-slate-500">Unassigned</span>
+                            </div>
+                            {!isSalesMember && (
+                              <Button
+                                variant="outline"
+                                size="sm"
                                 onClick={() => {
                                   setSelectedLeads([lead.id]);
                                   setShowAssignDialog(true);
                                 }}
+                                className="w-full border-indigo-300 hover:bg-indigo-50 text-indigo-700 font-medium"
                               >
-                                <UserPlus className="w-4 h-4 mr-2 text-indigo-600" />
-                                Reassign Lead
-                              </DropdownMenuItem>
-                              <DropdownMenuSeparator />
-                              <DropdownMenuItem 
-                                onClick={() => setDeletingLead(lead)}
-                                className="text-red-600"
-                              >
-                                <Trash2 className="w-4 h-4 mr-2" />
-                                Delete Lead
-                              </DropdownMenuItem>
-                            </DropdownMenuContent>
-                          </DropdownMenu>
-                        </div>
-                      ) : (
-                        <div className="space-y-3 p-3 bg-slate-50 rounded-lg border border-slate-200">
-                          <div className="flex items-center gap-2">
-                            <div className="w-2 h-2 rounded-full bg-slate-400"></div>
-                            <span className="text-sm font-medium text-slate-500">Unassigned</span>
+                                <User className="w-4 h-4 mr-2" />
+                                Assign Lead
+                              </Button>
+                            )}
                           </div>
-                          {!isSalesMember && (
-                            <Button 
-                              variant="outline" 
-                              size="sm"
-                              onClick={() => {
-                                setSelectedLeads([lead.id]);
-                                setShowAssignDialog(true);
-                              }}
-                              className="w-full border-indigo-300 hover:bg-indigo-50 text-indigo-700 font-medium"
-                            >
-                              <User className="w-4 h-4 mr-2" />
-                              Assign Lead
-                            </Button>
-                          )}
-                        </div>
-                      )}
-                    </div>
-                </CardContent>
-              </Card>
-            );
-            })
+                        )}
+                      </div>
+                    </CardContent>
+                  </Card>
+                );
+              })
             ) : (
-            <div className="col-span-full text-center py-20">
-              <div className="inline-flex items-center justify-center w-24 h-24 rounded-full bg-gradient-to-br from-slate-100 to-slate-200 mb-6 shadow-inner">
-                <User className="w-12 h-12 text-slate-400" />
-              </div>
-              <h3 className="text-xl font-bold text-slate-900 mb-2">No leads found</h3>
-              <p className="text-slate-600 mb-6">Try adjusting your filters or import new leads</p>
-              {!isSalesMember && (
-                <Button onClick={() => setShowImportDialog(true)} className="bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-700 hover:to-purple-700 shadow-lg">
-                  <Upload className="w-4 h-4 mr-2" />
-                  Import Leads
-                </Button>
-              )}
+              <div className="col-span-full text-center py-20">
+                <div className="inline-flex items-center justify-center w-24 h-24 rounded-full bg-gradient-to-br from-slate-100 to-slate-200 mb-6 shadow-inner">
+                  <User className="w-12 h-12 text-slate-400" />
+                </div>
+                <h3 className="text-xl font-bold text-slate-900 mb-2">No leads found</h3>
+                <p className="text-slate-600 mb-6">Try adjusting your filters or import new leads</p>
+                {!isSalesMember && (
+                  <Button onClick={() => setShowImportDialog(true)} className="bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-700 hover:to-purple-700 shadow-lg">
+                    <Upload className="w-4 h-4 mr-2" />
+                    Import Leads
+                  </Button>
+                )}
               </div>
             )}
           </div>
@@ -1184,149 +1181,150 @@ export default function Leads() {
           </div>
         )}
 
-      {/* Dialogs */}
-      <ImportLeadsDialog 
-        open={showImportDialog}
-        onOpenChange={setShowImportDialog}
-        salesUsers={visibleSalesUsers}
-      />
+        {/* Dialogs */}
+        <ImportLeadsDialog
+          open={showImportDialog}
+          onOpenChange={setShowImportDialog}
+          salesUsers={visibleSalesUsers}
+        />
 
-      <AssignLeadsDialog
-        open={showAssignDialog}
-        onOpenChange={setShowAssignDialog}
-        selectedLeads={selectedLeads}
-        leads={leads}
-        salesUsers={visibleSalesUsers}
-        onSuccess={() => {
-          setSelectedLeads([]);
-          setShowAssignDialog(false);
-        }}
-      />
+        <AssignLeadsDialog
+          open={showAssignDialog}
+          onOpenChange={setShowAssignDialog}
+          selectedLeads={selectedLeads}
+          leads={leads}
+          salesUsers={salesUsers}
+          departments={departments}
+          onSuccess={() => {
+            setSelectedLeads([]);
+            setShowAssignDialog(false);
+          }}
+        />
 
-      <LeadDetailDialog
-        lead={viewingLead}
-        open={!!viewingLead}
-        onOpenChange={(open) => !open && setViewingLead(null)}
-        salesUsers={visibleSalesUsers}
-      />
+        <LeadDetailDialog
+          lead={viewingLead}
+          open={!!viewingLead}
+          onOpenChange={(open) => !open && setViewingLead(null)}
+          salesUsers={visibleSalesUsers}
+        />
 
-      {/* Quick Status Update Dialog */}
-      <Dialog open={!!statusUpdateLead} onOpenChange={(open) => !open && setStatusUpdateLead(null)}>
-        <DialogContent className="max-w-md">
-          <DialogHeader>
-            <DialogTitle>Update Lead Status</DialogTitle>
-            <DialogDescription>{statusUpdateLead?.lead_name}</DialogDescription>
-          </DialogHeader>
-          <div className="space-y-4">
-            <div className="space-y-2">
-              <Label>Contact Status *</Label>
-              <Select 
-                defaultValue={statusUpdateLead?.contact_status || 'not_contacted'}
-                onValueChange={(v) => {
+        {/* Quick Status Update Dialog */}
+        <Dialog open={!!statusUpdateLead} onOpenChange={(open) => !open && setStatusUpdateLead(null)}>
+          <DialogContent className="max-w-md">
+            <DialogHeader>
+              <DialogTitle>Update Lead Status</DialogTitle>
+              <DialogDescription>{statusUpdateLead?.lead_name}</DialogDescription>
+            </DialogHeader>
+            <div className="space-y-4">
+              <div className="space-y-2">
+                <Label>Contact Status *</Label>
+                <Select
+                  defaultValue={statusUpdateLead?.contact_status || 'not_contacted'}
+                  onValueChange={(v) => {
+                    if (statusUpdateLead) {
+                      setStatusUpdateLead({ ...statusUpdateLead, contact_status: v });
+                    }
+                  }}
+                >
+                  <SelectTrigger className="h-11">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="not_contacted">Not Contacted</SelectItem>
+                    <SelectItem value="contacted">Contacted</SelectItem>
+                    <SelectItem value="not_interested">Not Interested</SelectItem>
+                    <SelectItem value="not_picked">Not Picked</SelectItem>
+                    <SelectItem value="switched_off">Switched Off</SelectItem>
+                    <SelectItem value="connected">Connected</SelectItem>
+                    <SelectItem value="follow_up">Follow Up</SelectItem>
+                    <SelectItem value="wrong_number">Wrong Number</SelectItem>
+                    <SelectItem value="out_of_network">Out of Network</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-2">
+                <Label>Feedback (Optional)</Label>
+                <Textarea
+                  placeholder="Add feedback..."
+                  defaultValue={statusUpdateLead?.feedback || ''}
+                  onChange={(e) => {
+                    if (statusUpdateLead) {
+                      setStatusUpdateLead({ ...statusUpdateLead, feedback: e.target.value });
+                    }
+                  }}
+                  rows={3}
+                />
+              </div>
+            </div>
+            <DialogFooter>
+              <Button variant="outline" onClick={() => setStatusUpdateLead(null)}>Cancel</Button>
+              <Button
+                onClick={() => {
                   if (statusUpdateLead) {
-                    setStatusUpdateLead({...statusUpdateLead, contact_status: v});
+                    updateLeadStatusMutation.mutate({
+                      leadId: statusUpdateLead.id,
+                      contact_status: statusUpdateLead.contact_status,
+                      feedback: statusUpdateLead.feedback
+                    });
                   }
                 }}
+                disabled={updateLeadStatusMutation.isPending}
+                className="bg-indigo-600 hover:bg-indigo-700"
               >
-                <SelectTrigger className="h-11">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="not_contacted">Not Contacted</SelectItem>
-                  <SelectItem value="contacted">Contacted</SelectItem>
-                  <SelectItem value="not_interested">Not Interested</SelectItem>
-                  <SelectItem value="not_picked">Not Picked</SelectItem>
-                  <SelectItem value="switched_off">Switched Off</SelectItem>
-                  <SelectItem value="connected">Connected</SelectItem>
-                  <SelectItem value="follow_up">Follow Up</SelectItem>
-                  <SelectItem value="wrong_number">Wrong Number</SelectItem>
-                  <SelectItem value="out_of_network">Out of Network</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-            <div className="space-y-2">
-              <Label>Feedback (Optional)</Label>
-              <Textarea
-                placeholder="Add feedback..."
-                defaultValue={statusUpdateLead?.feedback || ''}
-                onChange={(e) => {
-                  if (statusUpdateLead) {
-                    setStatusUpdateLead({...statusUpdateLead, feedback: e.target.value});
-                  }
-                }}
-                rows={3}
-              />
-            </div>
-          </div>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setStatusUpdateLead(null)}>Cancel</Button>
-            <Button 
-              onClick={() => {
-                if (statusUpdateLead) {
-                  updateLeadStatusMutation.mutate({
-                    leadId: statusUpdateLead.id,
-                    contact_status: statusUpdateLead.contact_status,
-                    feedback: statusUpdateLead.feedback
-                  });
-                }
-              }}
-              disabled={updateLeadStatusMutation.isPending}
-              className="bg-indigo-600 hover:bg-indigo-700"
-            >
-              {updateLeadStatusMutation.isPending && <Loader2 className="w-4 h-4 mr-2 animate-spin" />}
-              Update
-            </Button>
-          </DialogFooter>
-        </DialogContent>
+                {updateLeadStatusMutation.isPending && <Loader2 className="w-4 h-4 mr-2 animate-spin" />}
+                Update
+              </Button>
+            </DialogFooter>
+          </DialogContent>
         </Dialog>
 
-      {/* Delete Confirmation Dialog */}
-      <Dialog open={!!deletingLead} onOpenChange={(open) => !open && setDeletingLead(null)}>
-        <DialogContent className="max-w-md">
-          <DialogHeader>
-            <DialogTitle>Delete Lead{deletingLead?.isBulk ? 's' : ''}</DialogTitle>
-            <DialogDescription>
-              {deletingLead?.isBulk 
-                ? `Are you sure you want to delete ${selectedLeads.length} lead(s)? This action cannot be undone.`
-                : `Are you sure you want to delete ${deletingLead?.lead_name}? This action cannot be undone.`
-              }
-            </DialogDescription>
-          </DialogHeader>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setDeletingLead(null)}>Cancel</Button>
-            <Button 
-              variant="destructive"
-              onClick={() => {
-                if (deletingLead?.isBulk) {
-                  bulkDeleteMutation.mutate(selectedLeads);
-                } else if (deletingLead) {
-                  deleteLeadMutation.mutate(deletingLead.id);
+        {/* Delete Confirmation Dialog */}
+        <Dialog open={!!deletingLead} onOpenChange={(open) => !open && setDeletingLead(null)}>
+          <DialogContent className="max-w-md">
+            <DialogHeader>
+              <DialogTitle>Delete Lead{deletingLead?.isBulk ? 's' : ''}</DialogTitle>
+              <DialogDescription>
+                {deletingLead?.isBulk
+                  ? `Are you sure you want to delete ${selectedLeads.length} lead(s)? This action cannot be undone.`
+                  : `Are you sure you want to delete ${deletingLead?.lead_name}? This action cannot be undone.`
                 }
-              }}
-              disabled={deleteLeadMutation.isPending || bulkDeleteMutation.isPending}
-            >
-              {(deleteLeadMutation.isPending || bulkDeleteMutation.isPending) && <Loader2 className="w-4 h-4 mr-2 animate-spin" />}
-              Delete
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+              </DialogDescription>
+            </DialogHeader>
+            <DialogFooter>
+              <Button variant="outline" onClick={() => setDeletingLead(null)}>Cancel</Button>
+              <Button
+                variant="destructive"
+                onClick={() => {
+                  if (deletingLead?.isBulk) {
+                    bulkDeleteMutation.mutate(selectedLeads);
+                  } else if (deletingLead) {
+                    deleteLeadMutation.mutate(deletingLead.id);
+                  }
+                }}
+                disabled={deleteLeadMutation.isPending || bulkDeleteMutation.isPending}
+              >
+                {(deleteLeadMutation.isPending || bulkDeleteMutation.isPending) && <Loader2 className="w-4 h-4 mr-2 animate-spin" />}
+                Delete
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
 
-      {/* Advanced Filter Panel */}
-      <AdvancedFilterPanel
-        isOpen={showAdvancedFilter}
-        onClose={() => setShowAdvancedFilter(false)}
-        filters={advancedFilters}
-        onApplyFilters={setAdvancedFilters}
-        moduleConfig={LEAD_FILTERS}
-        savedFilters={savedFilters}
-        onSaveFilter={handleSaveFilter}
-        onLoadFilter={handleLoadFilter}
-        onDeleteFilter={handleDeleteFilter}
-      />
+        {/* Advanced Filter Panel */}
+        <AdvancedFilterPanel
+          isOpen={showAdvancedFilter}
+          onClose={() => setShowAdvancedFilter(false)}
+          filters={advancedFilters}
+          onApplyFilters={setAdvancedFilters}
+          moduleConfig={LEAD_FILTERS}
+          savedFilters={savedFilters}
+          onSaveFilter={handleSaveFilter}
+          onLoadFilter={handleLoadFilter}
+          onDeleteFilter={handleDeleteFilter}
+        />
 
-      {/* Follow-up Dialog */}
-      <FollowUpDialog user={user} />
+        {/* Follow-up Dialog */}
+        <FollowUpDialog user={user} />
       </div>
     </div>
   );
