@@ -64,6 +64,7 @@ export default function Sidebar({ projects = [], currentPage, user, collapsed, o
   const [leadsOpen, setLeadsOpen] = useState(true);
   const [accountsOpen, setAccountsOpen] = useState(true);
   const [marketingOpen, setMarketingOpen] = useState(true);
+  const [hrmsOpen, setHrmsOpen] = useState(true);
 
   // Check if user is in a sales department
   const salesDeptIds = Array.isArray(departments)
@@ -101,20 +102,23 @@ export default function Sidebar({ projects = [], currentPage, user, collapsed, o
   const navItems = [
     { name: 'Dashboard', icon: LayoutDashboard, page: 'Dashboard' },
     { name: 'Timesheet', icon: Clock, page: 'Timesheet', freelancerOnly: true },
-    { name: 'HR Dashboard', icon: UserCheck, page: 'HRDashboard', hrOnly: true },
-    { name: 'Recruitment', icon: UserPlus, page: 'Recruitment', hrOnly: true },
     { name: 'Inventory Bucket', icon: Database, page: 'MasterData', salesOnly: true },
     { name: 'Marketing Collateral', icon: Video, page: 'Marketing', marketingOnly: true },
     { name: 'Finance', icon: Wallet, page: 'FinanceDashboard', financeOnly: true },
-    { name: 'Petty Cash', icon: Wallet, page: 'PettyCashReimbursement', hrOnly: true },
-    { name: 'Attendance', icon: UserCheck, page: 'Attendance' },
-    { name: 'Leave', icon: Calendar, page: 'LeaveManagement', adminOnly: true },
-    { name: 'Salary', icon: DollarSign, page: 'Salary', hrOnly: true },
     { name: 'Backlog', icon: Layers, page: 'Backlog' },
     { name: 'Calendar', icon: Calendar, page: 'TaskCalendar' },
     { name: 'Meetings', icon: Video, page: 'Meetings' },
     { name: 'Sprints', icon: Zap, page: 'Sprints' },
     { name: 'Reports', icon: BarChart3, page: 'Reports', hiddenForSalesExec: true },
+  ];
+
+  const hrmsItems = [
+    { name: 'HR Dashboard', icon: UserCheck, page: 'HRDashboard', hrOnly: true },
+    { name: 'Recruitment', icon: UserPlus, page: 'Recruitment', hrOnly: true },
+    { name: 'Attendance', icon: UserCheck, page: 'Attendance' },
+    { name: 'Leave', icon: Calendar, page: 'LeaveManagement', adminOnly: true },
+    { name: 'Salary', icon: DollarSign, page: 'Salary', hrOnly: true },
+    { name: 'Petty Cash', icon: Wallet, page: 'PettyCashReimbursement', hrOnly: true },
   ];
 
   const adminItems = [
@@ -370,6 +374,48 @@ export default function Sidebar({ projects = [], currentPage, user, collapsed, o
             </div>
           )}
 
+          {/* HRMS Section */}
+          {!collapsed && (
+            <div className="mt-6 px-3">
+              <Collapsible open={hrmsOpen} onOpenChange={setHrmsOpen}>
+                <div className="flex items-center justify-between mb-2">
+                  <CollapsibleTrigger className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wider text-slate-500 hover:text-slate-300 w-full">
+                    {hrmsOpen ? <ChevronDown className="w-3 h-3" /> : <ChevronRight className="w-3 h-3" />}
+                    HRMS
+                  </CollapsibleTrigger>
+                </div>
+                <CollapsibleContent className="space-y-1">
+                  {hrmsItems.map((item) => {
+                    // Skip HR-only items for non-HR users (unless admin)
+                    if (item.hrOnly && user?.role_id !== 'hr' && !isAdmin) return null;
+                    // Skip admin-only items for non-admins
+                    if (item.adminOnly && !isAdmin) return null;
+
+                    const Icon = item.icon;
+                    const isActive = currentPage === item.page;
+
+                    return (
+                      <Link
+                        key={item.name}
+                        to={createPageUrl(item.page)}
+                        onClick={() => window.innerWidth < 1024 && onToggle()}
+                        className={cn(
+                          "flex items-center gap-3 px-3 py-2.5 rounded-lg transition-all duration-200",
+                          isActive
+                            ? "bg-indigo-600 text-white shadow-lg shadow-indigo-500/25"
+                            : "text-slate-400 hover:text-white hover:bg-slate-800"
+                        )}
+                      >
+                        <Icon className="w-5 h-5 flex-shrink-0" />
+                        <span className="font-medium">{item.name}</span>
+                      </Link>
+                    );
+                  })}
+                </CollapsibleContent>
+              </Collapsible>
+            </div>
+          )}
+
           {/* Accounts Section */}
           {!collapsed && isAdmin && (
             <div className="mt-6 px-3">
@@ -617,7 +663,7 @@ export default function Sidebar({ projects = [], currentPage, user, collapsed, o
             );
           })}
         </div>
-      </aside>
+      </aside >
     </>
   );
 }

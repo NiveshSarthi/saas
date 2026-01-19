@@ -168,7 +168,6 @@ export default function CheckInOutWidget({ user, todayRecord, onUpdate }) {
     });
   };
 
-  // ... (existing helper functions)
 
   const checkInMutation = useMutation({
     mutationFn: async () => {
@@ -234,10 +233,51 @@ export default function CheckInOutWidget({ user, todayRecord, onUpdate }) {
         await base44.entities.Attendance.create(attendanceData);
       }
     },
-    // ... (rest of mutation)
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['today-attendance', user?.email] });
+      queryClient.invalidateQueries({ queryKey: ['attendance-today', user?.email] });
+      toast.success('Successfully checked in');
+      if (onUpdate) onUpdate();
+    },
+    onError: (error) => {
+      toast.error(error.message || 'Check in failed');
+    }
   });
 
-  // ... (checkOutMutation)
+  const checkOutMutation = useMutation({
+    mutationFn: async () => {
+      const now = new Date();
+      const ip = await getIPAddress();
+      let location = await getLocation();
+
+      if (settings?.enable_geofencing && !location) {
+        throw new Error("Location access is MANDATORY for checkout. Please enable location services.");
+      }
+
+      const checkInTime = new Date(todayRecord.check_in);
+      const diffMs = now.getTime() - checkInTime.getTime();
+      const hours = diffMs / (1000 * 60 * 60);
+
+      const updateData = {
+        check_out: now.toISOString(),
+        status: 'completed',
+        total_hours: hours,
+        checkout_location: location,
+        checkout_ip: ip
+      };
+
+      await base44.entities.Attendance.update(todayRecord.id, updateData);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['today-attendance', user?.email] });
+      queryClient.invalidateQueries({ queryKey: ['attendance-today', user?.email] });
+      toast.success('Checked out successfully');
+      if (onUpdate) onUpdate();
+    },
+    onError: (error) => {
+      toast.error(error.message || 'Check out failed');
+    }
+  });
 
   const handleStartVisitClick = async () => {
     try {
@@ -265,7 +305,6 @@ export default function CheckInOutWidget({ user, todayRecord, onUpdate }) {
 
         <div className="relative p-6 flex flex-col items-center justify-between gap-6 md:gap-8">
 
-          {/* ... (Header section unchanged) ... */}
           {/* Top: Clock & Date */}
           <div className="flex flex-col sm:flex-row items-center gap-6 w-full justify-center sm:justify-start">
             <div className="p-4 bg-white/10 backdrop-blur-md rounded-2xl border border-white/20 shadow-xl flex-shrink-0">

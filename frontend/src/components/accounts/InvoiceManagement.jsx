@@ -370,44 +370,44 @@ export default function InvoiceManagement() {
                             {/* Summary Section */}
                             <div className="grid grid-cols-1 md:grid-cols-2 gap-8 items-start">
                                 <div className="space-y-4">
-                                    <Label className="text-[10px] font-black uppercase text-slate-400 tracking-widest pl-1">Payment Instructions & Notes</Label>
+                                    <Label className="text-xs font-semibold uppercase text-slate-500 tracking-wide pl-1">Payment Instructions & Notes</Label>
                                     <Textarea
                                         placeholder="Include bank details, UPI ID, or project milestones..."
                                         rows={5}
-                                        className="rounded-2xl border-slate-200 focus:border-indigo-500 p-4 font-medium"
+                                        className="rounded-xl border-slate-200 focus:border-indigo-500 p-4 font-medium"
                                         value={formData.notes}
                                         onChange={(e) => setFormData({ ...formData, notes: e.target.value })}
                                     />
-                                    <div className="bg-indigo-50/50 p-4 rounded-2xl border border-indigo-100/50 flex gap-4 text-indigo-700 shadow-sm shadow-indigo-50">
+                                    <div className="bg-indigo-50/50 p-4 rounded-xl border border-indigo-100/50 flex gap-4 text-indigo-700 shadow-sm shadow-indigo-50">
                                         <div className="w-10 h-10 rounded-full bg-indigo-100 flex items-center justify-center flex-shrink-0">
                                             <AlertCircle className="w-5 h-5" />
                                         </div>
-                                        <p className="text-xs font-semibold leading-relaxed py-1">
+                                        <p className="text-xs font-medium leading-relaxed py-1">
                                             Tax amounts are aggregated at the bottom. Ensure client GSTIN is correct in their profile for valid tax invoicing.
                                         </p>
                                     </div>
                                 </div>
 
-                                <div className="bg-white p-8 rounded-3xl shadow-2xl shadow-indigo-100/20 border border-slate-100 space-y-6">
+                                <div className="bg-white p-8 rounded-2xl shadow-xl shadow-indigo-100/20 border border-slate-100 space-y-6">
                                     <div className="space-y-3">
-                                        <div className="flex justify-between items-center text-slate-400">
-                                            <span className="text-[10px] font-black uppercase tracking-widest">Subtotal (Untaxed)</span>
-                                            <span className="font-mono font-bold text-slate-600 text-lg">₹{totals.subtotal.toLocaleString()}</span>
+                                        <div className="flex justify-between items-center text-slate-500">
+                                            <span className="text-xs font-semibold uppercase tracking-wide">Subtotal (Untaxed)</span>
+                                            <span className="font-mono font-bold text-slate-700 text-lg">₹{totals.subtotal.toLocaleString()}</span>
                                         </div>
-                                        <div className="flex justify-between items-center text-slate-400">
-                                            <span className="text-[10px] font-black uppercase tracking-widest">Aggregate GST/Tax</span>
-                                            <span className="font-mono font-bold text-slate-600 text-lg">₹{totals.tax_total.toLocaleString()}</span>
+                                        <div className="flex justify-between items-center text-slate-500">
+                                            <span className="text-xs font-semibold uppercase tracking-wide">Aggregate GST/Tax</span>
+                                            <span className="font-mono font-bold text-slate-700 text-lg">₹{totals.tax_total.toLocaleString()}</span>
                                         </div>
                                     </div>
 
                                     <div className="h-px bg-slate-100" />
 
                                     <div className="flex justify-between items-center py-2">
-                                        <span className="text-sm font-black uppercase tracking-widest text-slate-900 border-b-4 border-indigo-200">Total Invoice Amount</span>
-                                        <span className="text-3xl font-black text-indigo-600 font-mono italic tracking-tighter">₹{totals.total.toLocaleString()}</span>
+                                        <span className="text-sm font-bold uppercase tracking-wide text-slate-900">Total Invoice Amount</span>
+                                        <span className="text-3xl font-bold text-indigo-600 font-mono tracking-tight">₹{totals.total.toLocaleString()}</span>
                                     </div>
 
-                                    <Button type="submit" className="w-full h-14 bg-indigo-600 hover:bg-slate-900 text-white font-black uppercase tracking-widest rounded-2xl shadow-xl shadow-indigo-100 transition-all hover:-translate-y-1 active:scale-95 disabled:opacity-50" disabled={createMutation.isPending || updateMutation.isPending}>
+                                    <Button type="submit" className="w-full h-12 bg-indigo-600 hover:bg-slate-900 text-white font-bold uppercase tracking-wide rounded-xl shadow-lg shadow-indigo-100 transition-all hover:-translate-y-1 active:scale-95 disabled:opacity-50" disabled={createMutation.isPending || updateMutation.isPending}>
                                         {editingInvoice ? 'Commit Revision' : 'Confirm & Finalize Invoice'}
                                     </Button>
                                 </div>
@@ -417,81 +417,81 @@ export default function InvoiceManagement() {
                 </Dialog>
             </div>
 
-            <Card className="border-slate-200 shadow-2xl overflow-hidden rounded-2xl bg-white/70 backdrop-blur-md">
+            <Card className="border-slate-200 shadow-xl overflow-hidden rounded-2xl bg-white/70 backdrop-blur-md">
                 <div className="overflow-x-auto">
                     <Table>
                         <TableHeader className="bg-slate-50/50 border-b border-slate-100">
                             <TableRow className="hover:bg-transparent border-0">
-                                <TableHead className="font-black text-slate-400 uppercase text-[10px] tracking-widest py-6 pl-8">Invoice Identity</TableHead>
-                                <TableHead className="font-black text-slate-400 uppercase text-[10px] tracking-widest py-6">Timeline</TableHead>
-                                <TableHead className="font-black text-slate-400 uppercase text-[10px] tracking-widest py-6">Recipient Client</TableHead>
-                                <TableHead className="font-black text-slate-400 uppercase text-[10px] tracking-widest py-6 text-right">Valuation</TableHead>
-                                <TableHead className="font-black text-slate-400 uppercase text-[10px] tracking-widest py-6">State</TableHead>
-                                <TableHead className="font-black text-slate-400 uppercase text-[10px] tracking-widest py-6 text-right pr-8">Actions</TableHead>
+                                <TableHead className="font-bold text-slate-500 uppercase text-[10px] tracking-wide py-4 pl-6">Invoice Identity</TableHead>
+                                <TableHead className="font-bold text-slate-500 uppercase text-[10px] tracking-wide py-4">Timeline</TableHead>
+                                <TableHead className="font-bold text-slate-500 uppercase text-[10px] tracking-wide py-4">Recipient Client</TableHead>
+                                <TableHead className="font-bold text-slate-500 uppercase text-[10px] tracking-wide py-4 text-right">Valuation</TableHead>
+                                <TableHead className="font-bold text-slate-500 uppercase text-[10px] tracking-wide py-4">State</TableHead>
+                                <TableHead className="font-bold text-slate-500 uppercase text-[10px] tracking-wide py-4 text-right pr-6">Actions</TableHead>
                             </TableRow>
                         </TableHeader>
                         <TableBody>
                             {filteredInvoices.map((inv) => (
                                 <TableRow key={inv.id} className="hover:bg-indigo-50/40 group border-b border-slate-50 last:border-0 transition-all">
-                                    <TableCell className="py-6 pl-8">
+                                    <TableCell className="py-4 pl-6">
                                         <div className="flex items-center gap-4">
-                                            <div className="w-11 h-11 rounded-2xl bg-white border border-slate-100 flex items-center justify-center text-indigo-600 font-black text-xs transition-all shadow-sm group-hover:scale-110 group-hover:shadow-lg group-hover:shadow-indigo-100 group-hover:border-indigo-100">
+                                            <div className="w-10 h-10 rounded-xl bg-white border border-slate-200 flex items-center justify-center text-indigo-600 font-bold text-xs transition-all shadow-sm group-hover:scale-105 group-hover:shadow-md group-hover:shadow-indigo-100 group-hover:border-indigo-100">
                                                 {inv.invoice_number?.slice(-3) || '00'}
                                             </div>
                                             <div>
-                                                <div className="font-black text-slate-900 group-hover:text-indigo-600 transition-colors uppercase font-mono tracking-tighter text-base">{inv.invoice_number}</div>
-                                                <div className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mt-0.5">Auto-Generated ID</div>
+                                                <div className="font-bold text-slate-900 group-hover:text-indigo-600 transition-colors uppercase font-mono tracking-tight text-sm">{inv.invoice_number}</div>
+                                                <div className="text-[10px] font-semibold text-slate-400 uppercase tracking-wide mt-0.5">Auto-Generated ID</div>
                                             </div>
                                         </div>
                                     </TableCell>
-                                    <TableCell className="py-6">
+                                    <TableCell className="py-4">
                                         <div className="space-y-1">
-                                            <div className="flex items-center gap-2 font-bold text-slate-600 text-[11px] uppercase tracking-tighter">
+                                            <div className="flex items-center gap-2 font-semibold text-slate-600 text-[11px] uppercase tracking-tight">
                                                 <Clock className="w-3.5 h-3.5 text-indigo-300" />
                                                 Issued: {inv.date ? format(new Date(inv.date), 'MMM d, yyyy') : '-'}
                                             </div>
-                                            <div className="flex items-center gap-2 font-black text-rose-500 text-[11px] uppercase tracking-tighter">
+                                            <div className="flex items-center gap-2 font-bold text-rose-500 text-[11px] uppercase tracking-tight">
                                                 <AlertCircle className="w-3.5 h-3.5" />
                                                 Due: {inv.due_date ? format(new Date(inv.due_date), 'MMM d, yyyy') : '-'}
                                             </div>
                                         </div>
                                     </TableCell>
-                                    <TableCell className="py-6 font-black text-slate-800 uppercase tracking-tighter max-w-[180px] truncate text-sm">
+                                    <TableCell className="py-4 font-bold text-slate-800 uppercase tracking-tight max-w-[180px] truncate text-sm">
                                         {inv.client_name || 'UNSPECIFIED'}
                                     </TableCell>
-                                    <TableCell className="text-right py-6">
-                                        <div className="font-black text-slate-900 text-lg tracking-tighter italic">₹{(inv.total || 0).toLocaleString()}</div>
-                                        <div className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mt-1">
+                                    <TableCell className="text-right py-4">
+                                        <div className="font-bold text-slate-900 text-base tracking-tight">₹{(inv.total || 0).toLocaleString()}</div>
+                                        <div className="text-[10px] font-semibold text-slate-400 uppercase tracking-wide mt-0.5">
                                             Tax: <span className="text-indigo-500">₹{(inv.tax_total || 0).toLocaleString()}</span>
                                         </div>
                                     </TableCell>
-                                    <TableCell className="py-6">
-                                        <div className="scale-110 origin-left">
+                                    <TableCell className="py-4">
+                                        <div className="scale-100 origin-left">
                                             {getStatusBadge(inv.status)}
                                         </div>
                                     </TableCell>
-                                    <TableCell className="text-right py-6 pr-8">
+                                    <TableCell className="text-right py-4 pr-6">
                                         <DropdownMenu>
                                             <DropdownMenuTrigger asChild>
-                                                <Button variant="ghost" className="h-10 w-10 p-0 hover:bg-white hover:shadow-xl hover:shadow-indigo-100 rounded-2xl outline-none transition-all group-active:scale-90">
-                                                    <MoreVertical className="h-5 w-5 text-slate-400 group-hover:text-indigo-600" />
+                                                <Button variant="ghost" className="h-9 w-9 p-0 hover:bg-white hover:shadow-lg hover:shadow-indigo-100 rounded-xl outline-none transition-all group-active:scale-95">
+                                                    <MoreVertical className="h-4 w-4 text-slate-400 group-hover:text-indigo-600" />
                                                 </Button>
                                             </DropdownMenuTrigger>
-                                            <DropdownMenuContent align="end" className="w-56 bg-white/95 backdrop-blur-2xl border-indigo-100 shadow-2xl rounded-3xl p-2 ring-offset-2 ring-indigo-50 animate-in fade-in zoom-in-95 slide-in-from-top-4 duration-300">
-                                                <DropdownMenuItem className="rounded-2xl font-black text-[11px] uppercase tracking-widest text-slate-700 py-3.5 focus:bg-indigo-50 transition-all cursor-pointer" onClick={() => handleEdit(inv)}>
+                                            <DropdownMenuContent align="end" className="w-56 bg-white/95 backdrop-blur-xl border-indigo-100 shadow-xl rounded-2xl p-1.5 ring-offset-2 ring-indigo-50 animate-in fade-in zoom-in-95 slide-in-from-top-4 duration-300">
+                                                <DropdownMenuItem className="rounded-xl font-semibold text-[11px] uppercase tracking-wide text-slate-700 py-3 focus:bg-indigo-50 transition-all cursor-pointer" onClick={() => handleEdit(inv)}>
                                                     <Edit className="mr-3 h-4 w-4 text-indigo-500" /> Revision
                                                 </DropdownMenuItem>
-                                                <DropdownMenuItem className="rounded-2xl font-black text-[11px] uppercase tracking-widest text-slate-700 py-3.5 focus:bg-blue-50 transition-all cursor-pointer" onClick={() => toast.info('Initiating print flow...')}>
+                                                <DropdownMenuItem className="rounded-xl font-semibold text-[11px] uppercase tracking-wide text-slate-700 py-3 focus:bg-blue-50 transition-all cursor-pointer" onClick={() => toast.info('Initiating print flow...')}>
                                                     <Printer className="mr-3 h-4 w-4 text-blue-500" /> Print / PDF
                                                 </DropdownMenuItem>
-                                                <DropdownMenuItem className="rounded-2xl font-black text-[11px] uppercase tracking-widest text-slate-700 py-3.5 focus:bg-indigo-50 transition-all cursor-pointer" onClick={() => toast.info('Emailing to client...')}>
+                                                <DropdownMenuItem className="rounded-xl font-semibold text-[11px] uppercase tracking-wide text-slate-700 py-3 focus:bg-indigo-50 transition-all cursor-pointer" onClick={() => toast.info('Emailing to client...')}>
                                                     <Send className="mr-3 h-4 w-4 text-indigo-400" /> Send via Email
                                                 </DropdownMenuItem>
                                                 <div className="h-px bg-slate-100 my-1 mx-2" />
-                                                <DropdownMenuItem className="rounded-2xl font-black text-[11px] uppercase tracking-widest text-emerald-600 py-3.5 focus:bg-emerald-50 transition-all cursor-pointer" onClick={() => statusMutation.mutate({ id: inv.id, status: 'paid' })}>
+                                                <DropdownMenuItem className="rounded-xl font-semibold text-[11px] uppercase tracking-wide text-emerald-600 py-3 focus:bg-emerald-50 transition-all cursor-pointer" onClick={() => statusMutation.mutate({ id: inv.id, status: 'paid' })}>
                                                     <CheckCircle className="mr-3 h-4 w-4" /> Finalize as Paid
                                                 </DropdownMenuItem>
-                                                <DropdownMenuItem className="rounded-2xl font-black text-[11px] uppercase tracking-widest text-rose-500 py-3.5 focus:bg-rose-50 transition-all cursor-pointer" onClick={() => {
+                                                <DropdownMenuItem className="rounded-xl font-semibold text-[11px] uppercase tracking-wide text-rose-500 py-3 focus:bg-rose-50 transition-all cursor-pointer" onClick={() => {
                                                     if (confirm('Void this invoice permanently?')) deleteMutation.mutate(inv.id);
                                                 }}>
                                                     <Trash2 className="mr-3 h-4 w-4" /> Void Transition
@@ -504,16 +504,16 @@ export default function InvoiceManagement() {
                             {!invoicesLoading && filteredInvoices.length === 0 && (
                                 <TableRow>
                                     <TableCell colSpan={6} className="h-64 text-center border-0 hover:bg-transparent">
-                                        <div className="flex flex-col items-center justify-center p-12 bg-indigo-50/20 rounded-[40px] border-4 border-dashed border-indigo-100/50 mx-8 my-12 group hover:bg-indigo-50/40 transition-all">
-                                            <div className="w-20 h-20 bg-white rounded-3xl flex items-center justify-center mb-6 shadow-2xl shadow-indigo-100 group-hover:scale-110 transition-all rotate-3 group-hover:rotate-0">
-                                                <FileText className="w-10 h-10 text-indigo-200 group-hover:text-indigo-500 transition-colors" />
+                                        <div className="flex flex-col items-center justify-center p-12 bg-indigo-50/20 rounded-[32px] border-4 border-dashed border-indigo-100/50 mx-8 my-12 group hover:bg-indigo-50/40 transition-all">
+                                            <div className="w-16 h-16 bg-white rounded-2xl flex items-center justify-center mb-4 shadow-xl shadow-indigo-100 group-hover:scale-110 transition-all">
+                                                <FileText className="w-8 h-8 text-indigo-300 group-hover:text-indigo-500 transition-colors" />
                                             </div>
-                                            <h3 className="text-xl font-black text-slate-800 uppercase tracking-tighter mb-2">Vault Empty</h3>
-                                            <p className="text-slate-500 max-w-[280px] text-sm font-bold leading-relaxed mb-8">
+                                            <h3 className="text-lg font-bold text-slate-800 uppercase tracking-tight mb-2">Vault Empty</h3>
+                                            <p className="text-slate-500 max-w-[280px] text-sm font-medium leading-relaxed mb-6">
                                                 No invoices found on record. Elevate your business by issuing your first itemized digital bill.
                                             </p>
                                             <Button
-                                                className="bg-slate-900 hover:bg-indigo-600 text-white font-black uppercase tracking-widest rounded-2xl h-12 px-10 shadow-2xl shadow-indigo-200 transition-all active:scale-95"
+                                                className="bg-slate-900 hover:bg-indigo-600 text-white font-bold uppercase tracking-wide rounded-xl h-11 px-8 shadow-xl shadow-indigo-200 transition-all active:scale-95"
                                                 onClick={() => setDialogOpen(true)}
                                             >
                                                 <Plus className="w-4 h-4 mr-2" />
