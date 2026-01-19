@@ -103,12 +103,6 @@ export default function Sidebar({ projects = [], currentPage, user, collapsed, o
     { name: 'Dashboard', icon: LayoutDashboard, page: 'Dashboard' },
     { name: 'Timesheet', icon: Clock, page: 'Timesheet', freelancerOnly: true },
     { name: 'Inventory Bucket', icon: Database, page: 'MasterData', salesOnly: true },
-    { name: 'Marketing Collateral', icon: Video, page: 'Marketing', marketingOnly: true },
-    { name: 'Finance', icon: Wallet, page: 'FinanceDashboard', financeOnly: true },
-    { name: 'Backlog', icon: Layers, page: 'Backlog' },
-    { name: 'Calendar', icon: Calendar, page: 'TaskCalendar' },
-    { name: 'Meetings', icon: Video, page: 'Meetings' },
-    { name: 'Sprints', icon: Zap, page: 'Sprints' },
     { name: 'Reports', icon: BarChart3, page: 'Reports', hiddenForSalesExec: true },
   ];
 
@@ -133,7 +127,6 @@ export default function Sidebar({ projects = [], currentPage, user, collapsed, o
   ];
 
   const bottomItems = [
-    { name: 'Task List', icon: List, page: 'TaskList' },
     { name: 'Team', icon: Users, page: 'Team' },
     { name: 'Analytics', icon: BarChart3, page: 'Analytics', salesOrAdmin: true },
     { name: 'Support', icon: HeadphonesIcon, page: 'ITSupport' },
@@ -227,6 +220,71 @@ export default function Sidebar({ projects = [], currentPage, user, collapsed, o
                   >
                     <CheckSquare className="w-5 h-5 flex-shrink-0" />
                     <span className="font-medium">Tasks</span>
+                  </Link>
+                  <Link
+                    to={createPageUrl('Backlog')}
+                    onClick={() => window.innerWidth < 1024 && onToggle()}
+                    className={cn(
+                      "flex items-center gap-3 px-3 py-2.5 rounded-lg transition-all duration-200",
+                      currentPage === 'Backlog'
+                        ? "bg-indigo-600 text-white shadow-lg shadow-indigo-500/25"
+                        : "text-slate-400 hover:text-white hover:bg-slate-800"
+                    )}
+                  >
+                    <Layers className="w-5 h-5 flex-shrink-0" />
+                    <span className="font-medium">Backlog</span>
+                  </Link>
+                  <Link
+                    to={createPageUrl('TaskCalendar')}
+                    onClick={() => window.innerWidth < 1024 && onToggle()}
+                    className={cn(
+                      "flex items-center gap-3 px-3 py-2.5 rounded-lg transition-all duration-200",
+                      currentPage === 'TaskCalendar'
+                        ? "bg-indigo-600 text-white shadow-lg shadow-indigo-500/25"
+                        : "text-slate-400 hover:text-white hover:bg-slate-800"
+                    )}
+                  >
+                    <Calendar className="w-5 h-5 flex-shrink-0" />
+                    <span className="font-medium">Calendar</span>
+                  </Link>
+                  <Link
+                    to={createPageUrl('TaskList')}
+                    onClick={() => window.innerWidth < 1024 && onToggle()}
+                    className={cn(
+                      "flex items-center gap-3 px-3 py-2.5 rounded-lg transition-all duration-200",
+                      currentPage === 'TaskList'
+                        ? "bg-indigo-600 text-white shadow-lg shadow-indigo-500/25"
+                        : "text-slate-400 hover:text-white hover:bg-slate-800"
+                    )}
+                  >
+                    <List className="w-5 h-5 flex-shrink-0" />
+                    <span className="font-medium">Task List</span>
+                  </Link>
+                  <Link
+                    to={createPageUrl('Meetings')}
+                    onClick={() => window.innerWidth < 1024 && onToggle()}
+                    className={cn(
+                      "flex items-center gap-3 px-3 py-2.5 rounded-lg transition-all duration-200",
+                      currentPage === 'Meetings'
+                        ? "bg-indigo-600 text-white shadow-lg shadow-indigo-500/25"
+                        : "text-slate-400 hover:text-white hover:bg-slate-800"
+                    )}
+                  >
+                    <Video className="w-5 h-5 flex-shrink-0" />
+                    <span className="font-medium">Meetings</span>
+                  </Link>
+                  <Link
+                    to={createPageUrl('Sprints')}
+                    onClick={() => window.innerWidth < 1024 && onToggle()}
+                    className={cn(
+                      "flex items-center gap-3 px-3 py-2.5 rounded-lg transition-all duration-200",
+                      currentPage === 'Sprints'
+                        ? "bg-indigo-600 text-white shadow-lg shadow-indigo-500/25"
+                        : "text-slate-400 hover:text-white hover:bg-slate-800"
+                    )}
+                  >
+                    <Zap className="w-5 h-5 flex-shrink-0" />
+                    <span className="font-medium">Sprints</span>
                   </Link>
                 </CollapsibleContent>
               </Collapsible>
@@ -339,7 +397,7 @@ export default function Sidebar({ projects = [], currentPage, user, collapsed, o
                     )}
                   >
                     <Video className="w-5 h-5 flex-shrink-0" />
-                    <span className="font-medium">Video Workflow</span>
+                    <span className="font-medium">Marketing Collateral</span>
                   </Link>
                   <Link
                     to={createPageUrl('MarketingCalendarPage')}
