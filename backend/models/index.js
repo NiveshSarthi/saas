@@ -118,6 +118,7 @@ const salaryRecordSchema = new mongoose.Schema({
     gross_salary: Number,
     total_deductions: Number,
     net_salary: Number,
+    attendance_adjustments: Number,
     status: { type: String, default: 'draft' }, // draft, locked, paid
     details: mongoose.Schema.Types.Mixed, // Store full calculation object
     locked: { type: Boolean, default: false },
