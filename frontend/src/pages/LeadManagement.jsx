@@ -657,10 +657,12 @@ export default function LeadManagement() {
                 <Download className="w-4 h-4 mr-1" />
                 Export CSV
               </Button>
-              <Button size="sm" variant="outline" onClick={() => setImportDialogOpen(true)}>
-                <Upload className="w-4 h-4 mr-1" />
-                Import CSV
-              </Button>
+              {user?.role === 'admin' && (
+                <Button size="sm" variant="outline" onClick={() => setImportDialogOpen(true)}>
+                  <Upload className="w-4 h-4 mr-1" />
+                  Import CSV
+                </Button>
+              )}
               <Button size="sm" onClick={() => setCreateDialogOpen(true)}>
                 <Plus className="w-4 h-4 mr-1" />
                 New Lead
@@ -747,6 +749,7 @@ export default function LeadManagement() {
                     <SelectItem value="website">Website</SelectItem>
                     <SelectItem value="facebook">Facebook</SelectItem>
                     <SelectItem value="instagram">Instagram</SelectItem>
+                    <SelectItem value="whatsapp">WhatsApp</SelectItem>
                   </SelectContent>
                 </Select>
 
