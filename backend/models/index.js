@@ -203,6 +203,38 @@ const leadSchema = new mongoose.Schema({
     activity_log: [mongoose.Schema.Types.Mixed],
     last_activity_date: Date,
     created_by: String,
+    created_date: { type: Date, default: Date.now },
+    // Additional fields for lead management
+    lead_source: String,
+    budget: String,
+    timeline: String,
+    requirements: String,
+    project_name: String,
+    is_cold: { type: Boolean, default: false },
+    cold_date: Date,
+    lost_reason: String,
+    lost_comment: String,
+    lost_date: Date,
+    next_follow_up: Date,
+    contacted_date: Date,
+    last_contact_date: Date,
+    verified_budget: String,
+    proposal_sent: String,
+    negotiation_notes: String,
+    visit_date: Date,
+    agreement_signed: String,
+    payment_amount: String,
+    payment_date: Date,
+    final_amount: String,
+    stage_notes: String
+});
+
+const reLeadActivitySchema = new mongoose.Schema({
+    lead_id: { type: String, required: true },
+    activity_type: { type: String, required: true },
+    description: String,
+    actor_email: String,
+    metadata: mongoose.Schema.Types.Mixed,
     created_date: { type: Date, default: Date.now }
 });
 
@@ -223,6 +255,7 @@ const savedFilterSchema = new mongoose.Schema({
 });
 
 export const Lead = mongoose.model('Lead', leadSchema);
+export const RELeadActivity = mongoose.model('RELeadActivity', reLeadActivitySchema);
 export const Department = mongoose.model('Department', departmentSchema);
 export const SavedFilter = mongoose.model('SavedFilter', savedFilterSchema);
 

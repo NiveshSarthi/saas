@@ -286,11 +286,14 @@ export const calculateMonthlySalary = async (req, res) => {
             }
 
             // Adjustments
-            const adjustments = await SalaryAdjustment.find({ employee_email: userEmail, month, status: 'approved' });
+            const adjustments = await SalaryAdjustment.find({ employee_email: userEmail, month });
             let bonus = 0, other_deductions = 0;
             adjustments.forEach(adj => {
-                // Additions
-                if (['bonus', 'incentive', 'reimbursement', 'allowance', 'other'].includes(adj.adjustment_type) && adj.amount > 0) {
+                // Additions - Include approved adjustments and all incentives (auto-approved)
+                if (adj.status === 'approved' && ['bonus', 'reimbursement', 'allowance', 'other'].includes(adj.adjustment_type) && adj.amount > 0) {
+                    bonus += adj.amount;
+                } else if (adj.adjustment_type === 'incentive' && adj.amount > 0) {
+                    // Auto-include all incentive bonuses regardless of status
                     bonus += adj.amount;
                 }
                 // Deductions (Negative amounts or specific types)
