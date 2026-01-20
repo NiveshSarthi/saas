@@ -563,6 +563,24 @@ const salesTargetSchema = new mongoose.Schema({
     created_at: { type: Date, default: Date.now }
 });
 
+const hrTargetSchema = new mongoose.Schema({
+    target_type: {
+        type: String,
+        enum: ['attendance_rate', 'working_hours', 'timesheet_compliance', 'leave_utilization', 'recruitment', 'onboarding_completion'],
+        required: true
+    },
+    target_name: { type: String, required: true },
+    target_value: { type: Number, required: true },
+    target_unit: { type: String, default: '%' }, // %, hours, count, days
+    period: { type: String, enum: ['monthly', 'quarterly', 'yearly'], default: 'monthly' },
+    department_id: String, // optional - for department-specific targets
+    status: { type: String, enum: ['active', 'inactive'], default: 'active' },
+    description: String,
+    created_by: String,
+    created_at: { type: Date, default: Date.now },
+    updated_at: { type: Date, default: Date.now }
+});
+
 const salesKPISettingsSchema = new mongoose.Schema({
     user_id: String,
     target_calls_per_day: Number,
@@ -587,6 +605,7 @@ export const UserInvitation = mongoose.model('UserInvitation', userInvitationSch
 export const SalesActivity = mongoose.model('SalesActivity', salesActivitySchema);
 export const SalesTarget = mongoose.model('SalesTarget', salesTargetSchema);
 export const SalesKPISettings = mongoose.model('SalesKPISettings', salesKPISettingsSchema);
+export const HRTarget = mongoose.model('HRTarget', hrTargetSchema);
 export const DailySalesPerformance = mongoose.model('DailySalesPerformance', dailySalesPerformanceSchema);
 
 const facebookPageConnectionSchema = new mongoose.Schema({

@@ -46,6 +46,7 @@ import Attendance from './Attendance';
 import LeaveManagement from './LeaveManagement';
 import Salary from './Salary';
 import PettyCashReimbursement from './PettyCashReimbursement';
+import HRTargetsManagement from '@/components/hr/HRTargetsManagement';
 
 export default function HRDashboard() {
   const [user, setUser] = useState(null);
@@ -207,10 +208,14 @@ export default function HRDashboard() {
 
       <Tabs defaultValue="overview" className="space-y-6">
         <div className="sticky top-0 z-30 bg-white/95 backdrop-blur-sm pb-4 pt-2">
-          <TabsList className="grid grid-cols-6 h-auto p-1 bg-slate-100 rounded-xl">
+          <TabsList className="grid grid-cols-7 h-auto p-1 bg-slate-100 rounded-xl">
             <TabsTrigger value="overview" className="data-[state=active]:bg-white data-[state=active]:text-indigo-600 data-[state=active]:shadow-sm py-3 rounded-lg flex flex-col items-center gap-1.5 transition-all">
               <LayoutDashboard className="w-5 h-5" />
               <span className="text-xs font-semibold">Overview</span>
+            </TabsTrigger>
+            <TabsTrigger value="targets" className="data-[state=active]:bg-white data-[state=active]:text-indigo-600 data-[state=active]:shadow-sm py-3 rounded-lg flex flex-col items-center gap-1.5 transition-all">
+              <BarChart3 className="w-5 h-5" />
+              <span className="text-xs font-semibold">Targets</span>
             </TabsTrigger>
             <TabsTrigger value="recruitment" className="data-[state=active]:bg-white data-[state=active]:text-indigo-600 data-[state=active]:shadow-sm py-3 rounded-lg flex flex-col items-center gap-1.5 transition-all">
               <UserPlus className="w-5 h-5" />
@@ -537,6 +542,11 @@ export default function HRDashboard() {
               </div>
             </TabsContent>
           </Tabs>
+        </TabsContent>
+
+        {/* Targets Tab */}
+        <TabsContent value="targets" className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
+          <HRTargetsManagement user={user} />
         </TabsContent>
 
         {/* Recruitment Tab */}
