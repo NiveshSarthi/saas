@@ -91,6 +91,14 @@ export const calculateMonthlySalary = async (req, res) => {
             };
 
             // Attendance Processing
+            let attendanceAdjustments = 0;
+            let consecutiveLateCheckIn = 0;
+            let consecutiveEarlyCheckout = 0;
+            const expectedCheckIn = 10; // 10:00 AM
+            const expectedCheckOutStart = 17; // 5:00 PM
+            const expectedCheckOutEnd = 18; // 6:00 PM
+            const dailySalary = policy ? ((policy.basic_salary || 0) + (policy.hra || 0) + (policy.travelling_allowance || 0) + (policy.children_education_allowance || 0) + (policy.fixed_incentive || 0) + (policy.employer_incentive || 0)) / totalCalendarDays : 0;
+
             userAttendance.forEach(att => {
                 if (['present', 'checked_out', 'work_from_home'].includes(att.status)) {
                     emp.present_days++;
@@ -110,6 +118,88 @@ export const calculateMonthlySalary = async (req, res) => {
 
                 if (att.is_late) emp.late_count++;
                 if (att.is_early_checkout) emp.early_checkout_count++;
+
+                // Attendance-based adjustments
+                if (['present', 'checked_out', 'work_from_home'].includes(att.status)) {
+                    const checkInTime = att.check_in ? new Date(att.check_in) : null;
+                    const checkOutTime = att.check_out ? new Date(att.check_out) : null;
+                    let dailyAdjustment = 0;
+
+                    // Check-in rules
+                    if (checkInTime) {
+                        const checkInHour = checkInTime.getHours();
+                        const checkInMinute = checkInTime.getMinutes();
+                        const checkInTotalMinutes = checkInHour * 60 + checkInMinute;
+                        const expectedCheckInMinutes = expectedCheckIn * 60;
+
+                        if (checkInTotalMinutes > expectedCheckInMinutes) {
+                            // Check-in after 10 AM
+                            if (checkInHour >= 10 && checkInHour < 11) {
+                                // 10:01 - 11:00
+                                consecutiveLateCheckIn++;
+                                if (consecutiveLateCheckIn >= 3) {
+                                    dailyAdjustment -= dailySalary * 0.25;
+                                } else {
+                                    dailyAdjustment -= dailySalary * 0.25;
+                                }
+                            } else if (checkInHour >= 11 && checkInHour < 12) {
+                                // 11:00 - 12:00
+                                dailyAdjustment -= dailySalary * 0.5;
+                                consecutiveLateCheckIn = 0; // Reset streak
+                            } else if (checkInHour >= 12 && checkInHour < 14) {
+                                // 12:00 - 2:00
+                                dailyAdjustment -= dailySalary * 0.5;
+                                consecutiveLateCheckIn = 0;
+                            } else if (checkInHour >= 14 && checkInHour < 16) {
+                                // 2:00 - 4:00
+                                dailyAdjustment += dailySalary * 0.25;
+                                consecutiveLateCheckIn = 0;
+                            } else if (checkInHour >= 16 && checkInHour < 18) {
+                                // 4:00 - 6:00
+                                dailyAdjustment -= dailySalary;
+                                consecutiveLateCheckIn = 0;
+                            }
+                        } else {
+                            // Timely check-in
+                            consecutiveLateCheckIn = 0;
+                        }
+
+                        // Check-out rules (only if check-in was timely)
+                        if (checkInTotalMinutes <= expectedCheckInMinutes && checkOutTime) {
+                            const checkOutHour = checkOutTime.getHours();
+                            const checkOutMinute = checkOutTime.getMinutes();
+                            const checkOutTotalMinutes = checkOutHour * 60 + checkOutMinute;
+
+                            if (checkOutTotalMinutes < 14 * 60) {
+                                // Before 2:00 PM
+                                dailyAdjustment -= dailySalary;
+                                consecutiveEarlyCheckout = 0;
+                            } else if (checkOutTotalMinutes >= 14 * 60 && checkOutTotalMinutes < expectedCheckOutStart * 60) {
+                                // 2:00 - 5:00 PM
+                                dailyAdjustment -= dailySalary * 0.5;
+                                consecutiveEarlyCheckout = 0;
+                            } else if (checkOutTotalMinutes >= expectedCheckOutStart * 60 && checkOutTotalMinutes < expectedCheckOutEnd * 60) {
+                                // 5:00 - 6:00 PM
+                                consecutiveEarlyCheckout++;
+                                if (consecutiveEarlyCheckout >= 3) {
+                                    dailyAdjustment -= dailySalary * 0.25;
+                                } else {
+                                    dailyAdjustment -= dailySalary * 0.25;
+                                }
+                            } else {
+                                // On time or after 6 PM
+                                consecutiveEarlyCheckout = 0;
+                            }
+                        }
+                    } else {
+                        // Not present, reset streaks
+                        consecutiveLateCheckIn = 0;
+                        consecutiveEarlyCheckout = 0;
+                    }
+
+                    attendanceAdjustments += dailyAdjustment;
+                }
+
                 // Note: Overtime parsing from notes omitted for brevity, but can be added
             });
 
@@ -220,7 +310,7 @@ export const calculateMonthlySalary = async (req, res) => {
             }
 
             // Final Totals
-            emp.gross_salary = emp.base_earned_salary;
+            emp.gross_salary = emp.base_earned_salary + attendanceAdjustments;
 
             // Total Deductions = Statutory + Penalties + Other Deductions + Advance Recovery
             // NOT Absent Deduction (already handled by Prorata Gross)
@@ -231,6 +321,7 @@ export const calculateMonthlySalary = async (req, res) => {
 
             emp.cash_in_hand = emp.net_salary; // Usually same as Net for bank transfer
 
+            emp.attendance_adjustments = attendanceAdjustments;
             emp.ctc_monthly = emp.gross_salary + emp.total_employer_contribution;
 
             employeeSalaries[userEmail] = emp;
