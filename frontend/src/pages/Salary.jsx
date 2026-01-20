@@ -342,7 +342,122 @@ export default function SalaryPage() {
     const [year, month] = selectedMonth.split('-');
     const totalDays = new Date(parseInt(year), parseInt(month), 0).getDate();
 
-    // Count attendance types from actual records
+    // Sort attendance by date
+    const sortedAttendance = empAttendance.sort((a, b) => a.date.localeCompare(b.date));
+
+    // Calculate attendance-based adjustments
+    let attendanceAdjustments = 0;
+    const dailyDetails = [];
+    let consecutiveLateCheckIn = 0;
+    let consecutiveEarlyCheckout = 0;
+
+    const expectedCheckIn = 10; // 10:00 AM
+    const expectedCheckOutStart = 17; // 5:00 PM
+    const expectedCheckOutEnd = 18; // 6:00 PM
+
+    const dailySalary = policy ? ((policy.basic_salary || 0) + (policy.hra || 0) + (policy.travelling_allowance || 0) + (policy.children_education_allowance || 0) + (policy.fixed_incentive || 0) + (policy.employer_incentive || 0)) / totalDays : 0;
+
+    sortedAttendance.forEach(att => {
+      const checkInTime = att.check_in ? new Date(att.check_in) : null;
+      const checkOutTime = att.check_out ? new Date(att.check_out) : null;
+      let dailyAdjustment = 0;
+      let adjustmentReason = '';
+
+      // Check-in rules (only if present or checked_out)
+      if (['present', 'checked_out', 'work_from_home'].includes(att.status) && checkInTime) {
+        const checkInHour = checkInTime.getHours();
+        const checkInMinute = checkInTime.getMinutes();
+        const checkInTotalMinutes = checkInHour * 60 + checkInMinute;
+        const expectedCheckInMinutes = expectedCheckIn * 60;
+
+        if (checkInTotalMinutes > expectedCheckInMinutes) {
+          // Check-in after 10 AM
+          if (checkInHour >= 10 && checkInHour < 11) {
+            // 10:01 - 11:00
+            consecutiveLateCheckIn++;
+            if (consecutiveLateCheckIn >= 3) {
+              dailyAdjustment -= dailySalary * 0.25;
+              adjustmentReason = 'Late check-in (consecutive)';
+            } else {
+              dailyAdjustment -= dailySalary * 0.25;
+              adjustmentReason = 'Late check-in';
+            }
+          } else if (checkInHour >= 11 && checkInHour < 12) {
+            // 11:00 - 12:00
+            dailyAdjustment -= dailySalary * 0.5;
+            adjustmentReason = 'Very late check-in';
+            consecutiveLateCheckIn = 0; // Reset streak
+          } else if (checkInHour >= 12 && checkInHour < 14) {
+            // 12:00 - 2:00
+            dailyAdjustment -= dailySalary * 0.5;
+            adjustmentReason = 'Extremely late check-in';
+            consecutiveLateCheckIn = 0;
+          } else if (checkInHour >= 14 && checkInHour < 16) {
+            // 2:00 - 4:00
+            dailyAdjustment += dailySalary * 0.25;
+            adjustmentReason = 'Bonus for late check-in';
+            consecutiveLateCheckIn = 0;
+          } else if (checkInHour >= 16 && checkInHour < 18) {
+            // 4:00 - 6:00
+            dailyAdjustment -= dailySalary;
+            adjustmentReason = 'Full deduction for very late check-in';
+            consecutiveLateCheckIn = 0;
+          }
+        } else {
+          // Timely check-in
+          consecutiveLateCheckIn = 0;
+        }
+
+        // Check-out rules (only if check-in was timely)
+        if (checkInTotalMinutes <= expectedCheckInMinutes && checkOutTime) {
+          const checkOutHour = checkOutTime.getHours();
+          const checkOutMinute = checkOutTime.getMinutes();
+          const checkOutTotalMinutes = checkOutHour * 60 + checkOutMinute;
+
+          if (checkOutTotalMinutes < 14 * 60) {
+            // Before 2:00 PM
+            dailyAdjustment -= dailySalary;
+            adjustmentReason += (adjustmentReason ? '; ' : '') + 'Early checkout (full deduction)';
+            consecutiveEarlyCheckout = 0;
+          } else if (checkOutTotalMinutes >= 14 * 60 && checkOutTotalMinutes < expectedCheckOutStart * 60) {
+            // 2:00 - 5:00 PM
+            dailyAdjustment -= dailySalary * 0.5;
+            adjustmentReason += (adjustmentReason ? '; ' : '') + 'Early checkout';
+            consecutiveEarlyCheckout = 0;
+          } else if (checkOutTotalMinutes >= expectedCheckOutStart * 60 && checkOutTotalMinutes < expectedCheckOutEnd * 60) {
+            // 5:00 - 6:00 PM
+            consecutiveEarlyCheckout++;
+            if (consecutiveEarlyCheckout >= 3) {
+              dailyAdjustment -= dailySalary * 0.25;
+              adjustmentReason += (adjustmentReason ? '; ' : '') + 'Early checkout (consecutive)';
+            } else {
+              dailyAdjustment -= dailySalary * 0.25;
+              adjustmentReason += (adjustmentReason ? '; ' : '') + 'Early checkout';
+            }
+          } else {
+            // On time or after 6 PM
+            consecutiveEarlyCheckout = 0;
+          }
+        }
+      } else {
+        // Not present, reset streaks
+        consecutiveLateCheckIn = 0;
+        consecutiveEarlyCheckout = 0;
+      }
+
+      attendanceAdjustments += dailyAdjustment;
+
+      dailyDetails.push({
+        date: att.date,
+        checkIn: checkInTime ? checkInTime.toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' }) : null,
+        checkOut: checkOutTime ? checkOutTime.toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' }) : null,
+        status: att.status,
+        adjustment: dailyAdjustment,
+        reason: adjustmentReason
+      });
+    });
+
+    // Count attendance types from actual records (excluding attendance-based overrides)
     const present = empAttendance.filter(a => ['present', 'checked_out', 'work_from_home'].includes(a.status)).length;
     const absent = empAttendance.filter(a => a.status === 'absent').length;
     const halfDay = empAttendance.filter(a => a.status === 'half_day').length;
@@ -369,7 +484,7 @@ export default function SalaryPage() {
         baseSalary: 0, adjustments: 0, gross: 0, totalDeductions: 0, net: 0,
         earnedBasic: 0, earnedHra: 0, earnedTa: 0, earnedCea: 0, earnedFi: 0, empIncentive: 0,
         empPF: 0, empESI: 0, lwf: 0, latePenalty: 0, absentDeduction: 0,
-        attendancePercentage: 0, hasPolicy: false
+        attendancePercentage: 0, hasPolicy: false, attendanceAdjustments: 0, dailyDetails: []
       };
     }
 
@@ -425,7 +540,7 @@ export default function SalaryPage() {
       }
     }, 0);
 
-    const gross = baseSalary + adjustments;
+    const gross = baseSalary + adjustments + attendanceAdjustments;
 
     // CTC 2: Including adjustments
     const monthlyCTC2 = monthlyCTC1 + adjustments;
@@ -458,7 +573,8 @@ export default function SalaryPage() {
       baseSalary, earnedBasic, earnedHra, earnedTa, earnedCea, earnedFi, empIncentive,
       adjustments, gross, empPF, empESI, lwf, latePenalty, absentDeduction,
       totalDeductions, net, attendancePercentage, policy, hasPolicy: true,
-      employeeAdjustments, monthlyCTC1, yearlyCTC1, monthlyCTC2, yearlyCTC2
+      employeeAdjustments, monthlyCTC1, yearlyCTC1, monthlyCTC2, yearlyCTC2,
+      attendanceAdjustments, dailyDetails
     };
   }, [allPolicies, salaries, attendanceRecords, selectedMonth, allAdjustments]);
 
@@ -1089,6 +1205,12 @@ export default function SalaryPage() {
                                         <span className="font-bold text-rose-400">-₹{calc.absentDeduction.toLocaleString()}</span>
                                       </div>
                                     )}
+                                    {calc.attendanceAdjustments < 0 && (
+                                      <div className="flex justify-between items-center bg-slate-800 p-3 rounded-lg border border-rose-900/20">
+                                        <span className="text-slate-400 text-sm">Attendance</span>
+                                        <span className="font-bold text-rose-400">-₹{Math.abs(calc.attendanceAdjustments).toLocaleString()}</span>
+                                      </div>
+                                    )}
                                     {salary?.advance_recovery > 0 && (
                                       <div className="flex justify-between items-center bg-slate-800 p-3 rounded-lg border border-rose-900/20">
                                         <span className="text-slate-400 text-sm">Adv. Recov</span>
@@ -1102,6 +1224,15 @@ export default function SalaryPage() {
                                       </div>
                                     )}
                                   </div>
+                                </div>
+
+                                {/* Daily Attendance Details */}
+                                <div className="mt-6">
+                                  <h4 className="font-bold text-slate-300 mb-4 flex items-center gap-2 text-sm uppercase tracking-wide">
+                                    <Clock className="w-4 h-4 text-indigo-400" />
+                                    Daily Attendance Details
+                                  </h4>
+                                  <DailyAttendanceDetails dailyDetails={calc.dailyDetails} />
                                 </div>
                               </div>
                             )}
@@ -1422,6 +1553,68 @@ export default function SalaryPage() {
         allUsers={allUsers}
         onAdvanceCreated={() => recalculateMutation.mutate()}
       />
+    </div>
+  );
+}
+
+// Daily Attendance Details Component
+function DailyAttendanceDetails({ dailyDetails }) {
+  if (!dailyDetails || dailyDetails.length === 0) {
+    return (
+      <div className="text-center py-8">
+        <Clock className="w-12 h-12 text-slate-600 mx-auto mb-4" />
+        <p className="text-slate-500 font-medium">No attendance details available</p>
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-4">
+      <div className="grid grid-cols-1 gap-3">
+        {dailyDetails.map((detail, index) => (
+          <Card key={index} className="bg-slate-800/50 border border-slate-700/50 shadow-sm">
+            <CardContent className="p-4">
+              <div className="flex justify-between items-start">
+                <div className="flex-1">
+                  <div className="flex items-center gap-3 mb-2">
+                    <p className="text-sm font-bold text-slate-300">{detail.date}</p>
+                    <Badge className={
+                      detail.status === 'present' ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30' :
+                      detail.status === 'checked_out' ? 'bg-blue-500/20 text-blue-400 border border-blue-500/30' :
+                      detail.status === 'absent' ? 'bg-rose-500/20 text-rose-400 border border-rose-500/30' :
+                      detail.status === 'work_from_home' ? 'bg-purple-500/20 text-purple-400 border border-purple-500/30' :
+                      'bg-slate-700/50 text-slate-400 border border-slate-600'
+                    }>
+                      {detail.status?.replace('_', ' ').toUpperCase()}
+                    </Badge>
+                  </div>
+                  <div className="grid grid-cols-2 gap-4 text-sm">
+                    <div>
+                      <p className="text-slate-500 font-medium">Check-in</p>
+                      <p className="text-slate-300">{detail.checkIn || 'N/A'}</p>
+                    </div>
+                    <div>
+                      <p className="text-slate-500 font-medium">Check-out</p>
+                      <p className="text-slate-300">{detail.checkOut || 'N/A'}</p>
+                    </div>
+                  </div>
+                  {detail.reason && (
+                    <p className="text-xs text-slate-500 mt-2">{detail.reason}</p>
+                  )}
+                </div>
+                <div className="text-right">
+                  <p className={`text-sm font-bold ${detail.adjustment > 0 ? 'text-emerald-400' : detail.adjustment < 0 ? 'text-rose-400' : 'text-slate-500'}`}>
+                    {detail.adjustment > 0 ? '+' : ''}₹{Math.abs(detail.adjustment).toLocaleString()}
+                  </p>
+                  <p className="text-xs text-slate-500 uppercase">
+                    {detail.adjustment > 0 ? 'Bonus' : detail.adjustment < 0 ? 'Deduction' : 'No Change'}
+                  </p>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+        ))}
+      </div>
     </div>
   );
 }
