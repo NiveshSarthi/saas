@@ -1,8 +1,8 @@
 // @ts-nocheck
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import { base44 } from '@/api/base44Client';
 import { sendAssignmentNotification, MODULES } from '@/components/utils/notificationService';
-import { useMutation, useQueryClient } from '@tanstack/react-query';
+import { useMutation, useQueryClient, useQuery } from '@tanstack/react-query';
 import {
   Dialog,
   DialogContent,
@@ -32,6 +32,22 @@ export default function AssignLeadDialog({ open, onOpenChange, lead, users, curr
   const queryClient = useQueryClient();
 
   const isAdmin = currentUser?.role === 'admin';
+
+  // Fetch departments to find sales department
+  const { data: departments = [] } = useQuery({
+    queryKey: ['departments'],
+    queryFn: () => base44.entities.Department.list(),
+    enabled: open && isAdmin,
+  });
+
+  // Filter users to only sales department members for assignment
+  const salesDepartment = departments.find(d => d.name?.toLowerCase().includes('sales'));
+  const assignableUsers = useMemo(() => {
+    if (!isAdmin) return users.filter(u => u.email === currentUser?.email);
+    if (!salesDepartment) return users; // Fallback if no sales department found
+
+    return users.filter(u => u.department_id === salesDepartment.id || u.email === currentUser?.email);
+  }, [users, departments, salesDepartment, currentUser?.email, isAdmin]);
 
   const assignMutation = useMutation({
     mutationFn: async () => {
@@ -95,7 +111,7 @@ export default function AssignLeadDialog({ open, onOpenChange, lead, users, curr
                   <SelectItem value={currentUser?.email}>
                     Myself ({currentUser?.email})
                   </SelectItem>
-                  {users
+                  {assignableUsers
                     .filter(u => u.email !== currentUser?.email)
                     .map(user => (
                       <SelectItem key={user.email} value={user.email}>

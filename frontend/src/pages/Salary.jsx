@@ -327,6 +327,22 @@ export default function SalaryPage() {
     onSuccess: () => toast.success('CSV exported successfully')
   });
 
+  const applyRetroactiveIncentivesMutation = useMutation({
+    mutationFn: async () => {
+      const result = await base44.functions.invoke('applyRetroactiveIncentives');
+      return result.data;
+    },
+    onSuccess: (data) => {
+      toast.success(`Applied ${data.bonusesCreated} retroactive incentive bonuses`);
+      // Refresh salary data and adjustments
+      queryClient.invalidateQueries(['salary-records', selectedMonth]);
+      queryClient.invalidateQueries(['salary-adjustments-all', selectedMonth]);
+    },
+    onError: (error) => {
+      toast.error('Failed to apply retroactive incentives: ' + error.message);
+    }
+  });
+
   // Helper to get user name from email
   const getUserName = React.useCallback((email) => {
     const user = allUsers.find(u => u.email === email);
@@ -1232,7 +1248,11 @@ export default function SalaryPage() {
                                     <Clock className="w-4 h-4 text-indigo-400" />
                                     Daily Attendance Details
                                   </h4>
-                                  <DailyAttendanceDetails dailyDetails={calc.dailyDetails} />
+                                  <DailyAttendanceDetails
+                                    dailyDetails={calc.dailyDetails}
+                                    employeeAdjustments={calc.employeeAdjustments}
+                                    salaryRecord={salary}
+                                  />
                                 </div>
                               </div>
                             )}
@@ -1558,12 +1578,37 @@ export default function SalaryPage() {
 }
 
 // Daily Attendance Details Component
-function DailyAttendanceDetails({ dailyDetails }) {
-  if (!dailyDetails || dailyDetails.length === 0) {
+function DailyAttendanceDetails({ dailyDetails, employeeAdjustments = [], salaryRecord = null }) {
+  // Filter out days with no changes (adjustment === 0)
+  const filteredDailyDetails = dailyDetails.filter(detail => detail.adjustment !== 0);
+
+  // Create adjustment details from SalaryAdjustment entity
+  const adjustmentDetails = employeeAdjustments.map((adj, index) => ({
+    id: `adj-${index}`,
+    date: 'Monthly Adjustment',
+    status: adj.adjustment_type,
+    checkIn: null,
+    checkOut: null,
+    adjustment: adj.adjustment_type === 'penalty' || adj.adjustment_type === 'deduction' ? -Math.abs(adj.amount) : adj.amount,
+    reason: adj.description || `${adj.adjustment_type} adjustment`,
+    isAdjustment: true
+  }));
+
+  // Combine and sort by date (adjustments at end if no specific date)
+  const allDetails = [
+    ...filteredDailyDetails,
+    ...adjustmentDetails
+  ].sort((a, b) => {
+    if (a.date === 'Monthly Adjustment' && b.date !== 'Monthly Adjustment') return 1;
+    if (b.date === 'Monthly Adjustment' && a.date !== 'Monthly Adjustment') return -1;
+    return a.date.localeCompare(b.date);
+  });
+
+  if (!allDetails || allDetails.length === 0) {
     return (
       <div className="text-center py-8">
         <Clock className="w-12 h-12 text-slate-600 mx-auto mb-4" />
-        <p className="text-slate-500 font-medium">No attendance details available</p>
+        <p className="text-slate-500 font-medium">No attendance adjustments or salary changes</p>
       </div>
     );
   }
@@ -1571,33 +1616,48 @@ function DailyAttendanceDetails({ dailyDetails }) {
   return (
     <div className="space-y-4">
       <div className="grid grid-cols-1 gap-3">
-        {dailyDetails.map((detail, index) => (
-          <Card key={index} className="bg-slate-800/50 border border-slate-700/50 shadow-sm">
+        {allDetails.map((detail, index) => (
+          <Card key={detail.id || index} className="bg-slate-800/50 border border-slate-700/50 shadow-sm">
             <CardContent className="p-4">
               <div className="flex justify-between items-start">
                 <div className="flex-1">
                   <div className="flex items-center gap-3 mb-2">
                     <p className="text-sm font-bold text-slate-300">{detail.date}</p>
-                    <Badge className={
-                      detail.status === 'present' ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30' :
-                      detail.status === 'checked_out' ? 'bg-blue-500/20 text-blue-400 border border-blue-500/30' :
-                      detail.status === 'absent' ? 'bg-rose-500/20 text-rose-400 border border-rose-500/30' :
-                      detail.status === 'work_from_home' ? 'bg-purple-500/20 text-purple-400 border border-purple-500/30' :
-                      'bg-slate-700/50 text-slate-400 border border-slate-600'
-                    }>
-                      {detail.status?.replace('_', ' ').toUpperCase()}
-                    </Badge>
+                    {!detail.isAdjustment ? (
+                      <Badge className={
+                        detail.status === 'present' ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30' :
+                        detail.status === 'checked_out' ? 'bg-blue-500/20 text-blue-400 border border-blue-500/30' :
+                        detail.status === 'absent' ? 'bg-rose-500/20 text-rose-400 border border-rose-500/30' :
+                        detail.status === 'work_from_home' ? 'bg-purple-500/20 text-purple-400 border border-purple-500/30' :
+                        'bg-slate-700/50 text-slate-400 border border-slate-600'
+                      }>
+                        {detail.status?.replace('_', ' ').toUpperCase()}
+                      </Badge>
+                    ) : (
+                      <Badge className="bg-amber-500/20 text-amber-400 border border-amber-500/30">
+                        {detail.status?.toUpperCase()}
+                      </Badge>
+                    )}
                   </div>
-                  <div className="grid grid-cols-2 gap-4 text-sm">
-                    <div>
-                      <p className="text-slate-500 font-medium">Check-in</p>
-                      <p className="text-slate-300">{detail.checkIn || 'N/A'}</p>
+
+                  {!detail.isAdjustment ? (
+                    <div className="grid grid-cols-2 gap-4 text-sm">
+                      <div>
+                        <p className="text-slate-500 font-medium">Check-in</p>
+                        <p className="text-slate-300">{detail.checkIn || 'N/A'}</p>
+                      </div>
+                      <div>
+                        <p className="text-slate-500 font-medium">Check-out</p>
+                        <p className="text-slate-300">{detail.checkOut || 'N/A'}</p>
+                      </div>
                     </div>
-                    <div>
-                      <p className="text-slate-500 font-medium">Check-out</p>
-                      <p className="text-slate-300">{detail.checkOut || 'N/A'}</p>
+                  ) : (
+                    <div className="text-sm">
+                      <p className="text-slate-500 font-medium">Type</p>
+                      <p className="text-slate-300 capitalize">{detail.status?.replace('_', ' ')}</p>
                     </div>
-                  </div>
+                  )}
+
                   {detail.reason && (
                     <p className="text-xs text-slate-500 mt-2">{detail.reason}</p>
                   )}
@@ -1607,7 +1667,7 @@ function DailyAttendanceDetails({ dailyDetails }) {
                     {detail.adjustment > 0 ? '+' : ''}₹{Math.abs(detail.adjustment).toLocaleString()}
                   </p>
                   <p className="text-xs text-slate-500 uppercase">
-                    {detail.adjustment > 0 ? 'Bonus' : detail.adjustment < 0 ? 'Deduction' : 'No Change'}
+                    {detail.adjustment > 0 ? 'Addition' : 'Deduction'}
                   </p>
                 </div>
               </div>

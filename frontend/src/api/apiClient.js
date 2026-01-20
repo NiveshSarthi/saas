@@ -1,6 +1,6 @@
 import { appParams } from '@/lib/app-params';
 
-const API_BASE = import.meta.env.VITE_BACKEND_URL || 'http://localhost:3000';
+const API_BASE = import.meta.env.VITE_BACKEND_URL || 'http://localhost:3001';
 
 /**
  * @typedef {Object} EntityManager
@@ -17,6 +17,30 @@ class ApiClient {
         this.config = config;
         // Track entities that returned 404 so we avoid repeated network calls
         this._missingEntities = new Set();
+    }
+
+    _createEntityMethod(entityName) {
+        return async (data) => {
+            const res = await fetch(`${API_BASE}/rest/v1/${entityName}`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(data)
+            });
+            if (!res.ok) {
+                // If successful, remove from missing entities
+                if (res.status === 404) {
+                    this._missingEntities.add(entityName);
+                } else if (res.status !== 404) {
+                    // If it works, remove from missing entities
+                    this._missingEntities.delete(entityName);
+                }
+                throw new Error(`Entity Error: ${res.statusText}`);
+            }
+            // Success - remove from missing entities
+            this._missingEntities.delete(entityName);
+            const created = await res.json();
+            return { ...(created || {}), id: created?.id || created?._id };
+        };
     }
 
     // Auth Namespace
@@ -111,11 +135,12 @@ class ApiClient {
 
                 // If we already detected this entity is missing (404), return
                 // a lightweight stub that throws quickly to avoid further network calls.
+                // But allow create operations to attempt the call in case the entity was added later
                 if (this._missingEntities.has(entityName)) {
                     return {
                         filter: async () => { return []; },
                         list: async () => { return []; },
-                        create: async () => { throw new Error(`Entity Error: ${entityName} not available`); },
+                        create: this._createEntityMethod(entityName),
                         update: async () => { throw new Error(`Entity Error: ${entityName} not available`); },
                         get: async () => { return null; },
                         delete: async () => { throw new Error(`Entity Error: ${entityName} not available`); }
@@ -165,19 +190,7 @@ class ApiClient {
                         return data;
                     },
 
-                    create: async (data) => {
-                        const res = await fetch(`${API_BASE}/rest/v1/${entityName}`, {
-                            method: 'POST',
-                            headers: { 'Content-Type': 'application/json' },
-                            body: JSON.stringify(data)
-                        });
-                        if (!res.ok) {
-                            if (res.status === 404) this._missingEntities.add(entityName);
-                            throw new Error(`Entity Error: ${res.statusText}`);
-                        }
-                        const created = await res.json();
-                        return { ...(created || {}), id: created?.id || created?._id };
-                    },
+                    create: this._createEntityMethod(entityName),
 
                     update: async (id, data) => {
                         if (id === undefined || id === null) {
