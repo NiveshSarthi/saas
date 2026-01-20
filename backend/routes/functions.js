@@ -373,7 +373,81 @@ router.post('/invoke/testFacebookToken', async (req, res) => {
         }
     });
 });
-router.post('/invoke/refetchFacebookLeadDetails', mockSuccess);
+router.post('/invoke/refetchFacebookLeadDetails', async (req, res) => {
+    try {
+        const { leadId } = req.body;
+        const Lead = models.Lead;
+        const FacebookPageConnection = models.FacebookPageConnection;
+
+        if (!leadId) {
+            return res.status(400).json({ error: 'leadId is required' });
+        }
+
+        const lead = await Lead.findById(leadId);
+        if (!lead) {
+            return res.status(404).json({ error: 'Lead not found' });
+        }
+
+        if (!lead.fb_lead_id) {
+            return res.status(400).json({ error: 'Lead does not have Facebook lead ID' });
+        }
+
+        // Find page connection
+        let page = null;
+        if (lead.fb_page_id) {
+            page = await FacebookPageConnection.findOne({ page_id: lead.fb_page_id });
+        } else if (lead.fb_form_id) {
+            // Find page that has this form
+            page = await FacebookPageConnection.findOne({ 'lead_forms.form_id': lead.fb_form_id });
+        }
+
+        if (!page) {
+            return res.status(404).json({ error: 'Facebook page connection not found' });
+        }
+
+        // Fetch lead details from Facebook
+        const proof = getAppSecretProof(page.access_token);
+        const proofParam = proof ? `&appsecret_proof=${proof}` : '';
+        const leadRes = await fetch(`https://graph.facebook.com/${FB_API_VERSION}/${lead.fb_lead_id}?access_token=${page.access_token}${proofParam}`);
+        const leadData = await leadRes.json();
+
+        if (leadData.error) {
+            return res.status(400).json({ error: `Facebook API error: ${leadData.error.message}` });
+        }
+
+        // Parse field data
+        let fieldsFound = 0;
+        if (leadData.field_data && Array.isArray(leadData.field_data)) {
+            fieldsFound = leadData.field_data.length;
+
+            // Build form fields section
+            let formFieldsText = '--- Form Fields ---\n';
+            leadData.field_data.forEach(field => {
+                formFieldsText += `${field.name}: ${field.values.join(', ')}\n`;
+            });
+
+            // Append to existing notes
+            let updatedNotes = lead.notes || '';
+            if (updatedNotes.includes('--- Form Fields ---')) {
+                // Replace existing section
+                const beforeFields = updatedNotes.split('--- Form Fields ---')[0];
+                updatedNotes = beforeFields.trim() + '\n\n' + formFieldsText.trim();
+            } else {
+                // Add new section
+                updatedNotes = updatedNotes.trim() + '\n\n' + formFieldsText.trim();
+            }
+
+            // Update lead
+            lead.notes = updatedNotes;
+            lead.raw_facebook_data = leadData.field_data;
+            await lead.save();
+        }
+
+        res.json({ success: true, data: { fieldsFound } });
+    } catch (e) {
+        res.status(500).json({ error: e.message });
+    }
+});
 router.post('/invoke/notifyMarketingTasksDue', mockSuccess);
 router.post('/invoke/autoCategorizeTran', mockDataReturn({ category: 'uncategorized' }));
 router.post('/invoke/createGoogleMeet', mockDataReturn({ meetingLink: 'https://meet.google.com/mock-link' }));
@@ -405,6 +479,7 @@ router.post('/invoke/updateUserName', mockSuccess);
 router.post('/invoke/getDashboardUsers', async (req, res) => {
     try {
         const User = models.User;
+        // Return all users for lead assignment (including inactive users who might still be assignable)
         const users = await User.find({});
         res.json({
             data: {
@@ -414,6 +489,68 @@ router.post('/invoke/getDashboardUsers', async (req, res) => {
         });
     } catch (error) {
         console.error("Error in getDashboardUsers:", error);
+        res.status(500).json({ error: error.message });
+    }
+});
+
+// Apply incentive bonuses retroactively for already closed won leads
+router.post('/invoke/applyRetroactiveIncentives', async (req, res) => {
+    try {
+        const Lead = models.Lead;
+        const SalaryAdjustment = models.SalaryAdjustment;
+
+        // Find all closed won leads
+        const closedWonLeads = await Lead.find({ status: 'closed_won', final_amount: { $exists: true, $ne: null } });
+
+        let bonusesCreated = 0;
+        let skipped = 0;
+
+        for (const lead of closedWonLeads) {
+            const bonusRecipient = lead.assigned_to;
+            if (!bonusRecipient || !lead.final_amount) {
+                skipped++;
+                continue;
+            }
+
+            // Check if bonus already exists for this lead
+            const existingBonus = await SalaryAdjustment.findOne({
+                employee_email: bonusRecipient,
+                description: { $regex: `Lead closure bonus for.*${lead.id}` }
+            });
+
+            if (existingBonus) {
+                skipped++;
+                continue;
+            }
+
+            // Calculate bonus (assume closure date or current month)
+            const bonusAmount = parseFloat(lead.final_amount) * 0.0025;
+            const bonusMonth = lead.created_date ?
+                new Date(lead.created_date).toISOString().slice(0, 7) :
+                new Date().toISOString().slice(0, 7);
+
+            await SalaryAdjustment.create({
+                employee_email: bonusRecipient,
+                month: bonusMonth,
+                adjustment_type: 'incentive',
+                amount: bonusAmount,
+                status: 'approved',
+                description: `Deal closed with ${lead.lead_name || lead.name || 'Client'} - Lead closure incentive bonus (retroactive)`
+            });
+
+            bonusesCreated++;
+        }
+
+        res.json({
+            success: true,
+            data: {
+                bonusesCreated,
+                skipped,
+                message: `Created ${bonusesCreated} retroactive incentive bonuses, skipped ${skipped} leads`
+            }
+        });
+    } catch (error) {
+        console.error("Error applying retroactive incentives:", error);
         res.status(500).json({ error: error.message });
     }
 });

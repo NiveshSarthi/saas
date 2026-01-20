@@ -83,6 +83,26 @@ export default function StageChangeDialog({ open, onOpenChange, lead, targetStag
         await base44.entities.Lead.update(lead.id, data);
         console.log('✅ Lead updated successfully');
 
+        // Add incentive bonus when lead is closed won
+        if (targetStage.key === 'closed_won' && data.final_amount) {
+          const bonusRecipient = lead.assigned_to || currentUser?.email; // Use assigned user or current user
+          if (!bonusRecipient) return;
+
+          const bonusAmount = parseFloat(data.final_amount) * 0.0025; // 0.25%
+          const currentMonth = new Date().toISOString().slice(0, 7); // YYYY-MM
+
+          console.log(`💰 Adding incentive bonus of ${bonusAmount} for ${bonusRecipient}`);
+          await base44.entities.SalaryAdjustment.create({
+            employee_email: bonusRecipient,
+            month: currentMonth,
+            adjustment_type: 'incentive',
+            amount: bonusAmount,
+            status: 'approved',
+            description: `Deal closed with ${lead.lead_name || lead.name || 'Client'} - Lead closure incentive bonus`
+          });
+          console.log('✅ Incentive bonus added');
+        }
+
         // Check for duplicate log within last 5 seconds
         const recentActivities = await base44.entities.RELeadActivity.filter(
           { lead_id: lead.id },
