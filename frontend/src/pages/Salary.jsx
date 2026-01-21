@@ -327,6 +327,54 @@ export default function SalaryPage() {
     onSuccess: () => toast.success('CSV exported successfully')
   });
 
+  const exportPDFMutation = useMutation({
+    mutationFn: async () => {
+      const employeeData = filteredSalaries.map(s => {
+        const calc = calculateEmployeeSalary(s.employee_email);
+        return {
+          employee_name: s.employee_name,
+          employee_email: s.employee_email,
+          month: s.month,
+          baseSalary: calc.baseSalary,
+          adjustments: calc.adjustments,
+          gross: calc.gross,
+          totalDeductions: calc.totalDeductions,
+          net: calc.net,
+          attendanceRate: calc.attendancePercentage,
+          presentDays: calc.effectivePresent,
+          totalDays: calc.totalDays
+        };
+      });
+
+      const response = await base44.functions.invoke('exportSalaryPDF', {
+        month: selectedMonth,
+        employeeData
+      });
+      return response.data;
+    },
+    onSuccess: (data) => {
+      const byteCharacters = atob(data.pdf_base64);
+      const byteNumbers = new Array(byteCharacters.length);
+      for (let i = 0; i < byteCharacters.length; i++) {
+        byteNumbers[i] = byteCharacters.charCodeAt(i);
+      }
+      const byteArray = new Uint8Array(byteNumbers);
+      const blob = new Blob([byteArray], { type: 'application/pdf' });
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = data.filename;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      window.URL.revokeObjectURL(url);
+      toast.success('PDF exported successfully');
+    },
+    onError: (error) => {
+      toast.error('PDF export failed: ' + error.message);
+    }
+  });
+
   const applyRetroactiveIncentivesMutation = useMutation({
     mutationFn: async () => {
       const result = await base44.functions.invoke('applyRetroactiveIncentives');
@@ -655,12 +703,12 @@ export default function SalaryPage() {
   }
 
   return (
-    <div className="min-h-screen bg-[#0f172a] text-slate-200 font-sans selection:bg-purple-500/30">
+    <div className="min-h-screen bg-slate-50 text-slate-900 font-sans selection:bg-blue-500/30">
       {/* Background Ambience */}
       <div className="fixed inset-0 z-0 pointer-events-none">
-        <div className="absolute top-[-10%] left-[-10%] w-[40%] h-[40%] bg-purple-900/20 rounded-full blur-[120px]" />
-        <div className="absolute bottom-[-10%] right-[-10%] w-[40%] h-[40%] bg-indigo-900/20 rounded-full blur-[120px]" />
-        <div className="absolute top-[20%] right-[10%] w-[20%] h-[30%] bg-pink-900/10 rounded-full blur-[100px]" />
+        <div className="absolute top-[-10%] left-[-10%] w-[40%] h-[40%] bg-blue-100/30 rounded-full blur-[120px]" />
+        <div className="absolute bottom-[-10%] right-[-10%] w-[40%] h-[40%] bg-indigo-100/30 rounded-full blur-[120px]" />
+        <div className="absolute top-[20%] right-[10%] w-[20%] h-[30%] bg-emerald-100/20 rounded-full blur-[100px]" />
       </div>
 
       {/* Main Content */}
@@ -670,14 +718,14 @@ export default function SalaryPage() {
         <div className="flex flex-col lg:flex-row justify-between items-start lg:items-end gap-6 mb-10">
           <div className="space-y-2">
             <div className="flex items-center gap-3 mb-2">
-              <div className="p-3 bg-gradient-to-br from-indigo-500 to-purple-600 rounded-xl shadow-lg shadow-indigo-500/20">
+              <div className="p-3 bg-gradient-to-br from-blue-600 to-indigo-700 rounded-xl shadow-lg shadow-blue-500/20">
                 <DollarSign className="w-8 h-8 text-white" />
               </div>
-              <h1 className="text-4xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-white via-slate-200 to-slate-400">
+              <h1 className="text-4xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-slate-700 via-blue-600 to-indigo-700">
                 Payroll Hub
               </h1>
             </div>
-            <p className="text-slate-400 text-lg max-w-xl">
+            <p className="text-slate-600 text-lg max-w-xl">
               Manage salaries, track attendance, and process payments with real-time insights.
             </p>
           </div>
@@ -699,17 +747,17 @@ export default function SalaryPage() {
         {/* Stats Grid */}
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-12">
           {/* Gross Payroll */}
-          <div className="group relative overflow-hidden bg-slate-900/50 backdrop-blur-xl border border-slate-800 rounded-3xl p-6 hover:bg-slate-800/60 transition-all duration-300">
+          <div className="group relative overflow-hidden bg-white/80 backdrop-blur-xl border border-slate-200 rounded-3xl p-6 hover:bg-white/90 hover:shadow-lg transition-all duration-300">
             <div className="absolute top-0 right-0 p-4 opacity-5 group-hover:opacity-10 transition-opacity">
               <DollarSign className="w-24 h-24 text-indigo-500" />
             </div>
             <div className="relative">
-              <p className="text-slate-400 font-medium mb-1">Gross Payroll</p>
+              <p className="text-slate-500 font-medium mb-1">Gross Payroll</p>
               <div className="flex items-baseline gap-1 mb-3">
-                <span className="text-3xl font-bold text-white">₹{(totals.gross / 100000).toFixed(2)}</span>
+                <span className="text-3xl font-bold text-slate-900">₹{(totals.gross / 100000).toFixed(2)}</span>
                 <span className="text-sm font-medium text-slate-500">Lakhs</span>
               </div>
-              <div className="flex items-center gap-2 text-sm text-emerald-400">
+              <div className="flex items-center gap-2 text-sm text-emerald-600">
                 <TrendingUp className="w-4 h-4" />
                 <span>+2.5% from last month</span>
               </div>
@@ -717,17 +765,17 @@ export default function SalaryPage() {
           </div>
 
           {/* Net Payable */}
-          <div className="group relative overflow-hidden bg-slate-900/50 backdrop-blur-xl border border-slate-800 rounded-3xl p-6 hover:bg-slate-800/60 transition-all duration-300">
+          <div className="group relative overflow-hidden bg-white/80 backdrop-blur-xl border border-slate-200 rounded-3xl p-6 hover:bg-white/90 hover:shadow-lg transition-all duration-300">
             <div className="absolute top-0 right-0 p-4 opacity-5 group-hover:opacity-10 transition-opacity">
               <Wallet className="w-24 h-24 text-emerald-500" />
             </div>
             <div className="relative">
-              <p className="text-slate-400 font-medium mb-1">Net Payable</p>
+              <p className="text-slate-500 font-medium mb-1">Net Payable</p>
               <div className="flex items-baseline gap-1 mb-3">
-                <span className="text-3xl font-bold text-white">₹{(totals.net / 100000).toFixed(2)}</span>
+                <span className="text-3xl font-bold text-slate-900">₹{(totals.net / 100000).toFixed(2)}</span>
                 <span className="text-sm font-medium text-slate-500">Lakhs</span>
               </div>
-              <div className="w-full bg-slate-700/50 h-1.5 rounded-full overflow-hidden">
+              <div className="w-full bg-slate-100 h-1.5 rounded-full overflow-hidden">
                 <div className="bg-emerald-500 h-full rounded-full" style={{ width: '85%' }} />
               </div>
               <p className="text-xs text-slate-500 mt-2">85% Processed</p>
@@ -735,21 +783,21 @@ export default function SalaryPage() {
           </div>
 
           {/* Average Attendance */}
-          <div className="group relative overflow-hidden bg-slate-900/50 backdrop-blur-xl border border-slate-800 rounded-3xl p-6 hover:bg-slate-800/60 transition-all duration-300">
+          <div className="group relative overflow-hidden bg-white/80 backdrop-blur-xl border border-slate-200 rounded-3xl p-6 hover:bg-white/90 hover:shadow-lg transition-all duration-300">
             <div className="absolute top-0 right-0 p-4 opacity-5 group-hover:opacity-10 transition-opacity">
               <Users className="w-24 h-24 text-purple-500" />
             </div>
             <div className="relative">
-              <p className="text-slate-400 font-medium mb-1">Active Employees</p>
+              <p className="text-slate-500 font-medium mb-1">Active Employees</p>
               <div className="flex items-baseline gap-1 mb-3">
-                <span className="text-3xl font-bold text-white">{totals.employees}</span>
+                <span className="text-3xl font-bold text-slate-900">{totals.employees}</span>
                 <span className="text-sm font-medium text-slate-500">Members</span>
               </div>
               <div className="flex gap-2 mt-2">
-                <Badge variant="outline" className="border-emerald-500/20 text-emerald-400 bg-emerald-500/10">
+                <Badge variant="outline" className="border-emerald-200 text-emerald-600 bg-emerald-50">
                   {statusCounts.paid} Paid
                 </Badge>
-                <Badge variant="outline" className="border-amber-500/20 text-amber-400 bg-amber-500/10">
+                <Badge variant="outline" className="border-amber-200 text-amber-600 bg-amber-50">
                   {statusCounts.approved} Approved
                 </Badge>
               </div>
@@ -757,21 +805,21 @@ export default function SalaryPage() {
           </div>
 
           {/* Pending Actions */}
-          <div className="group relative overflow-hidden bg-slate-900/50 backdrop-blur-xl border border-slate-800 rounded-3xl p-6 hover:bg-slate-800/60 transition-all duration-300">
+          <div className="group relative overflow-hidden bg-white/80 backdrop-blur-xl border border-slate-200 rounded-3xl p-6 hover:bg-white/90 hover:shadow-lg transition-all duration-300">
             <div className="absolute top-0 right-0 p-4 opacity-5 group-hover:opacity-10 transition-opacity">
               <AlertCircle className="w-24 h-24 text-rose-500" />
             </div>
             <div className="relative">
-              <p className="text-slate-400 font-medium mb-1">Pending Actions</p>
+              <p className="text-slate-500 font-medium mb-1">Pending Actions</p>
               <div className="flex items-baseline gap-1 mb-3">
-                <span className="text-3xl font-bold text-white">{statusCounts.draft + statusCounts.locked}</span>
+                <span className="text-3xl font-bold text-slate-900">{statusCounts.draft + statusCounts.locked}</span>
                 <span className="text-sm font-medium text-slate-500">Tasks</span>
               </div>
               <div className="flex gap-2 mt-2">
-                <Badge variant="outline" className="border-rose-500/20 text-rose-400 bg-rose-500/10">
+                <Badge variant="outline" className="border-rose-200 text-rose-600 bg-rose-50">
                   {statusCounts.draft} Draft
                 </Badge>
-                <Badge variant="outline" className="border-blue-500/20 text-blue-400 bg-blue-500/10">
+                <Badge variant="outline" className="border-blue-200 text-blue-600 bg-blue-50">
                   {statusCounts.locked} Locked
                 </Badge>
               </div>
@@ -780,10 +828,10 @@ export default function SalaryPage() {
         </div>
 
         <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-8">
-          <TabsList className="bg-slate-900/50 backdrop-blur-lg border border-slate-800 p-1 rounded-2xl inline-flex">
+          <TabsList className="bg-white/50 backdrop-blur-lg border border-slate-200 p-1 rounded-2xl inline-flex">
             <TabsTrigger
               value="management"
-              className="px-8 py-3 rounded-xl text-slate-400 data-[state=active]:bg-indigo-600 data-[state=active]:text-white data-[state=active]:shadow-lg active:scale-95 transition-all duration-200"
+              className="px-8 py-3 rounded-xl text-slate-500 data-[state=active]:bg-indigo-600 data-[state=active]:text-white data-[state=active]:shadow-lg active:scale-95 transition-all duration-200"
             >
               <div className="flex items-center gap-2">
                 <Users className="w-4 h-4" />
@@ -792,7 +840,7 @@ export default function SalaryPage() {
             </TabsTrigger>
             <TabsTrigger
               value="policies"
-              className="px-8 py-3 rounded-xl text-slate-400 data-[state=active]:bg-purple-600 data-[state=active]:text-white data-[state=active]:shadow-lg active:scale-95 transition-all duration-200"
+              className="px-8 py-3 rounded-xl text-slate-500 data-[state=active]:bg-purple-600 data-[state=active]:text-white data-[state=active]:shadow-lg active:scale-95 transition-all duration-200"
             >
               <div className="flex items-center gap-2">
                 <Settings className="w-4 h-4" />
@@ -804,12 +852,12 @@ export default function SalaryPage() {
           {/* Payroll Management Tab */}
           <TabsContent value="management" className="space-y-6">
             {/* Enhanced Control Panel */}
-            <Card className="bg-slate-900/50 backdrop-blur-2xl border border-slate-800 shadow-2xl">
+            <Card className="bg-white/80 backdrop-blur-2xl border border-slate-200 shadow-xl">
               <CardContent className="p-6">
                 <div className="flex flex-wrap items-center gap-4">
                   {/* Month Selector */}
-                  <div className="flex items-center gap-3 bg-slate-800/50 rounded-xl p-2 border border-slate-700">
-                    <Calendar className="w-5 h-5 text-indigo-400" />
+                  <div className="flex items-center gap-3 bg-slate-50 rounded-xl p-2 border border-slate-200">
+                    <Calendar className="w-5 h-5 text-indigo-600" />
                     <Input
                       type="month"
                       value={selectedMonth}
@@ -817,7 +865,7 @@ export default function SalaryPage() {
                         setSelectedMonth(e.target.value);
                         setSelectedRecords([]);
                       }}
-                      className="w-48 bg-transparent border-none text-white font-semibold focus-visible:ring-0"
+                      className="w-48 bg-transparent border-none text-slate-900 font-semibold focus-visible:ring-0"
                     />
                   </div>
 
@@ -828,17 +876,17 @@ export default function SalaryPage() {
                       placeholder="Search by name or email..."
                       value={searchQuery}
                       onChange={(e) => setSearchQuery(e.target.value)}
-                      className="pl-12 bg-slate-800/50 border-slate-700 text-white placeholder:text-slate-500 font-medium h-12 rounded-xl focus-visible:ring-indigo-500"
+                      className="pl-12 bg-slate-50 border-slate-200 text-slate-900 placeholder:text-slate-400 font-medium h-12 rounded-xl focus-visible:ring-indigo-500"
                     />
                   </div>
 
                   {/* Status Filter */}
                   <Select value={statusFilter} onValueChange={setStatusFilter}>
-                    <SelectTrigger className="w-44 bg-slate-800/50 border-slate-700 text-white h-12 rounded-xl font-semibold">
+                    <SelectTrigger className="w-44 bg-slate-50 border-slate-200 text-slate-900 h-12 rounded-xl font-semibold">
                       <Filter className="w-4 h-4 mr-2" />
                       <SelectValue />
                     </SelectTrigger>
-                    <SelectContent className="bg-slate-900 border-slate-800 text-white">
+                    <SelectContent className="bg-white border-slate-200 text-slate-900">
                       <SelectItem value="all">All Status</SelectItem>
                       <SelectItem value="draft">Draft</SelectItem>
                       <SelectItem value="locked">Locked</SelectItem>
@@ -849,11 +897,11 @@ export default function SalaryPage() {
 
                   {/* View Mode */}
                   <Select value={viewMode} onValueChange={setViewMode}>
-                    <SelectTrigger className="w-36 bg-slate-800/50 border-slate-700 text-white h-12 rounded-xl font-semibold">
+                    <SelectTrigger className="w-36 bg-slate-50 border-slate-200 text-slate-900 h-12 rounded-xl font-semibold">
                       <Eye className="w-4 h-4 mr-2" />
                       <SelectValue />
                     </SelectTrigger>
-                    <SelectContent className="bg-slate-900 border-slate-800 text-white">
+                    <SelectContent className="bg-white border-slate-200 text-slate-900">
                       <SelectItem value="cards">Cards</SelectItem>
                       <SelectItem value="compact">Compact</SelectItem>
                     </SelectContent>
@@ -880,7 +928,7 @@ export default function SalaryPage() {
                           toast.error('Cleanup failed: ' + error.message);
                         }
                       }}
-                      className="gap-2 bg-slate-800/50 border-slate-700 text-slate-300 hover:bg-slate-800 h-12 rounded-xl font-semibold hover:text-orange-400 transition-colors"
+                      className="gap-2 bg-slate-50 border-slate-200 text-slate-600 hover:bg-slate-100 h-12 rounded-xl font-semibold hover:text-orange-600 transition-colors"
                     >
                       <Trash2 className="w-4 h-4" />
                       Cleanup
@@ -889,7 +937,7 @@ export default function SalaryPage() {
                       variant="outline"
                       onClick={() => recalculateMutation.mutate()}
                       disabled={recalculateMutation.isPending || isCalculating}
-                      className="gap-2 bg-slate-800/50 border-slate-700 text-slate-300 hover:bg-slate-800 h-12 rounded-xl font-semibold hover:text-indigo-400 transition-colors"
+                      className="gap-2 bg-slate-50 border-slate-200 text-slate-600 hover:bg-slate-100 h-12 rounded-xl font-semibold hover:text-indigo-600 transition-colors"
                     >
                       <RefreshCw className={`w-4 h-4 ${recalculateMutation.isPending ? 'animate-spin' : ''}`} />
                       Recalculate
@@ -897,7 +945,7 @@ export default function SalaryPage() {
                     <Button
                       variant="outline"
                       onClick={() => exportCSVMutation.mutate()}
-                      className="gap-2 bg-slate-800/50 border-slate-700 text-slate-300 hover:bg-slate-800 h-12 rounded-xl font-semibold hover:text-emerald-400 transition-colors"
+                      className="gap-2 bg-slate-50 border-slate-200 text-slate-600 hover:bg-slate-100 h-12 rounded-xl font-semibold hover:text-emerald-600 transition-colors"
                     >
                       <Download className="w-4 h-4" />
                       Export
@@ -907,14 +955,14 @@ export default function SalaryPage() {
 
                 {/* Bulk Actions */}
                 {selectedRecords.length > 0 && (
-                  <div className="mt-4 flex items-center justify-between bg-indigo-900/20 rounded-xl p-4 border border-indigo-500/30">
+                  <div className="mt-4 flex items-center justify-between bg-indigo-50 rounded-xl p-4 border border-indigo-100">
                     <div className="flex items-center gap-3">
                       <Checkbox
                         checked={selectedRecords.length === filteredSalaries.length}
                         onCheckedChange={handleSelectAll}
-                        className="border-indigo-400/50 data-[state=checked]:bg-indigo-500 data-[state=checked]:border-indigo-500"
+                        className="border-indigo-400 data-[state=checked]:bg-indigo-600 data-[state=checked]:border-indigo-600"
                       />
-                      <Badge className="bg-indigo-500 text-white text-base px-4 py-2 font-bold shadow-lg shadow-indigo-500/20">
+                      <Badge className="bg-indigo-600 text-white text-base px-4 py-2 font-bold shadow-lg shadow-indigo-500/20">
                         {selectedRecords.length} Selected
                       </Badge>
                     </div>
@@ -922,7 +970,7 @@ export default function SalaryPage() {
                       <Button
                         variant="outline"
                         onClick={() => setLockDialogOpen(true)}
-                        className="gap-2 border-slate-700 bg-slate-800 text-slate-300 hover:bg-slate-700 font-semibold"
+                        className="gap-2 border-slate-200 bg-white text-slate-700 hover:bg-slate-50 font-semibold"
                       >
                         <Lock className="w-4 h-4" />
                         Lock
@@ -954,10 +1002,10 @@ export default function SalaryPage() {
                 <p className="text-slate-400 font-medium">Loading payroll data...</p>
               </div>
             ) : filteredSalaries.length === 0 ? (
-              <Card className="bg-slate-900/50 backdrop-blur-2xl border border-slate-800 shadow-2xl">
+              <Card className="bg-white/80 backdrop-blur-2xl border border-slate-200 shadow-xl">
                 <CardContent className="p-16 text-center">
-                  <AlertCircle className="w-20 h-20 text-slate-700 mx-auto mb-6" />
-                  <h3 className="text-2xl font-bold text-slate-300 mb-2">No Records Found</h3>
+                  <AlertCircle className="w-20 h-20 text-slate-300 mx-auto mb-6" />
+                  <h3 className="text-2xl font-bold text-slate-700 mb-2">No Records Found</h3>
                   <p className="text-slate-500 font-medium">
                     {salaries.length === 0
                       ? 'Click "Recalculate" to generate salary records from attendance data'
@@ -973,13 +1021,13 @@ export default function SalaryPage() {
 
                   if (!calc.hasPolicy) {
                     return (
-                      <Card key={salary.id} className="bg-amber-900/20 backdrop-blur-xl border border-amber-500/20 shadow-xl">
+                      <Card key={salary.id} className="bg-amber-50 border border-amber-200 shadow-md">
                         <CardContent className="p-6">
                           <div className="flex items-center gap-4">
                             <AlertCircle className="w-8 h-8 text-amber-500" />
                             <div>
-                              <h3 className="font-bold text-lg text-slate-200">{salary.employee_name}</h3>
-                              <p className="text-amber-500 font-medium">No active salary policy found</p>
+                              <h3 className="font-bold text-lg text-slate-900">{salary.employee_name}</h3>
+                              <p className="text-amber-600 font-medium">No active salary policy found</p>
                             </div>
                           </div>
                         </CardContent>
@@ -988,9 +1036,9 @@ export default function SalaryPage() {
                   }
 
                   return (
-                    <Card key={salary.id} className="group bg-slate-900/70 backdrop-blur-2xl border border-slate-800 shadow-2xl hover:shadow-indigo-500/10 transition-all duration-300 overflow-hidden">
+                    <Card key={salary.id} className="group bg-white/80 backdrop-blur-2xl border border-slate-200 shadow-xl hover:shadow-indigo-500/10 transition-all duration-300 overflow-hidden">
                       {/* Hover Gradient Effect */}
-                      <div className="absolute top-0 right-0 w-80 h-80 bg-indigo-500/10 rounded-full blur-[100px] opacity-0 group-hover:opacity-100 transition-opacity duration-500" />
+                      <div className="absolute top-0 right-0 w-80 h-80 bg-indigo-50/50 rounded-full blur-[100px] opacity-0 group-hover:opacity-100 transition-opacity duration-500" />
 
                       <CardContent className="p-6 relative">
                         <div className="flex items-start gap-4">
@@ -1009,14 +1057,14 @@ export default function SalaryPage() {
                                   {salary.employee_name?.charAt(0) || 'U'}
                                 </div>
                                 <div>
-                                  <h3 className="text-2xl font-bold text-white mb-1 tracking-tight">{salary.employee_name}</h3>
-                                  <p className="text-sm text-slate-400 font-medium">{getUserName(salary.employee_email)}</p>
+                                  <h3 className="text-2xl font-bold text-slate-900 mb-1 tracking-tight">{salary.employee_name}</h3>
+                                  <p className="text-sm text-slate-500 font-medium">{getUserName(salary.employee_email)}</p>
                                 </div>
                                 <Badge className={
-                                  salary.status === 'paid' ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30' :
-                                    salary.status === 'approved' ? 'bg-blue-500/20 text-blue-400 border border-blue-500/30' :
-                                      salary.status === 'locked' ? 'bg-amber-500/20 text-amber-400 border border-amber-500/30' :
-                                        'bg-slate-700/50 text-slate-400 border border-slate-600'
+                                  salary.status === 'paid' ? 'bg-emerald-100 text-emerald-700 border border-emerald-200' :
+                                    salary.status === 'approved' ? 'bg-blue-100 text-blue-700 border border-blue-200' :
+                                      salary.status === 'locked' ? 'bg-amber-100 text-amber-700 border border-amber-200' :
+                                        'bg-slate-100 text-slate-600 border border-slate-200'
                                 }>
                                   {salary.locked && <Lock className="w-3 h-3 mr-1" />}
                                   {salary.status?.toUpperCase()}
@@ -1025,19 +1073,19 @@ export default function SalaryPage() {
 
                               <div className="text-right">
                                 <p className="text-xs font-bold text-slate-500 mb-1 uppercase tracking-wider">NET SALARY</p>
-                                <p className="text-5xl font-black text-transparent bg-clip-text bg-gradient-to-r from-emerald-400 to-teal-300">
+                                <p className="text-5xl font-black text-transparent bg-clip-text bg-gradient-to-r from-emerald-600 to-teal-500">
                                   ₹{calc.net.toLocaleString()}
                                 </p>
 
                                 <div className="mt-4 flex items-center justify-end gap-3 text-sm">
                                   <div className="text-right">
                                     <p className="text-[10px] font-bold text-slate-500 uppercase">Monthly CTC</p>
-                                    <p className="font-bold text-indigo-400">₹{calc.monthlyCTC1.toLocaleString()}</p>
+                                    <p className="font-bold text-indigo-600">₹{calc.monthlyCTC1.toLocaleString()}</p>
                                   </div>
-                                  <div className="w-px h-8 bg-slate-700 mx-1" />
+                                  <div className="w-px h-8 bg-slate-200 mx-1" />
                                   <div className="text-right">
                                     <p className="text-[10px] font-bold text-slate-500 uppercase">Yearly CTC</p>
-                                    <p className="font-bold text-purple-400">₹{calc.yearlyCTC1.toLocaleString()}</p>
+                                    <p className="font-bold text-purple-600">₹{calc.yearlyCTC1.toLocaleString()}</p>
                                   </div>
                                 </div>
                               </div>
@@ -1045,71 +1093,71 @@ export default function SalaryPage() {
 
                             {/* Attendance Metrics */}
                             <div className="grid grid-cols-2 md:grid-cols-6 gap-3 mb-8">
-                              <div className="bg-slate-800/50 rounded-2xl p-4 border border-slate-700/50">
-                                <p className="text-[10px] font-bold text-emerald-500 uppercase mb-1">Present</p>
-                                <p className="text-2xl font-bold text-white">{calc.effectivePresent}</p>
+                              <div className="bg-slate-50 rounded-2xl p-4 border border-slate-200">
+                                <p className="text-[10px] font-bold text-emerald-600 uppercase mb-1">Present</p>
+                                <p className="text-2xl font-bold text-slate-900">{calc.effectivePresent}</p>
                               </div>
-                              <div className="bg-slate-800/50 rounded-2xl p-4 border border-slate-700/50">
-                                <p className="text-[10px] font-bold text-rose-500 uppercase mb-1">Unpaid Absent</p>
-                                <p className="text-2xl font-bold text-white">{calc.unpaidAbsent}</p>
+                              <div className="bg-slate-50 rounded-2xl p-4 border border-slate-200">
+                                <p className="text-[10px] font-bold text-rose-600 uppercase mb-1">Unpaid Absent</p>
+                                <p className="text-2xl font-bold text-slate-900">{calc.unpaidAbsent}</p>
                               </div>
-                              <div className="bg-slate-800/50 rounded-2xl p-4 border border-slate-700/50">
-                                <p className="text-[10px] font-bold text-amber-500 uppercase mb-1">Week Off</p>
-                                <p className="text-2xl font-bold text-white">{calc.weekoff}</p>
+                              <div className="bg-slate-50 rounded-2xl p-4 border border-slate-200">
+                                <p className="text-[10px] font-bold text-amber-600 uppercase mb-1">Week Off</p>
+                                <p className="text-2xl font-bold text-slate-900">{calc.weekoff}</p>
                               </div>
-                              <div className="bg-slate-800/50 rounded-2xl p-4 border border-slate-700/50">
-                                <p className="text-[10px] font-bold text-purple-500 uppercase mb-1">Paid Leave</p>
-                                <p className="text-2xl font-bold text-white">{calc.paidLeave}</p>
+                              <div className="bg-slate-50 rounded-2xl p-4 border border-slate-200">
+                                <p className="text-[10px] font-bold text-purple-600 uppercase mb-1">Paid Leave</p>
+                                <p className="text-2xl font-bold text-slate-900">{calc.paidLeave}</p>
                               </div>
-                              <div className="bg-slate-800/50 rounded-2xl p-4 border border-slate-700/50">
-                                <p className="text-[10px] font-bold text-sky-500 uppercase mb-1">Half Day</p>
-                                <p className="text-2xl font-bold text-white">{calc.halfDay}</p>
+                              <div className="bg-slate-50 rounded-2xl p-4 border border-slate-200">
+                                <p className="text-[10px] font-bold text-sky-600 uppercase mb-1">Half Day</p>
+                                <p className="text-2xl font-bold text-slate-900">{calc.halfDay}</p>
                               </div>
-                              <div className="bg-slate-800/50 rounded-2xl p-4 border border-slate-700/50">
+                              <div className="bg-slate-50 rounded-2xl p-4 border border-slate-200">
                                 <p className="text-[10px] font-bold text-slate-500 uppercase mb-1">Not Marked</p>
-                                <p className="text-2xl font-bold text-white">{calc.notMarked}</p>
+                                <p className="text-2xl font-bold text-slate-900">{calc.notMarked}</p>
                               </div>
                             </div>
 
                             {/* Salary Breakdown */}
                             <div className="grid grid-cols-3 gap-4 mb-8">
-                              <div className="relative overflow-hidden bg-slate-800/80 rounded-2xl p-5 border border-slate-700/50 group/card hover:bg-slate-800 transition-colors">
+                              <div className="relative overflow-hidden bg-slate-50 rounded-2xl p-5 border border-slate-200 group/card hover:bg-white hover:shadow-md transition-all">
                                 <div className="flex items-center gap-2 mb-3">
-                                  <div className="p-2 bg-blue-500/20 rounded-lg">
-                                    <ArrowUpRight className="w-4 h-4 text-blue-400" />
+                                  <div className="p-2 bg-blue-100 rounded-lg">
+                                    <ArrowUpRight className="w-4 h-4 text-blue-600" />
                                   </div>
-                                  <p className="text-sm font-bold text-slate-300 uppercase tracking-wide">Base Salary</p>
+                                  <p className="text-sm font-bold text-slate-500 uppercase tracking-wide">Base Salary</p>
                                 </div>
-                                <p className="text-3xl font-bold text-white tracking-tight">₹{calc.baseSalary.toLocaleString()}</p>
-                                <div className="mt-3 w-full bg-slate-700/50 h-1 rounded-full overflow-hidden">
-                                  <div className="bg-blue-500 h-full rounded-full" style={{ width: `${(calc.paidDays / calc.totalDays) * 100}%` }} />
+                                <p className="text-3xl font-bold text-slate-900 tracking-tight">₹{calc.baseSalary.toLocaleString()}</p>
+                                <div className="mt-3 w-full bg-slate-200 h-1 rounded-full overflow-hidden">
+                                  <div className="bg-blue-600 h-full rounded-full" style={{ width: `${(calc.paidDays / calc.totalDays) * 100}%` }} />
                                 </div>
                                 <p className="text-xs text-slate-500 mt-2 font-medium">{calc.paidDays} payable days</p>
                               </div>
 
-                              <div className="relative overflow-hidden bg-slate-800/80 rounded-2xl p-5 border border-slate-700/50 group/card hover:bg-slate-800 transition-colors">
+                              <div className="relative overflow-hidden bg-slate-50 rounded-2xl p-5 border border-slate-200 group/card hover:bg-white hover:shadow-md transition-all">
                                 <div className="flex items-center gap-2 mb-3">
-                                  <div className="p-2 bg-amber-500/20 rounded-lg">
-                                    <Zap className="w-4 h-4 text-amber-400" />
+                                  <div className="p-2 bg-amber-100 rounded-lg">
+                                    <Zap className="w-4 h-4 text-amber-600" />
                                   </div>
-                                  <p className="text-sm font-bold text-slate-300 uppercase tracking-wide">Adjustments</p>
+                                  <p className="text-sm font-bold text-slate-500 uppercase tracking-wide">Adjustments</p>
                                 </div>
-                                <p className="text-3xl font-bold text-white tracking-tight">₹{calc.adjustments.toLocaleString()}</p>
-                                <div className="mt-3 w-full bg-slate-700/50 h-1 rounded-full overflow-hidden">
+                                <p className="text-3xl font-bold text-slate-900 tracking-tight">₹{calc.adjustments.toLocaleString()}</p>
+                                <div className="mt-3 w-full bg-slate-200 h-1 rounded-full overflow-hidden">
                                   <div className="bg-amber-500 h-full rounded-full" style={{ width: '100%' }} />
                                 </div>
                                 <p className="text-xs text-slate-500 mt-2 font-medium">Incentives & Bonus</p>
                               </div>
 
-                              <div className="relative overflow-hidden bg-slate-800/80 rounded-2xl p-5 border border-slate-700/50 group/card hover:bg-slate-800 transition-colors">
+                              <div className="relative overflow-hidden bg-slate-50 rounded-2xl p-5 border border-slate-200 group/card hover:bg-white hover:shadow-md transition-all">
                                 <div className="flex items-center gap-2 mb-3">
-                                  <div className="p-2 bg-rose-500/20 rounded-lg">
-                                    <ArrowDownRight className="w-4 h-4 text-rose-400" />
+                                  <div className="p-2 bg-rose-100 rounded-lg">
+                                    <ArrowDownRight className="w-4 h-4 text-rose-600" />
                                   </div>
-                                  <p className="text-sm font-bold text-slate-300 uppercase tracking-wide">Deductions</p>
+                                  <p className="text-sm font-bold text-slate-500 uppercase tracking-wide">Deductions</p>
                                 </div>
-                                <p className="text-3xl font-bold text-white tracking-tight">₹{calc.totalDeductions.toLocaleString()}</p>
-                                <div className="mt-3 w-full bg-slate-700/50 h-1 rounded-full overflow-hidden">
+                                <p className="text-3xl font-bold text-slate-900 tracking-tight">₹{calc.totalDeductions.toLocaleString()}</p>
+                                <div className="mt-3 w-full bg-slate-200 h-1 rounded-full overflow-hidden">
                                   <div className="bg-rose-500 h-full rounded-full" style={{ width: '100%' }} />
                                 </div>
                                 <p className="text-xs text-slate-500 mt-2 font-medium">PF, ESI & Penalties</p>
@@ -1120,7 +1168,7 @@ export default function SalaryPage() {
                             <Button
                               variant="ghost"
                               onClick={() => setExpandedRows(prev => ({ ...prev, [salary.id]: !prev[salary.id] }))}
-                              className="w-full text-indigo-400 hover:text-indigo-300 hover:bg-indigo-900/20 font-semibold rounded-xl h-12 mb-4 transition-all"
+                              className="w-full text-indigo-600 hover:text-indigo-700 hover:bg-indigo-50 font-semibold rounded-xl h-12 mb-4 transition-all"
                             >
                               {isExpanded ? (
                                 <>
@@ -1137,48 +1185,48 @@ export default function SalaryPage() {
 
                             {/* Expanded Details */}
                             {isExpanded && (
-                              <div className="space-y-6 p-6 bg-slate-800/30 rounded-2xl border border-slate-700/50 mb-6 animate-in slide-in-from-top-4 duration-200">
+                              <div className="space-y-6 p-6 bg-slate-50 rounded-2xl border border-slate-200 mb-6 animate-in slide-in-from-top-4 duration-200">
                                 {/* Components */}
                                 <div>
-                                  <h4 className="font-bold text-slate-300 mb-4 flex items-center gap-2 text-sm uppercase tracking-wide">
-                                    <BarChart3 className="w-4 h-4 text-indigo-400" />
+                                  <h4 className="font-bold text-slate-700 mb-4 flex items-center gap-2 text-sm uppercase tracking-wide">
+                                    <BarChart3 className="w-4 h-4 text-indigo-600" />
                                     Detailed Components
                                   </h4>
                                   <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
                                     {calc.earnedBasic > 0 && (
-                                      <div className="flex justify-between items-center bg-slate-800 p-3 rounded-lg border border-slate-700">
-                                        <span className="text-slate-400 text-sm">Basic</span>
-                                        <span className="font-bold text-white">₹{calc.earnedBasic.toLocaleString()}</span>
+                                      <div className="flex justify-between items-center bg-white p-3 rounded-lg border border-slate-200">
+                                        <span className="text-slate-500 text-sm">Basic</span>
+                                        <span className="font-bold text-slate-900">₹{calc.earnedBasic.toLocaleString()}</span>
                                       </div>
                                     )}
                                     {calc.earnedHra > 0 && (
-                                      <div className="flex justify-between items-center bg-slate-800 p-3 rounded-lg border border-slate-700">
-                                        <span className="text-slate-400 text-sm">HRA</span>
-                                        <span className="font-bold text-white">₹{calc.earnedHra.toLocaleString()}</span>
+                                      <div className="flex justify-between items-center bg-white p-3 rounded-lg border border-slate-200">
+                                        <span className="text-slate-500 text-sm">HRA</span>
+                                        <span className="font-bold text-slate-900">₹{calc.earnedHra.toLocaleString()}</span>
                                       </div>
                                     )}
                                     {calc.earnedTa > 0 && (
-                                      <div className="flex justify-between items-center bg-slate-800 p-3 rounded-lg border border-slate-700">
-                                        <span className="text-slate-400 text-sm">Travel</span>
-                                        <span className="font-bold text-white">₹{calc.earnedTa.toLocaleString()}</span>
+                                      <div className="flex justify-between items-center bg-white p-3 rounded-lg border border-slate-200">
+                                        <span className="text-slate-500 text-sm">Travel</span>
+                                        <span className="font-bold text-slate-900">₹{calc.earnedTa.toLocaleString()}</span>
                                       </div>
                                     )}
                                     {calc.earnedCea > 0 && (
-                                      <div className="flex justify-between items-center bg-slate-800 p-3 rounded-lg border border-slate-700">
-                                        <span className="text-slate-400 text-sm">Child Edu</span>
-                                        <span className="font-bold text-white">₹{calc.earnedCea.toLocaleString()}</span>
+                                      <div className="flex justify-between items-center bg-white p-3 rounded-lg border border-slate-200">
+                                        <span className="text-slate-500 text-sm">Child Edu</span>
+                                        <span className="font-bold text-slate-900">₹{calc.earnedCea.toLocaleString()}</span>
                                       </div>
                                     )}
                                     {calc.earnedFi > 0 && (
-                                      <div className="flex justify-between items-center bg-slate-800 p-3 rounded-lg border border-slate-700">
-                                        <span className="text-slate-400 text-sm">Fixed Inc.</span>
-                                        <span className="font-bold text-white">₹{calc.earnedFi.toLocaleString()}</span>
+                                      <div className="flex justify-between items-center bg-white p-3 rounded-lg border border-slate-200">
+                                        <span className="text-slate-500 text-sm">Fixed Inc.</span>
+                                        <span className="font-bold text-slate-900">₹{calc.earnedFi.toLocaleString()}</span>
                                       </div>
                                     )}
                                     {calc.empIncentive > 0 && (
-                                      <div className="flex justify-between items-center bg-slate-800 p-3 rounded-lg border border-slate-700">
-                                        <span className="text-slate-400 text-sm">Emp. Inc.</span>
-                                        <span className="font-bold text-white">₹{calc.empIncentive.toLocaleString()}</span>
+                                      <div className="flex justify-between items-center bg-white p-3 rounded-lg border border-slate-200">
+                                        <span className="text-slate-500 text-sm">Emp. Inc.</span>
+                                        <span className="font-bold text-slate-900">₹{calc.empIncentive.toLocaleString()}</span>
                                       </div>
                                     )}
                                   </div>
@@ -1186,57 +1234,57 @@ export default function SalaryPage() {
 
                                 {/* Deductions */}
                                 <div>
-                                  <h4 className="font-bold text-slate-300 mb-4 flex items-center gap-2 text-sm uppercase tracking-wide">
-                                    <TrendingDown className="w-4 h-4 text-rose-400" />
+                                  <h4 className="font-bold text-slate-700 mb-4 flex items-center gap-2 text-sm uppercase tracking-wide">
+                                    <TrendingDown className="w-4 h-4 text-rose-500" />
                                     Applied Deductions
                                   </h4>
                                   <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
                                     {calc.empPF > 0 && (
-                                      <div className="flex justify-between items-center bg-slate-800 p-3 rounded-lg border border-rose-900/20">
-                                        <span className="text-slate-400 text-sm">PF</span>
-                                        <span className="font-bold text-rose-400">-₹{Math.round(calc.empPF).toLocaleString()}</span>
+                                      <div className="flex justify-between items-center bg-white p-3 rounded-lg border border-rose-200">
+                                        <span className="text-slate-500 text-sm">PF</span>
+                                        <span className="font-bold text-rose-600">-₹{Math.round(calc.empPF).toLocaleString()}</span>
                                       </div>
                                     )}
                                     {calc.empESI > 0 && (
-                                      <div className="flex justify-between items-center bg-slate-800 p-3 rounded-lg border border-rose-900/20">
-                                        <span className="text-slate-400 text-sm">ESI</span>
-                                        <span className="font-bold text-rose-400">-₹{Math.round(calc.empESI).toLocaleString()}</span>
+                                      <div className="flex justify-between items-center bg-white p-3 rounded-lg border border-rose-200">
+                                        <span className="text-slate-500 text-sm">ESI</span>
+                                        <span className="font-bold text-rose-600">-₹{Math.round(calc.empESI).toLocaleString()}</span>
                                       </div>
                                     )}
                                     {calc.lwf > 0 && (
-                                      <div className="flex justify-between items-center bg-slate-800 p-3 rounded-lg border border-rose-900/20">
-                                        <span className="text-slate-400 text-sm">LWF</span>
-                                        <span className="font-bold text-rose-400">-₹{Math.round(calc.lwf).toLocaleString()}</span>
+                                      <div className="flex justify-between items-center bg-white p-3 rounded-lg border border-rose-200">
+                                        <span className="text-slate-500 text-sm">LWF</span>
+                                        <span className="font-bold text-rose-600">-₹{Math.round(calc.lwf).toLocaleString()}</span>
                                       </div>
                                     )}
                                     {calc.latePenalty > 0 && (
-                                      <div className="flex justify-between items-center bg-slate-800 p-3 rounded-lg border border-rose-900/20">
-                                        <span className="text-slate-400 text-sm">Late Penalty</span>
-                                        <span className="font-bold text-rose-400">-₹{Math.round(calc.latePenalty).toLocaleString()}</span>
+                                      <div className="flex justify-between items-center bg-white p-3 rounded-lg border border-rose-200">
+                                        <span className="text-slate-500 text-sm">Late Penalty</span>
+                                        <span className="font-bold text-rose-600">-₹{Math.round(calc.latePenalty).toLocaleString()}</span>
                                       </div>
                                     )}
                                     {calc.absentDeduction > 0 && (
-                                      <div className="flex justify-between items-center bg-slate-800 p-3 rounded-lg border border-rose-900/20">
-                                        <span className="text-slate-400 text-sm">Absent</span>
-                                        <span className="font-bold text-rose-400">-₹{calc.absentDeduction.toLocaleString()}</span>
+                                      <div className="flex justify-between items-center bg-white p-3 rounded-lg border border-rose-200">
+                                        <span className="text-slate-500 text-sm">Absent</span>
+                                        <span className="font-bold text-rose-600">-₹{calc.absentDeduction.toLocaleString()}</span>
                                       </div>
                                     )}
                                     {calc.attendanceAdjustments < 0 && (
-                                      <div className="flex justify-between items-center bg-slate-800 p-3 rounded-lg border border-rose-900/20">
-                                        <span className="text-slate-400 text-sm">Attendance</span>
-                                        <span className="font-bold text-rose-400">-₹{Math.abs(calc.attendanceAdjustments).toLocaleString()}</span>
+                                      <div className="flex justify-between items-center bg-white p-3 rounded-lg border border-rose-200">
+                                        <span className="text-slate-500 text-sm">Attendance</span>
+                                        <span className="font-bold text-rose-600">-₹{Math.abs(calc.attendanceAdjustments).toLocaleString()}</span>
                                       </div>
                                     )}
                                     {salary?.advance_recovery > 0 && (
-                                      <div className="flex justify-between items-center bg-slate-800 p-3 rounded-lg border border-rose-900/20">
-                                        <span className="text-slate-400 text-sm">Adv. Recov</span>
-                                        <span className="font-bold text-rose-400">-₹{salary.advance_recovery.toLocaleString()}</span>
+                                      <div className="flex justify-between items-center bg-white p-3 rounded-lg border border-rose-200">
+                                        <span className="text-slate-500 text-sm">Adv. Recov</span>
+                                        <span className="font-bold text-rose-600">-₹{salary.advance_recovery.toLocaleString()}</span>
                                       </div>
                                     )}
                                     {salary?.other_deductions > 0 && (
-                                      <div className="flex justify-between items-center bg-slate-800 p-3 rounded-lg border border-rose-900/20">
-                                        <span className="text-slate-400 text-sm">Other</span>
-                                        <span className="font-bold text-rose-400">-₹{salary.other_deductions.toLocaleString()}</span>
+                                      <div className="flex justify-between items-center bg-white p-3 rounded-lg border border-rose-200">
+                                        <span className="text-slate-500 text-sm">Other</span>
+                                        <span className="font-bold text-rose-600">-₹{salary.other_deductions.toLocaleString()}</span>
                                       </div>
                                     )}
                                   </div>
@@ -1244,8 +1292,8 @@ export default function SalaryPage() {
 
                                 {/* Daily Attendance Details */}
                                 <div className="mt-6">
-                                  <h4 className="font-bold text-slate-300 mb-4 flex items-center gap-2 text-sm uppercase tracking-wide">
-                                    <Clock className="w-4 h-4 text-indigo-400" />
+                                  <h4 className="font-bold text-slate-700 mb-4 flex items-center gap-2 text-sm uppercase tracking-wide">
+                                    <Clock className="w-4 h-4 text-indigo-600" />
                                     Daily Attendance Details
                                   </h4>
                                   <DailyAttendanceDetails
@@ -1266,7 +1314,7 @@ export default function SalaryPage() {
                                   setCurrentRecord(salary);
                                   setAdjustmentDialogOpen(true);
                                 }}
-                                className="bg-slate-800 border-slate-700 text-slate-300 hover:bg-slate-700 hover:text-white rounded-lg"
+                                className="bg-slate-50 border-slate-200 text-slate-600 hover:bg-slate-100 hover:text-indigo-600 rounded-lg"
                               >
                                 <Plus className="w-4 h-4 mr-2" />
                                 Adjustment
@@ -1278,7 +1326,7 @@ export default function SalaryPage() {
                                   setSelectedEmployee(salary.employee_email);
                                   setAdvanceDialogOpen(true);
                                 }}
-                                className="bg-slate-800 border-slate-700 text-slate-300 hover:bg-slate-700 hover:text-white rounded-lg"
+                                className="bg-slate-50 border-slate-200 text-slate-600 hover:bg-slate-100 hover:text-indigo-600 rounded-lg"
                               >
                                 <Wallet className="w-4 h-4 mr-2" />
                                 Advance
@@ -1288,7 +1336,7 @@ export default function SalaryPage() {
                                 size="sm"
                                 onClick={() => generateSlipMutation.mutate(salary.id)}
                                 disabled={generateSlipMutation.isPending}
-                                className="bg-slate-800 border-slate-700 text-slate-300 hover:bg-slate-700 hover:text-white rounded-lg"
+                                className="bg-slate-50 border-slate-200 text-slate-600 hover:bg-slate-100 hover:text-indigo-600 rounded-lg"
                               >
                                 <FileText className="w-4 h-4 mr-2" />
                                 Slip
@@ -1298,7 +1346,7 @@ export default function SalaryPage() {
                                 size="sm"
                                 onClick={() => emailSlipMutation.mutate(salary.id)}
                                 disabled={emailSlipMutation.isPending}
-                                className="bg-slate-800 border-slate-700 text-slate-300 hover:bg-slate-700 hover:text-white rounded-lg"
+                                className="bg-slate-50 border-slate-200 text-slate-600 hover:bg-slate-100 hover:text-indigo-600 rounded-lg"
                               >
                                 <Mail className="w-4 h-4 mr-2" />
                                 Email
@@ -1310,7 +1358,7 @@ export default function SalaryPage() {
                                   setSelectedEmployee(salary.employee_email);
                                   setHistoryDialogOpen(true);
                                 }}
-                                className="bg-slate-800 border-slate-700 text-slate-300 hover:bg-slate-700 hover:text-white rounded-lg"
+                                className="bg-slate-50 border-slate-200 text-slate-600 hover:bg-slate-100 hover:text-indigo-600 rounded-lg"
                               >
                                 <History className="w-4 h-4 mr-2" />
                                 History
@@ -1324,7 +1372,7 @@ export default function SalaryPage() {
                                   }
                                 }}
                                 disabled={salary.locked}
-                                className="bg-rose-500/10 border-rose-500/20 text-rose-400 hover:bg-rose-500/20 hover:text-rose-300 rounded-lg ml-auto"
+                                className="bg-rose-50 border-rose-200 text-rose-600 hover:bg-rose-100 hover:text-rose-700 rounded-lg ml-auto"
                               >
                                 <Trash2 className="w-4 h-4" />
                               </Button>
@@ -1338,66 +1386,66 @@ export default function SalaryPage() {
               </div>
             ) : (
               // Compact View
-              <Card className="bg-slate-900/50 backdrop-blur-2xl border border-slate-800 shadow-2xl">
+              <Card className="bg-white/80 backdrop-blur-2xl border border-slate-200 shadow-xl">
                 <CardContent className="p-6">
                   <div className="overflow-x-auto">
                     <table className="w-full">
                       <thead>
-                        <tr className="border-b border-slate-700">
-                          <th className="text-left p-3 font-bold text-slate-400">
-                            <Checkbox checked={selectedRecords.length === filteredSalaries.length} onCheckedChange={handleSelectAll} className="border-slate-600 data-[state=checked]:bg-indigo-500" />
+                        <tr className="border-b border-slate-200">
+                          <th className="text-left p-3 font-bold text-slate-500">
+                            <Checkbox checked={selectedRecords.length === filteredSalaries.length} onCheckedChange={handleSelectAll} className="border-slate-300 data-[state=checked]:bg-indigo-600" />
                           </th>
-                          <th className="text-left p-3 font-bold text-slate-400">Employee</th>
-                          <th className="text-center p-3 font-bold text-slate-400">Attendance</th>
-                          <th className="text-right p-3 font-bold text-slate-400">Base</th>
-                          <th className="text-right p-3 font-bold text-slate-400">Adjustments</th>
-                          <th className="text-right p-3 font-bold text-slate-400">Deductions</th>
-                          <th className="text-right p-3 font-bold text-slate-400">Net</th>
-                          <th className="text-center p-3 font-bold text-slate-400">Status</th>
-                          <th className="text-center p-3 font-bold text-slate-400">Actions</th>
+                          <th className="text-left p-3 font-bold text-slate-500">Employee</th>
+                          <th className="text-center p-3 font-bold text-slate-500">Attendance</th>
+                          <th className="text-right p-3 font-bold text-slate-500">Base</th>
+                          <th className="text-right p-3 font-bold text-slate-500">Adjustments</th>
+                          <th className="text-right p-3 font-bold text-slate-500">Deductions</th>
+                          <th className="text-right p-3 font-bold text-slate-500">Net</th>
+                          <th className="text-center p-3 font-bold text-slate-500">Status</th>
+                          <th className="text-center p-3 font-bold text-slate-500">Actions</th>
                         </tr>
                       </thead>
                       <tbody>
                         {filteredSalaries.map((salary) => {
                           const calc = calculateEmployeeSalary(salary.employee_email);
                           return (
-                            <tr key={salary.id} className="border-b border-slate-700/50 hover:bg-slate-800/50 transition-colors">
+                            <tr key={salary.id} className="border-b border-slate-100 hover:bg-slate-50 transition-colors">
                               <td className="p-3">
                                 <Checkbox
                                   checked={selectedRecords.includes(salary.id)}
                                   onCheckedChange={() => handleSelectRecord(salary.id)}
                                   disabled={salary.locked}
-                                  className="border-slate-600 data-[state=checked]:bg-indigo-500"
+                                  className="border-slate-300 data-[state=checked]:bg-indigo-600"
                                 />
                               </td>
                               <td className="p-3">
-                                <div className="font-bold text-white">{salary.employee_name}</div>
+                                <div className="font-bold text-slate-900">{salary.employee_name}</div>
                                 <div className="text-xs text-slate-500">{salary.employee_email}</div>
                               </td>
                               <td className="p-3 text-center">
-                                <Badge className="bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 font-bold">{calc.effectivePresent}P</Badge>
-                                <Badge className="bg-rose-500/10 text-rose-400 border border-rose-500/20 font-bold ml-1">{calc.unpaidAbsent}A</Badge>
+                                <Badge className="bg-emerald-50 text-emerald-600 border border-emerald-200 font-bold">{calc.effectivePresent}P</Badge>
+                                <Badge className="bg-rose-50 text-rose-600 border border-rose-200 font-bold ml-1">{calc.unpaidAbsent}A</Badge>
                               </td>
-                              <td className="p-3 text-right font-bold text-slate-300">₹{calc.baseSalary.toLocaleString()}</td>
-                              <td className="p-3 text-right font-bold text-amber-400">+₹{calc.adjustments.toLocaleString()}</td>
-                              <td className="p-3 text-right font-bold text-rose-400">-₹{calc.totalDeductions.toLocaleString()}</td>
-                              <td className="p-3 text-right font-black text-emerald-400 text-lg">₹{calc.net.toLocaleString()}</td>
+                              <td className="p-3 text-right font-bold text-slate-600">₹{calc.baseSalary.toLocaleString()}</td>
+                              <td className="p-3 text-right font-bold text-amber-600">+₹{calc.adjustments.toLocaleString()}</td>
+                              <td className="p-3 text-right font-bold text-rose-600">-₹{calc.totalDeductions.toLocaleString()}</td>
+                              <td className="p-3 text-right font-black text-emerald-600 text-lg">₹{calc.net.toLocaleString()}</td>
                               <td className="p-3 text-center">
                                 <Badge className={
-                                  salary.status === 'paid' ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30' :
-                                    salary.status === 'approved' ? 'bg-blue-500/20 text-blue-400 border border-blue-500/30' :
-                                      salary.status === 'locked' ? 'bg-amber-500/20 text-amber-400 border border-amber-500/30' :
-                                        'bg-slate-700/50 text-slate-400 border border-slate-600'
+                                  salary.status === 'paid' ? 'bg-emerald-100 text-emerald-700 border border-emerald-200' :
+                                    salary.status === 'approved' ? 'bg-blue-100 text-blue-700 border border-blue-200' :
+                                      salary.status === 'locked' ? 'bg-amber-100 text-amber-700 border border-amber-200' :
+                                        'bg-slate-100 text-slate-600 border border-slate-200'
                                 }>
                                   {salary.status}
                                 </Badge>
                               </td>
                               <td className="p-3">
                                 <div className="flex gap-1 justify-center">
-                                  <Button size="sm" variant="ghost" onClick={() => { setCurrentRecord(salary); setAdjustmentDialogOpen(true); }} className="text-slate-400 hover:text-white hover:bg-slate-700">
+                                  <Button size="sm" variant="ghost" onClick={() => { setCurrentRecord(salary); setAdjustmentDialogOpen(true); }} className="text-slate-400 hover:text-indigo-600 hover:bg-indigo-50">
                                     <Plus className="w-4 h-4" />
                                   </Button>
-                                  <Button size="sm" variant="ghost" onClick={() => generateSlipMutation.mutate(salary.id)} className="text-slate-400 hover:text-white hover:bg-slate-700">
+                                  <Button size="sm" variant="ghost" onClick={() => generateSlipMutation.mutate(salary.id)} className="text-slate-400 hover:text-indigo-600 hover:bg-indigo-50">
                                     <FileText className="w-4 h-4" />
                                   </Button>
                                 </div>
@@ -1407,14 +1455,15 @@ export default function SalaryPage() {
                         })}
                       </tbody>
                     </table>
-                  </div>
-                </CardContent>
-              </Card>
-            )}
-          </TabsContent>
+                  </div >
+                </CardContent >
+              </Card >
+            )
+            }
+          </TabsContent >
 
           {/* Policies Tab */}
-          <TabsContent value="policies" className="space-y-6">
+          < TabsContent value="policies" className="space-y-6" >
             <div className="flex justify-end">
               <Button
                 onClick={() => {
@@ -1431,14 +1480,14 @@ export default function SalaryPage() {
             <div className="grid gap-6">
               {policiesLoading ? (
                 <div className="text-center py-16">
-                  <RefreshCw className="w-12 h-12 text-indigo-500 animate-spin mx-auto mb-4" />
-                  <p className="text-slate-400 font-medium">Loading policies...</p>
+                  <RefreshCw className="w-12 h-12 text-indigo-600 animate-spin mx-auto mb-4" />
+                  <p className="text-slate-500 font-medium">Loading policies...</p>
                 </div>
               ) : policies.length === 0 ? (
-                <Card className="bg-slate-900/50 backdrop-blur-2xl border border-slate-800 shadow-2xl">
+                <Card className="bg-white/80 backdrop-blur-2xl border border-slate-200 shadow-xl">
                   <CardContent className="p-16 text-center">
-                    <Settings className="w-20 h-20 text-slate-700 mx-auto mb-6" />
-                    <h3 className="text-2xl font-bold text-slate-300 mb-2">No Policies Found</h3>
+                    <Settings className="w-20 h-20 text-slate-300 mx-auto mb-6" />
+                    <h3 className="text-2xl font-bold text-slate-700 mb-2">No Policies Found</h3>
                     <p className="text-slate-500 font-medium mb-6">Create your first salary policy to get started</p>
                     <Button onClick={() => setPolicyFormOpen(true)} className="bg-indigo-600 hover:bg-indigo-700 text-white">
                       <Plus className="w-4 h-4 mr-2" />
@@ -1454,7 +1503,7 @@ export default function SalaryPage() {
                     (policy.fixed_incentive || 0);
 
                   return (
-                    <Card key={policy.id} className="group bg-slate-900/50 backdrop-blur-2xl border border-slate-800 shadow-2xl hover:bg-slate-800/50 transition-all duration-300">
+                    <Card key={policy.id} className="group bg-white/80 backdrop-blur-2xl border border-slate-200 shadow-xl hover:shadow-indigo-500/10 transition-all duration-300">
                       <CardContent className="p-6">
                         <div className="flex items-start justify-between">
                           <div className="flex items-center gap-6 flex-1">
@@ -1463,25 +1512,25 @@ export default function SalaryPage() {
                             </div>
                             <div className="flex-1">
                               <div className="flex items-center gap-3 mb-2">
-                                <h3 className="text-xl font-bold text-white">{user?.full_name || 'Unknown'}</h3>
-                                <Badge className={policy.is_active ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30' : 'bg-slate-700 text-slate-400 border border-slate-600'}>
+                                <h3 className="text-xl font-bold text-slate-900">{user?.full_name || 'Unknown'}</h3>
+                                <Badge className={policy.is_active ? 'bg-emerald-100 text-emerald-700 border border-emerald-200' : 'bg-slate-100 text-slate-600 border border-slate-200'}>
                                   {policy.is_active ? 'Active' : 'Inactive'}
                                 </Badge>
                               </div>
-                              <p className="text-sm text-slate-400 font-medium">{policy.user_email}</p>
+                              <p className="text-sm text-slate-500 font-medium">{policy.user_email}</p>
 
                               <div className="grid grid-cols-3 gap-4 mt-6">
-                                <div className="bg-slate-800/50 rounded-xl p-3 border border-slate-700/50">
-                                  <p className="text-[10px] text-indigo-400 font-bold uppercase mb-1">Monthly Gross</p>
-                                  <p className="text-xl font-bold text-white">₹{monthlyGross.toLocaleString()}</p>
+                                <div className="bg-slate-50 rounded-xl p-3 border border-slate-200">
+                                  <p className="text-[10px] text-indigo-600 font-bold uppercase mb-1">Monthly Gross</p>
+                                  <p className="text-xl font-bold text-slate-900">₹{monthlyGross.toLocaleString()}</p>
                                 </div>
-                                <div className="bg-slate-800/50 rounded-xl p-3 border border-slate-700/50">
-                                  <p className="text-[10px] text-purple-400 font-bold uppercase mb-1">Type</p>
-                                  <p className="text-lg font-bold text-white capitalize">{policy.salary_type?.replace('_', ' ')}</p>
+                                <div className="bg-slate-50 rounded-xl p-3 border border-slate-200">
+                                  <p className="text-[10px] text-purple-600 font-bold uppercase mb-1">Type</p>
+                                  <p className="text-lg font-bold text-slate-900 capitalize">{policy.salary_type?.replace('_', ' ')}</p>
                                 </div>
-                                <div className="bg-slate-800/50 rounded-xl p-3 border border-slate-700/50">
-                                  <p className="text-[10px] text-emerald-400 font-bold uppercase mb-1">Status</p>
-                                  <p className="text-lg font-bold text-white">{policy.is_active ? 'Active' : 'Inactive'}</p>
+                                <div className="bg-slate-50 rounded-xl p-3 border border-slate-200">
+                                  <p className="text-[10px] text-emerald-600 font-bold uppercase mb-1">Status</p>
+                                  <p className="text-lg font-bold text-slate-900">{policy.is_active ? 'Active' : 'Inactive'}</p>
                                 </div>
                               </div>
                             </div>
@@ -1495,7 +1544,7 @@ export default function SalaryPage() {
                                 setEditingPolicy(policy);
                                 setPolicyFormOpen(true);
                               }}
-                              className="border-slate-700 bg-slate-800/50 text-slate-300 hover:bg-slate-800 hover:text-white rounded-xl"
+                              className="border-slate-200 bg-white text-slate-600 hover:bg-slate-50 hover:text-indigo-600 rounded-xl"
                             >
                               Edit
                             </Button>
@@ -1507,7 +1556,7 @@ export default function SalaryPage() {
                                   deletePolicyMutation.mutate(policy.id);
                                 }
                               }}
-                              className="border-rose-900/20 bg-rose-900/10 text-rose-400 hover:bg-rose-900/20 rounded-xl"
+                              className="border-rose-200 bg-rose-50 text-rose-600 hover:bg-rose-100 rounded-xl"
                             >
                               Delete
                             </Button>
@@ -1519,12 +1568,12 @@ export default function SalaryPage() {
                 })
               )}
             </div>
-          </TabsContent>
-        </Tabs>
-      </div>
+          </TabsContent >
+        </Tabs >
+      </div >
 
       {/* Dialogs */}
-      <SalaryAdjustmentDialog
+      < SalaryAdjustmentDialog
         isOpen={adjustmentDialogOpen}
         onClose={() => {
           setAdjustmentDialogOpen(false);
@@ -1573,7 +1622,7 @@ export default function SalaryPage() {
         allUsers={allUsers}
         onAdvanceCreated={() => recalculateMutation.mutate()}
       />
-    </div>
+    </div >
   );
 }
 
@@ -1607,7 +1656,7 @@ function DailyAttendanceDetails({ dailyDetails, employeeAdjustments = [], salary
   if (!allDetails || allDetails.length === 0) {
     return (
       <div className="text-center py-8">
-        <Clock className="w-12 h-12 text-slate-600 mx-auto mb-4" />
+        <Clock className="w-12 h-12 text-slate-300 mx-auto mb-4" />
         <p className="text-slate-500 font-medium">No attendance adjustments or salary changes</p>
       </div>
     );
@@ -1617,24 +1666,24 @@ function DailyAttendanceDetails({ dailyDetails, employeeAdjustments = [], salary
     <div className="space-y-4">
       <div className="grid grid-cols-1 gap-3">
         {allDetails.map((detail, index) => (
-          <Card key={detail.id || index} className="bg-slate-800/50 border border-slate-700/50 shadow-sm">
+          <Card key={detail.id || index} className="bg-white border border-slate-200 shadow-sm">
             <CardContent className="p-4">
               <div className="flex justify-between items-start">
                 <div className="flex-1">
                   <div className="flex items-center gap-3 mb-2">
-                    <p className="text-sm font-bold text-slate-300">{detail.date}</p>
+                    <p className="text-sm font-bold text-slate-700">{detail.date}</p>
                     {!detail.isAdjustment ? (
                       <Badge className={
-                        detail.status === 'present' ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30' :
-                        detail.status === 'checked_out' ? 'bg-blue-500/20 text-blue-400 border border-blue-500/30' :
-                        detail.status === 'absent' ? 'bg-rose-500/20 text-rose-400 border border-rose-500/30' :
-                        detail.status === 'work_from_home' ? 'bg-purple-500/20 text-purple-400 border border-purple-500/30' :
-                        'bg-slate-700/50 text-slate-400 border border-slate-600'
+                        detail.status === 'present' ? 'bg-emerald-100 text-emerald-700 border border-emerald-200' :
+                          detail.status === 'checked_out' ? 'bg-blue-100 text-blue-700 border border-blue-200' :
+                            detail.status === 'absent' ? 'bg-rose-100 text-rose-700 border border-rose-200' :
+                              detail.status === 'work_from_home' ? 'bg-purple-100 text-purple-700 border border-purple-200' :
+                                'bg-slate-100 text-slate-600 border border-slate-200'
                       }>
                         {detail.status?.replace('_', ' ').toUpperCase()}
                       </Badge>
                     ) : (
-                      <Badge className="bg-amber-500/20 text-amber-400 border border-amber-500/30">
+                      <Badge className="bg-amber-100 text-amber-700 border border-amber-200">
                         {detail.status?.toUpperCase()}
                       </Badge>
                     )}
@@ -1644,17 +1693,17 @@ function DailyAttendanceDetails({ dailyDetails, employeeAdjustments = [], salary
                     <div className="grid grid-cols-2 gap-4 text-sm">
                       <div>
                         <p className="text-slate-500 font-medium">Check-in</p>
-                        <p className="text-slate-300">{detail.checkIn || 'N/A'}</p>
+                        <p className="text-slate-900 font-semibold">{detail.checkIn || 'N/A'}</p>
                       </div>
                       <div>
                         <p className="text-slate-500 font-medium">Check-out</p>
-                        <p className="text-slate-300">{detail.checkOut || 'N/A'}</p>
+                        <p className="text-slate-900 font-semibold">{detail.checkOut || 'N/A'}</p>
                       </div>
                     </div>
                   ) : (
                     <div className="text-sm">
                       <p className="text-slate-500 font-medium">Type</p>
-                      <p className="text-slate-300 capitalize">{detail.status?.replace('_', ' ')}</p>
+                      <p className="text-slate-900 font-semibold capitalize">{detail.status?.replace('_', ' ')}</p>
                     </div>
                   )}
 
@@ -1663,7 +1712,7 @@ function DailyAttendanceDetails({ dailyDetails, employeeAdjustments = [], salary
                   )}
                 </div>
                 <div className="text-right">
-                  <p className={`text-sm font-bold ${detail.adjustment > 0 ? 'text-emerald-400' : detail.adjustment < 0 ? 'text-rose-400' : 'text-slate-500'}`}>
+                  <p className={`text-sm font-bold ${detail.adjustment > 0 ? 'text-emerald-600' : detail.adjustment < 0 ? 'text-rose-600' : 'text-slate-500'}`}>
                     {detail.adjustment > 0 ? '+' : ''}₹{Math.abs(detail.adjustment).toLocaleString()}
                   </p>
                   <p className="text-xs text-slate-500 uppercase">
@@ -1693,8 +1742,8 @@ function SalaryHistoryView({ employeeEmail }) {
   if (isLoading) {
     return (
       <div className="text-center py-12">
-        <RefreshCw className="w-12 h-12 text-indigo-500 animate-spin mx-auto mb-4" />
-        <p className="text-slate-400">Loading history...</p>
+        <RefreshCw className="w-12 h-12 text-indigo-600 animate-spin mx-auto mb-4" />
+        <p className="text-slate-500">Loading history...</p>
       </div>
     );
   }
@@ -1702,7 +1751,7 @@ function SalaryHistoryView({ employeeEmail }) {
   if (history.length === 0) {
     return (
       <div className="text-center py-12">
-        <AlertCircle className="w-16 h-16 text-slate-700 mx-auto mb-4" />
+        <AlertCircle className="w-16 h-16 text-slate-300 mx-auto mb-4" />
         <p className="text-slate-500 font-medium">No salary history found</p>
       </div>
     );
@@ -1711,49 +1760,49 @@ function SalaryHistoryView({ employeeEmail }) {
   return (
     <div className="space-y-4">
       {history.map((record) => (
-        <Card key={record.id} className="bg-slate-900/50 border border-slate-800 shadow-lg hover:bg-slate-800/50 transition-all">
+        <Card key={record.id} className="bg-white border border-slate-200 shadow-lg hover:shadow-indigo-500/10 transition-all">
           <CardContent className="p-6">
             <div className="flex justify-between items-start mb-4">
               <div>
-                <h4 className="text-2xl font-bold text-white mb-2">{record.month}</h4>
+                <h4 className="text-2xl font-bold text-slate-900 mb-2">{record.month}</h4>
                 <Badge className={
-                  record.status === 'paid' ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30' :
-                    record.status === 'approved' ? 'bg-blue-500/20 text-blue-400 border border-blue-500/30' :
-                      'bg-slate-700 text-slate-400 border border-slate-600'
+                  record.status === 'paid' ? 'bg-emerald-100 text-emerald-700 border border-emerald-200' :
+                    record.status === 'approved' ? 'bg-blue-100 text-blue-700 border border-blue-200' :
+                      'bg-slate-100 text-slate-600 border border-slate-200'
                 }>
                   {record.status?.toUpperCase()}
                 </Badge>
               </div>
               <div className="text-right">
                 <p className="text-xs font-bold text-slate-500 mb-1 uppercase">NET SALARY</p>
-                <p className="text-4xl font-black text-transparent bg-clip-text bg-gradient-to-r from-emerald-400 to-teal-300">
+                <p className="text-4xl font-black text-transparent bg-clip-text bg-gradient-to-r from-emerald-600 to-teal-500">
                   ₹{(record.net_salary || 0).toLocaleString()}
                 </p>
               </div>
             </div>
 
             <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-              <div className="bg-slate-800/50 rounded-xl p-4 border border-slate-700/50">
-                <p className="text-[10px] text-blue-400 font-bold uppercase">Gross</p>
-                <p className="text-2xl font-bold text-white">₹{(record.gross_salary || 0).toLocaleString()}</p>
+              <div className="bg-slate-50 rounded-xl p-4 border border-slate-200">
+                <p className="text-[10px] text-indigo-600 font-bold uppercase">Gross</p>
+                <p className="text-2xl font-bold text-slate-900">₹{(record.gross_salary || 0).toLocaleString()}</p>
               </div>
-              <div className="bg-slate-800/50 rounded-xl p-4 border border-slate-700/50">
-                <p className="text-[10px] text-rose-400 font-bold uppercase">Deductions</p>
-                <p className="text-2xl font-bold text-white">₹{(record.total_deductions || 0).toLocaleString()}</p>
+              <div className="bg-slate-50 rounded-xl p-4 border border-slate-200">
+                <p className="text-[10px] text-rose-600 font-bold uppercase">Deductions</p>
+                <p className="text-2xl font-bold text-slate-900">₹{(record.total_deductions || 0).toLocaleString()}</p>
               </div>
-              <div className="bg-slate-800/50 rounded-xl p-4 border border-slate-700/50">
-                <p className="text-[10px] text-emerald-400 font-bold uppercase">Present</p>
-                <p className="text-2xl font-bold text-white">{record.present_days || 0}</p>
+              <div className="bg-slate-50 rounded-xl p-4 border border-slate-200">
+                <p className="text-[10px] text-emerald-600 font-bold uppercase">Present</p>
+                <p className="text-2xl font-bold text-slate-900">{record.present_days || 0}</p>
               </div>
-              <div className="bg-slate-800/50 rounded-xl p-4 border border-slate-700/50">
-                <p className="text-[10px] text-amber-400 font-bold uppercase">Absent</p>
-                <p className="text-2xl font-bold text-white">{record.absent_days || 0}</p>
+              <div className="bg-slate-50 rounded-xl p-4 border border-slate-200">
+                <p className="text-[10px] text-amber-600 font-bold uppercase">Absent</p>
+                <p className="text-2xl font-bold text-slate-900">{record.absent_days || 0}</p>
               </div>
             </div>
 
             {record.payment_date && (
-              <div className="mt-4 flex items-center gap-2 text-sm text-slate-400">
-                <CheckCircle className="w-4 h-4 text-emerald-500" />
+              <div className="mt-4 flex items-center gap-2 text-sm text-slate-500">
+                <CheckCircle className="w-4 h-4 text-emerald-600" />
                 <span className="font-semibold">Paid on: {format(new Date(record.payment_date), 'dd MMM yyyy')}</span>
               </div>
             )}

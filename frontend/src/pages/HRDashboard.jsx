@@ -546,7 +546,7 @@ export default function HRDashboard() {
 
         {/* Targets Tab */}
         <TabsContent value="targets" className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
-          <HRTargetsManagement user={user} />
+          <HRTargetsManagement user={user} attendanceStats={attendanceStats} users={users} />
         </TabsContent>
 
         {/* Recruitment Tab */}
