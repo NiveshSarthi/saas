@@ -327,6 +327,54 @@ export default function SalaryPage() {
     onSuccess: () => toast.success('CSV exported successfully')
   });
 
+  const exportPDFMutation = useMutation({
+    mutationFn: async () => {
+      const employeeData = filteredSalaries.map(s => {
+        const calc = calculateEmployeeSalary(s.employee_email);
+        return {
+          employee_name: s.employee_name,
+          employee_email: s.employee_email,
+          month: s.month,
+          baseSalary: calc.baseSalary,
+          adjustments: calc.adjustments,
+          gross: calc.gross,
+          totalDeductions: calc.totalDeductions,
+          net: calc.net,
+          attendanceRate: calc.attendancePercentage,
+          presentDays: calc.effectivePresent,
+          totalDays: calc.totalDays
+        };
+      });
+
+      const response = await base44.functions.invoke('exportSalaryPDF', {
+        month: selectedMonth,
+        employeeData
+      });
+      return response.data;
+    },
+    onSuccess: (data) => {
+      const byteCharacters = atob(data.pdf_base64);
+      const byteNumbers = new Array(byteCharacters.length);
+      for (let i = 0; i < byteCharacters.length; i++) {
+        byteNumbers[i] = byteCharacters.charCodeAt(i);
+      }
+      const byteArray = new Uint8Array(byteNumbers);
+      const blob = new Blob([byteArray], { type: 'application/pdf' });
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = data.filename;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      window.URL.revokeObjectURL(url);
+      toast.success('PDF exported successfully');
+    },
+    onError: (error) => {
+      toast.error('PDF export failed: ' + error.message);
+    }
+  });
+
   const applyRetroactiveIncentivesMutation = useMutation({
     mutationFn: async () => {
       const result = await base44.functions.invoke('applyRetroactiveIncentives');
@@ -655,12 +703,12 @@ export default function SalaryPage() {
   }
 
   return (
-    <div className="min-h-screen bg-[#0f172a] text-slate-200 font-sans selection:bg-purple-500/30">
+    <div className="min-h-screen bg-slate-50 text-slate-900 font-sans selection:bg-blue-500/30">
       {/* Background Ambience */}
       <div className="fixed inset-0 z-0 pointer-events-none">
-        <div className="absolute top-[-10%] left-[-10%] w-[40%] h-[40%] bg-purple-900/20 rounded-full blur-[120px]" />
-        <div className="absolute bottom-[-10%] right-[-10%] w-[40%] h-[40%] bg-indigo-900/20 rounded-full blur-[120px]" />
-        <div className="absolute top-[20%] right-[10%] w-[20%] h-[30%] bg-pink-900/10 rounded-full blur-[100px]" />
+        <div className="absolute top-[-10%] left-[-10%] w-[40%] h-[40%] bg-blue-100/30 rounded-full blur-[120px]" />
+        <div className="absolute bottom-[-10%] right-[-10%] w-[40%] h-[40%] bg-indigo-100/30 rounded-full blur-[120px]" />
+        <div className="absolute top-[20%] right-[10%] w-[20%] h-[30%] bg-emerald-100/20 rounded-full blur-[100px]" />
       </div>
 
       {/* Main Content */}
@@ -670,14 +718,14 @@ export default function SalaryPage() {
         <div className="flex flex-col lg:flex-row justify-between items-start lg:items-end gap-6 mb-10">
           <div className="space-y-2">
             <div className="flex items-center gap-3 mb-2">
-              <div className="p-3 bg-gradient-to-br from-indigo-500 to-purple-600 rounded-xl shadow-lg shadow-indigo-500/20">
+              <div className="p-3 bg-gradient-to-br from-blue-600 to-indigo-700 rounded-xl shadow-lg shadow-blue-500/20">
                 <DollarSign className="w-8 h-8 text-white" />
               </div>
-              <h1 className="text-4xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-white via-slate-200 to-slate-400">
+              <h1 className="text-4xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-slate-700 via-blue-600 to-indigo-700">
                 Payroll Hub
               </h1>
             </div>
-            <p className="text-slate-400 text-lg max-w-xl">
+            <p className="text-slate-600 text-lg max-w-xl">
               Manage salaries, track attendance, and process payments with real-time insights.
             </p>
           </div>

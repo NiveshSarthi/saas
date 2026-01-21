@@ -103,7 +103,7 @@ export default function AssignLeadDialog({ open, onOpenChange, lead, users, curr
           <div className="space-y-2">
             <Label>Assign To *</Label>
             {isAdmin ? (
-              <Select value={assignee} onValueChange={setAssignee}>
+              <Select value={assignee || undefined} onValueChange={setAssignee}>
                 <SelectTrigger>
                   <SelectValue placeholder="Select user" />
                 </SelectTrigger>
