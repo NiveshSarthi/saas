@@ -199,8 +199,8 @@ export default function UserManagement() {
 
   const toggleInvitationActiveMutation = useMutation({
     mutationFn: async ({ id, active }) => {
-      // active -> 'accepted' (Approved/Active), inactive -> 'revoked'
-      const newStatus = active ? 'accepted' : 'revoked';
+      // active -> 'pending' (Invited/Active), inactive -> 'revoked'
+      const newStatus = active ? 'pending' : 'revoked';
       await base44.entities.UserInvitation.update(id, { status: newStatus });
     },
     onSuccess: (_, { active }) => {
@@ -423,7 +423,7 @@ export default function UserManagement() {
   };
 
   const allUsers = [
-    ...users.map(u => ({ ...u, type: 'user' })),
+    ...users.map(u => ({ ...u, id: u.id || u._id, type: 'user' })),
     ...invitations
       .filter(i => !users.some(u => u.email === i.email))
       .map(i => ({

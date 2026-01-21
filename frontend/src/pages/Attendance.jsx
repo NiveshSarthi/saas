@@ -117,11 +117,8 @@ export default function AttendancePage() {
     enabled: !!user,
   });
 
-  const excludedUsers = ['Nivesh Sarthi', 'Rahul Kushwaha', 'Satpal', 'Tech NS', 'Sachin'];
-
   const allUsers = usersList
     .filter(u => u.active !== false && u.status !== 'inactive')
-    .filter(user => !excludedUsers.includes(user.full_name))
     .map(u => ({
       ...u,
       id: u.id,
@@ -910,7 +907,7 @@ export default function AttendancePage() {
                     </div>
 
                     <div className="lg:col-span-3">
-                      {reportType === 'daily' && <DailyAttendanceReport records={todayAllRecords} users={allUsers} />}
+                      {reportType === 'daily' && <DailyAttendanceReport records={todayAllRecords} users={allUsers} departments={departments} />}
                       {reportType === 'monthly' && (
                         <div className="space-y-6">
                           <Button onClick={handleExportPDF} variant="outline" className="mb-4">
@@ -921,6 +918,7 @@ export default function AttendancePage() {
                             users={allUsers}
                             selectedMonth={selectedMonth}
                             workDays={workDays}
+                            departments={departments}
                           />
                         </div>
                       )}

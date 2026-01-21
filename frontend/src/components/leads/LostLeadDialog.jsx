@@ -87,7 +87,7 @@ export default function LostLeadDialog({ open, onOpenChange, lead, onSuccess }) 
         <div className="space-y-4 py-4">
           <div className="space-y-2">
             <Label>Lost Reason *</Label>
-            <Select value={reason} onValueChange={(val) => {
+            <Select value={reason || undefined} onValueChange={(val) => {
               setReason(val);
               setError('');
             }}>

@@ -85,7 +85,7 @@ export default function StageChangeDialog({ open, onOpenChange, lead, targetStag
 
         // Add incentive bonus when lead is closed won
         if (targetStage.key === 'closed_won' && data.final_amount) {
-          const bonusRecipient = lead.assigned_to || currentUser?.email; // Use assigned user or current user
+          const bonusRecipient = lead.assigned_to || lead.created_by; // Use assigned user or lead creator
           if (!bonusRecipient) return;
 
           const bonusAmount = parseFloat(data.final_amount) * 0.0025; // 0.25%
@@ -247,7 +247,7 @@ export default function StageChangeDialog({ open, onOpenChange, lead, targetStag
             <div className="space-y-2">
               <Label>Requirement *</Label>
               <Select
-                value={formData.requirement}
+                value={formData.requirement || undefined}
                 onValueChange={(value) => setFormData({ ...formData, requirement: value })}
               >
                 <SelectTrigger>
@@ -281,7 +281,7 @@ export default function StageChangeDialog({ open, onOpenChange, lead, targetStag
             <div className="space-y-2">
               <Label>Timeline *</Label>
               <Select
-                value={formData.timeline}
+                value={formData.timeline || undefined}
                 onValueChange={(value) => setFormData({ ...formData, timeline: value })}
               >
                 <SelectTrigger>

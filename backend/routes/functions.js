@@ -467,6 +467,41 @@ router.post('/invoke/generateReport', mockSuccess);
 router.post('/invoke/processAdvanceRecovery', mockSuccess);
 router.post('/invoke/generateSalarySlip', mockDataReturn({ url: '#' }));
 router.post('/invoke/exportSalaryCSV', mockSuccess);
+
+// Export Salary Data as PDF
+router.post('/invoke/exportSalaryPDF', async (req, res) => {
+    try {
+        const { month, employeeData = [] } = req.body;
+
+        if (!month) {
+            return res.status(400).json({ error: 'Month is required' });
+        }
+
+        // Generate PDF content (mock for now - in production use pdfkit or puppeteer)
+        const pdfContent = {
+            title: `Salary Report - ${month}`,
+            generatedAt: new Date().toISOString(),
+            employeeCount: employeeData.length,
+            totalGross: employeeData.reduce((sum, emp) => sum + (emp.baseSalary || 0), 0),
+            totalNet: employeeData.reduce((sum, emp) => sum + (emp.net || 0), 0),
+            data: employeeData
+        };
+
+        // In production, this would generate actual PDF
+        // For now, return mock data
+        res.json({
+            success: true,
+            data: {
+                pdf_base64: btoa(JSON.stringify(pdfContent, null, 2)),
+                filename: `salary_report_${month}.pdf`,
+                message: 'PDF generated successfully'
+            }
+        });
+    } catch (error) {
+        console.error('PDF export error:', error);
+        res.status(500).json({ error: error.message });
+    }
+});
 router.post('/invoke/cleanupDuplicateAttendance', mockSuccess);
 router.post('/invoke/syncWorkDayLedger', mockSuccess);
 
