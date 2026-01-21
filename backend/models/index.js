@@ -608,6 +608,36 @@ export const SalesKPISettings = mongoose.model('SalesKPISettings', salesKPISetti
 export const HRTarget = mongoose.model('HRTarget', hrTargetSchema);
 export const DailySalesPerformance = mongoose.model('DailySalesPerformance', dailySalesPerformanceSchema);
 
+const timesheetSchema = new mongoose.Schema({
+    freelancer_email: String,
+    freelancer_name: String,
+    week_start_date: String, // YYYY-MM-DD
+    period_start: String,
+    period_end: String,
+    status: { type: String, default: 'draft' }, // draft, submitted, approved, rejected
+    entries: [{
+        task_id: String,
+        task_title: String,
+        date: String,
+        hours: Number,
+        description: String,
+        project_id: String,
+        project_name: String
+    }],
+    total_hours: { type: Number, default: 0 },
+    submitted_at: Date,
+    approved_at: Date,
+    approved_by: String,
+    rejected_at: Date,
+    rejected_by: String,
+    rejection_reason: String,
+    comments: String,
+    created_at: { type: Date, default: Date.now },
+    updated_at: { type: Date, default: Date.now }
+});
+
+export const Timesheet = mongoose.model('Timesheet', timesheetSchema);
+
 const facebookPageConnectionSchema = new mongoose.Schema({
     page_id: String,
     page_name: String,

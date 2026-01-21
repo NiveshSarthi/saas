@@ -1,7 +1,7 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { base44 } from '@/api/base44Client';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { format, startOfWeek, endOfWeek, addDays, isSameDay } from 'date-fns';
+import { format, startOfWeek, endOfWeek, addDays, isSameDay, parseISO } from 'date-fns';
 import { cn } from '@/lib/utils';
 import {
   Clock,
@@ -14,7 +14,12 @@ import {
   AlertCircle,
   Trash2,
   Edit,
-  Eye
+  Eye,
+  ChevronLeft,
+  ChevronRight,
+  Briefcase,
+  Layers,
+  FileText
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -88,15 +93,33 @@ export default function Timesheet() {
   const weekStart = startOfWeek(selectedWeek, { weekStartsOn: 1 }); // Monday
   const weekEnd = endOfWeek(selectedWeek, { weekStartsOn: 1 }); // Sunday
 
-  // Get freelancer's assigned tasks
+  // Get user's assigned tasks (FIXED LOGIC)
   const { data: assignedTasks = [] } = useQuery({
-    queryKey: ['freelancer-tasks', user?.email],
+    queryKey: ['my-tasks', user?.email],
     queryFn: () => base44.entities.Task.filter({
-      assignedFreelancerId: user?.email,
-      assignmentType: 'FREELANCER'
+      assignees: user?.email
     }),
     enabled: !!user?.email,
   });
+
+  // Also fetch tasks where user is the primary assignee (backward compatibility)
+  const { data: directTasks = [] } = useQuery({
+    queryKey: ['freelancer-tasks', user?.email],
+    queryFn: () => base44.entities.Task.filter({
+      assignedFreelancerId: user?.email
+    }),
+    enabled: !!user?.email,
+  });
+
+  // Combine and deduplicate tasks
+  const allMyTasks = useMemo(() => {
+    const taskMap = new Map();
+    [...assignedTasks, ...directTasks].forEach(task => {
+      taskMap.set(task.id, task);
+    });
+    return Array.from(taskMap.values());
+  }, [assignedTasks, directTasks]);
+
 
   // Get current week's timesheet
   const { data: currentTimesheet } = useQuery({
@@ -138,7 +161,7 @@ export default function Timesheet() {
 
   const addEntryMutation = useMutation({
     mutationFn: async (entryData) => {
-      const task = assignedTasks.find(t => t.id === entryData.task_id);
+      const task = allMyTasks.find(t => t.id === entryData.task_id);
       const project = projects.find(p => p.id === task?.project_id);
 
       const newEntry = {
@@ -185,11 +208,15 @@ export default function Timesheet() {
       });
       toast.success('Time entry added successfully');
     },
+    onError: (error) => {
+      console.error('Add entry failed:', error);
+      toast.error(`Failed to add entry: ${error.message}`);
+    }
   });
 
   const updateEntryMutation = useMutation({
     mutationFn: async ({ entryIndex, entryData }) => {
-      const task = assignedTasks.find(t => t.id === entryData.task_id);
+      const task = allMyTasks.find(t => t.id === entryData.task_id);
       const project = projects.find(p => p.id === task?.project_id);
 
       const updatedEntry = {
@@ -224,6 +251,10 @@ export default function Timesheet() {
       });
       toast.success('Time entry updated successfully');
     },
+    onError: (error) => {
+      console.error('Update entry failed:', error);
+      toast.error(`Failed to update entry: ${error.message}`);
+    }
   });
 
   const deleteEntryMutation = useMutation({
@@ -258,9 +289,7 @@ export default function Timesheet() {
   });
 
   const handleAddEntry = () => {
-    if (!currentTimesheet) {
-      createTimesheetMutation.mutate();
-    }
+    // Removed redundant createTimesheetMutation call to avoid race conditions
     setEditingEntry(null);
     setEntryForm({
       task_id: '',
@@ -296,10 +325,10 @@ export default function Timesheet() {
 
   const getStatusBadge = (status) => {
     const statusConfig = {
-      draft: { label: 'Draft', color: 'bg-gray-100 text-gray-700' },
-      submitted: { label: 'Submitted', color: 'bg-blue-100 text-blue-700' },
-      approved: { label: 'Approved', color: 'bg-green-100 text-green-700' },
-      rejected: { label: 'Rejected', color: 'bg-red-100 text-red-700' },
+      draft: { label: 'Draft', color: 'bg-slate-100 text-slate-700 border-slate-200' },
+      submitted: { label: 'Submitted', color: 'bg-blue-50 text-blue-700 border-blue-200' },
+      approved: { label: 'Approved', color: 'bg-emerald-50 text-emerald-700 border-emerald-200' },
+      rejected: { label: 'Rejected', color: 'bg-rose-50 text-rose-700 border-rose-200' },
     };
     return statusConfig[status] || statusConfig.draft;
   };
@@ -313,292 +342,386 @@ export default function Timesheet() {
 
   if (!user) {
     return (
-      <div className="p-6 lg:p-8 text-center">
-        <h2 className="text-xl font-semibold text-slate-900">Access Denied</h2>
-        <p className="text-slate-500 mt-2">Please log in to access timesheets.</p>
+      <div className="min-h-screen bg-slate-50 flex items-center justify-center p-4">
+        <div className="bg-white p-8 rounded-2xl shadow-xl text-center max-w-md w-full">
+          <div className="w-16 h-16 bg-slate-100 rounded-full flex items-center justify-center mx-auto mb-4">
+            <Clock className="w-8 h-8 text-slate-400" />
+          </div>
+          <h2 className="text-2xl font-bold text-slate-900 mb-2">Access Denied</h2>
+          <p className="text-slate-500">Please log in to access timesheets.</p>
+        </div>
       </div>
     );
   }
 
   return (
-    <div className="p-6 lg:p-8 max-w-7xl mx-auto">
-      {/* Header */}
-      <div className="mb-8">
-        <div className="flex items-center justify-between">
-          <div>
+    <div className="min-h-screen bg-slate-50/50 pb-20">
+      <div className="p-6 lg:p-8 max-w-7xl mx-auto space-y-8">
+
+        {/* Header Area */}
+        <div className="flex flex-col md:flex-row md:items-center justify-between gap-6">
+          <div className="animate-in slide-in-from-left-4 duration-500">
             <h1 className="text-3xl font-bold text-slate-900">Timesheet</h1>
-            <p className="text-slate-600 mt-1">Track and manage your work hours</p>
+            <p className="text-slate-500 mt-1 flex items-center gap-2">
+              <Calendar className="w-4 h-4" />
+              Track and manage your work hours
+            </p>
           </div>
-          <div className="flex items-center gap-4">
+
+          <div className="flex items-center bg-white p-1 rounded-xl border border-slate-200 shadow-sm animate-in slide-in-from-right-4 duration-500">
             <Button
-              variant="outline"
+              variant="ghost"
+              size="icon"
               onClick={() => setSelectedWeek(addDays(selectedWeek, -7))}
+              className="hover:bg-slate-100 text-slate-500"
             >
-              Previous Week
+              <ChevronLeft className="w-4 h-4" />
             </Button>
-            <div className="text-center">
-              <p className="text-sm text-slate-500">Week of</p>
-              <p className="font-semibold">{format(weekStart, 'MMM d, yyyy')}</p>
+            <div className="px-4 text-center min-w-[140px]">
+              <p className="text-xs font-semibold text-slate-400 uppercase tracking-wider">Week of</p>
+              <p className="font-bold text-slate-700">{format(weekStart, 'MMM d, yyyy')}</p>
             </div>
             <Button
-              variant="outline"
+              variant="ghost"
+              size="icon"
               onClick={() => setSelectedWeek(addDays(selectedWeek, 7))}
+              className="hover:bg-slate-100 text-slate-500"
             >
-              Next Week
+              <ChevronRight className="w-4 h-4" />
             </Button>
           </div>
         </div>
-      </div>
 
-      {/* Status and Actions */}
-      <div className="bg-white rounded-2xl border border-slate-200 p-6 mb-6">
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-4">
-            <div>
-              <h2 className="text-lg font-semibold text-slate-900">Current Status</h2>
-              <Badge className={cn("mt-1", getStatusBadge(currentTimesheet?.status || 'draft').color)}>
-                {getStatusBadge(currentTimesheet?.status || 'draft').label}
-              </Badge>
+        {/* Info & Stats Cards */}
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+          {/* Status Card */}
+          <div className="bg-white rounded-2xl border border-slate-200 p-6 shadow-sm hover:shadow-md transition-shadow">
+            <div className="flex items-start justify-between">
+              <div>
+                <p className="text-sm font-medium text-slate-500 mb-1">Status</p>
+                <div className="flex items-center gap-2">
+                  <Badge className={cn("px-3 py-1 rounded-lg border", getStatusBadge(currentTimesheet?.status || 'draft').color)}>
+                    {getStatusBadge(currentTimesheet?.status || 'draft').label}
+                  </Badge>
+                </div>
+              </div>
+              <div className="p-3 bg-indigo-50 rounded-xl">
+                <Briefcase className="w-6 h-6 text-indigo-600" />
+              </div>
             </div>
-            {currentTimesheet && (
-              <div className="text-center">
-                <p className="text-sm text-slate-500">Total Hours</p>
-                <p className="text-2xl font-bold text-indigo-600">{currentTimesheet.total_hours || 0}</p>
+            {currentTimesheet?.status === 'draft' && currentTimesheet.entries?.length > 0 && (
+              <div className="mt-4 pt-4 border-t border-slate-100">
+                <Button
+                  onClick={() => setSubmitDialogOpen(true)}
+                  className="w-full bg-indigo-600 hover:bg-indigo-700 text-white shadow-lg shadow-indigo-200"
+                >
+                  <Send className="w-4 h-4 mr-2" />
+                  Submit for Approval
+                </Button>
               </div>
             )}
           </div>
 
-          <div className="flex items-center gap-2">
-            {(currentTimesheet?.status === 'draft' || !currentTimesheet) && (
-              <Button onClick={handleAddEntry}>
+          {/* Total Hours Card */}
+          <div className="bg-white rounded-2xl border border-slate-200 p-6 shadow-sm hover:shadow-md transition-shadow">
+            <div className="flex items-start justify-between">
+              <div>
+                <p className="text-sm font-medium text-slate-500 mb-1">Total Hours</p>
+                <p className="text-3xl font-bold text-slate-900">{currentTimesheet?.total_hours || 0}</p>
+              </div>
+              <div className="p-3 bg-emerald-50 rounded-xl">
+                <Clock className="w-6 h-6 text-emerald-600" />
+              </div>
+            </div>
+            <div className="mt-4 pt-4 border-t border-slate-100">
+              <p className="text-xs text-slate-400">Total logged hours this week</p>
+            </div>
+          </div>
+
+          {/* Quick Action Card */}
+          <div className="bg-gradient-to-br from-indigo-600 to-purple-700 rounded-2xl p-6 text-white shadow-lg shadow-indigo-200 relative overflow-hidden group">
+            <div className="absolute top-0 right-0 -mr-4 -mt-4 w-24 h-24 bg-white/10 rounded-full blur-2xl group-hover:bg-white/20 transition-all"></div>
+            <h3 className="text-lg font-bold mb-2 relative z-10">Log Time</h3>
+            <p className="text-indigo-100 mb-6 text-sm relative z-10">Record your work for tasks and projects.</p>
+            {(currentTimesheet?.status === 'draft' || !currentTimesheet) ? (
+              <Button onClick={handleAddEntry} className="w-full bg-white text-indigo-600 hover:bg-indigo-50 border-none">
                 <Plus className="w-4 h-4 mr-2" />
+                Add New Entry
+              </Button>
+            ) : (
+              <div className="bg-white/20 backdrop-blur-sm rounded-lg p-3 text-center text-sm font-medium">
+                Timesheet {currentTimesheet.status}
+              </div>
+            )}
+          </div>
+        </div>
+
+        {/* Weekly Overview Calendar */}
+        <div className="bg-white rounded-2xl border border-slate-200 p-6 shadow-sm">
+          <h3 className="text-lg font-bold text-slate-900 mb-6 flex items-center gap-2">
+            <Layers className="w-5 h-5 text-slate-400" />
+            Weekly Overview
+          </h3>
+          <div className="grid grid-cols-7 gap-2 md:gap-4">
+            {DAYS_OF_WEEK.map((day, index) => {
+              const date = addDays(weekStart, index);
+              const hours = getDailyHours(date);
+              const isToday = isSameDay(date, new Date());
+
+              return (
+                <div
+                  key={day}
+                  className={cn(
+                    "flex flex-col items-center justify-center p-3 md:p-4 rounded-xl border transition-all duration-200",
+                    isToday
+                      ? "border-indigo-500 bg-indigo-50 shadow-md shadow-indigo-100 scale-105"
+                      : "border-slate-100 bg-slate-50/50 hover:bg-slate-50 hover:border-slate-200"
+                  )}
+                >
+                  <span className={cn("text-xs font-semibold mb-1", isToday ? "text-indigo-600" : "text-slate-400")}>
+                    {day}
+                  </span>
+                  <span className={cn("text-lg md:text-xl font-bold mb-2", isToday ? "text-indigo-900" : "text-slate-700")}>
+                    {format(date, 'd')}
+                  </span>
+                  {hours > 0 ? (
+                    <Badge variant="secondary" className={cn("text-xs font-bold", isToday ? "bg-indigo-200 text-indigo-800 hover:bg-indigo-300" : "bg-emerald-100 text-emerald-700 hover:bg-emerald-200")}>
+                      {hours}h
+                    </Badge>
+                  ) : (
+                    <span className="h-5 w-full"></span>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        </div>
+
+        {/* Time Entries Table */}
+        <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
+          <div className="p-6 border-b border-slate-100 flex items-center justify-between">
+            <h3 className="text-lg font-bold text-slate-900 flex items-center gap-2">
+              <FileText className="w-5 h-5 text-slate-400" />
+              Time Entries
+            </h3>
+            {currentTimesheet?.entries?.length > 0 && currentTimesheet.status === 'draft' && (
+              <Button onClick={handleAddEntry} size="sm" variant="outline" className="border-slate-200 text-slate-600 hover:text-indigo-600 hover:bg-indigo-50">
+                <Plus className="w-4 h-4 mr-2" />
+                Add
+              </Button>
+            )}
+          </div>
+
+          {currentTimesheet?.entries?.length > 0 ? (
+            <div className="overflow-x-auto">
+              <Table>
+                <TableHeader>
+                  <TableRow className="hover:bg-transparent border-slate-100">
+                    <TableHead className="w-[180px] text-slate-500 font-semibold bg-slate-50/50">Date</TableHead>
+                    <TableHead className="text-slate-500 font-semibold bg-slate-50/50">Task</TableHead>
+                    <TableHead className="text-slate-500 font-semibold bg-slate-50/50">Project</TableHead>
+                    <TableHead className="text-right text-slate-500 font-semibold bg-slate-50/50">Hours</TableHead>
+                    <TableHead className="w-[30%] text-slate-500 font-semibold bg-slate-50/50">Description</TableHead>
+                    <TableHead className="w-[100px] text-center text-slate-500 font-semibold bg-slate-50/50">Actions</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {currentTimesheet.entries.map((entry, index) => (
+                    <TableRow key={index} className="hover:bg-slate-50/80 border-slate-100 transition-colors">
+                      <TableCell className="font-medium text-slate-900">
+                        <div className="flex flex-col">
+                          <span>{format(new Date(entry.date), 'MMM d, yyyy')}</span>
+                          <span className="text-xs text-slate-400">{format(new Date(entry.date), 'EEEE')}</span>
+                        </div>
+                      </TableCell>
+                      <TableCell>
+                        <div className="font-medium text-slate-900">{entry.task_title}</div>
+                      </TableCell>
+                      <TableCell>
+                        <Badge variant="outline" className="bg-slate-50 text-slate-600 border-slate-200 font-normal">
+                          {entry.project_name}
+                        </Badge>
+                      </TableCell>
+                      <TableCell className="text-right">
+                        <span className="font-bold text-slate-700 bg-slate-100 px-2 py-1 rounded-md">{entry.hours}h</span>
+                      </TableCell>
+                      <TableCell className="max-w-xs">
+                        <p className="truncate text-slate-600 text-sm" title={entry.description}>{entry.description}</p>
+                      </TableCell>
+                      <TableCell>
+                        <div className="flex items-center justify-center gap-1">
+                          {currentTimesheet.status === 'draft' ? (
+                            <>
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                onClick={() => handleEditEntry(entry, index)}
+                                className="h-8 w-8 p-0 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-full"
+                              >
+                                <Edit className="w-4 h-4" />
+                              </Button>
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                onClick={() => deleteEntryMutation.mutate(index)}
+                                className="h-8 w-8 p-0 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-full"
+                              >
+                                <Trash2 className="w-4 h-4" />
+                              </Button>
+                            </>
+                          ) : (
+                            <span className="text-xs text-slate-400 italic">Locked</span>
+                          )}
+                        </div>
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </div>
+          ) : (
+            <div className="p-16 text-center flex flex-col items-center">
+              <div className="w-20 h-20 bg-slate-50 rounded-full flex items-center justify-center mb-6 animate-pulse">
+                <Clock className="w-10 h-10 text-slate-300" />
+              </div>
+              <h3 className="text-xl font-bold text-slate-900 mb-2">No time entries yet</h3>
+              <p className="text-slate-500 mb-8 max-w-sm">Start tracking your work hours for this week. Click the button below to add your first entry.</p>
+
+              <Button onClick={handleAddEntry} className="bg-indigo-600 hover:bg-indigo-700 text-white shadow-xl shadow-indigo-200 px-8 py-6 h-auto text-lg rounded-xl transition-all hover:scale-105 active:scale-95">
+                <Plus className="w-5 h-5 mr-2" />
                 Add Entry
               </Button>
-            )}
-
-            {currentTimesheet?.status === 'draft' && currentTimesheet.entries?.length > 0 && (
-              <Button
-                variant="outline"
-                onClick={() => setSubmitDialogOpen(true)}
-                className="border-blue-500 text-blue-600 hover:bg-blue-50"
-              >
-                <Send className="w-4 h-4 mr-2" />
-                Submit for Approval
-              </Button>
-            )}
-          </div>
-        </div>
-      </div>
-
-      {/* Weekly Overview */}
-      <div className="bg-white rounded-2xl border border-slate-200 p-6 mb-6">
-        <h3 className="text-lg font-semibold text-slate-900 mb-4">Weekly Overview</h3>
-        <div className="grid grid-cols-7 gap-4">
-          {DAYS_OF_WEEK.map((day, index) => {
-            const date = addDays(weekStart, index);
-            const hours = getDailyHours(date);
-            const isToday = isSameDay(date, new Date());
-
-            return (
-              <div
-                key={day}
-                className={cn(
-                  "text-center p-4 rounded-lg border",
-                  isToday ? "border-indigo-500 bg-indigo-50" : "border-slate-200 bg-slate-50"
-                )}
-              >
-                <p className={cn("text-sm font-medium", isToday ? "text-indigo-600" : "text-slate-600")}>
-                  {day}
-                </p>
-                <p className="text-xs text-slate-500 mt-1">
-                  {format(date, 'MMM d')}
-                </p>
-                <p className={cn("text-lg font-bold mt-2", hours > 0 ? "text-green-600" : "text-slate-400")}>
-                  {hours}h
-                </p>
-              </div>
-            );
-          })}
-        </div>
-      </div>
-
-      {/* Time Entries Table */}
-      <div className="bg-white rounded-2xl border border-slate-200 overflow-hidden">
-        <div className="p-6 border-b border-slate-200">
-          <h3 className="text-lg font-semibold text-slate-900">Time Entries</h3>
+            </div>
+          )}
         </div>
 
-        {currentTimesheet?.entries?.length > 0 ? (
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>Date</TableHead>
-                <TableHead>Task</TableHead>
-                <TableHead>Project</TableHead>
-                <TableHead>Hours</TableHead>
-                <TableHead>Description</TableHead>
-                <TableHead className="w-24">Actions</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {currentTimesheet.entries.map((entry, index) => (
-                <TableRow key={index}>
-                  <TableCell>{format(new Date(entry.date), 'MMM d, yyyy')}</TableCell>
-                  <TableCell className="font-medium">{entry.task_title}</TableCell>
-                  <TableCell>{entry.project_name}</TableCell>
-                  <TableCell>{entry.hours}h</TableCell>
-                  <TableCell className="max-w-xs truncate">{entry.description}</TableCell>
-                  <TableCell>
-                    {currentTimesheet.status === 'draft' && (
-                      <div className="flex items-center gap-1">
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          onClick={() => handleEditEntry(entry, index)}
-                        >
-                          <Edit className="w-4 h-4" />
-                        </Button>
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          onClick={() => deleteEntryMutation.mutate(index)}
-                          className="text-red-600 hover:text-red-700"
-                        >
-                          <Trash2 className="w-4 h-4" />
-                        </Button>
+        {/* Add/Edit Entry Dialog */}
+        <Dialog open={entryDialogOpen} onOpenChange={setEntryDialogOpen}>
+          <DialogContent className="sm:max-w-md bg-white border-0 shadow-2xl rounded-2xl">
+            <DialogHeader className="pb-4 border-b border-slate-100">
+              <DialogTitle className="text-xl font-bold text-slate-900 flex items-center gap-2">
+                {editingEntry !== null ? <Edit className="w-5 h-5 text-indigo-500" /> : <Plus className="w-5 h-5 text-indigo-500" />}
+                {editingEntry !== null ? 'Edit Time Entry' : 'Add Time Entry'}
+              </DialogTitle>
+              <DialogDescription className="text-slate-500">
+                Record the time you spent working on a task
+              </DialogDescription>
+            </DialogHeader>
+
+            <div className="space-y-5 pt-4">
+              <div className="space-y-2">
+                <Label htmlFor="task" className="text-slate-700 font-semibold">Task</Label>
+                <Select
+                  value={entryForm.task_id}
+                  onValueChange={(value) => setEntryForm(prev => ({ ...prev, task_id: value }))}
+                >
+                  <SelectTrigger className="bg-slate-50 border-slate-200 h-11 focus:ring-indigo-500">
+                    <SelectValue placeholder="Select a task" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {allMyTasks.length > 0 ? (
+                      allMyTasks.map(task => (
+                        <SelectItem key={task.id} value={task.id}>
+                          {task.title} ({task.parent_id ? 'Subtask' : 'Task'}){(task.created_by || task.reporter_email) ? ` - Created by ${task.created_by || task.reporter_email}` : ''}
+                        </SelectItem>
+                      ))
+                    ) : (
+                      <div className="p-4 text-center text-sm text-slate-500">
+                        No tasks assigned.
                       </div>
                     )}
-                  </TableCell>
-                </TableRow>
-              ))}
-            </TableBody>
-          </Table>
-        ) : (
-          <div className="p-12 text-center">
-            <Clock className="w-16 h-16 text-slate-300 mx-auto mb-4" />
-            <h3 className="text-lg font-medium text-slate-900 mb-2">No time entries yet</h3>
-            <p className="text-slate-500 mb-6">Start tracking your work hours for this week</p>
-            <Button onClick={handleAddEntry}>
-              <Plus className="w-4 h-4 mr-2" />
-              Add Your First Entry
-            </Button>
-          </div>
-        )}
-      </div>
+                  </SelectContent>
+                </Select>
+              </div>
 
-      {/* Add/Edit Entry Dialog */}
-      <Dialog open={entryDialogOpen} onOpenChange={setEntryDialogOpen}>
-        <DialogContent className="sm:max-w-md">
-          <DialogHeader>
-            <DialogTitle>
-              {editingEntry !== null ? 'Edit Time Entry' : 'Add Time Entry'}
-            </DialogTitle>
-            <DialogDescription>
-              Record the time you spent working on a task
-            </DialogDescription>
-          </DialogHeader>
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label htmlFor="date" className="text-slate-700 font-semibold">Date</Label>
+                  <Input
+                    id="date"
+                    type="date"
+                    value={entryForm.date}
+                    onChange={(e) => setEntryForm(prev => ({ ...prev, date: e.target.value }))}
+                    min={format(weekStart, 'yyyy-MM-dd')}
+                    max={format(weekEnd, 'yyyy-MM-dd')}
+                    className="bg-slate-50 border-slate-200 h-11 focus:ring-indigo-500"
+                  />
+                </div>
 
-          <div className="space-y-4">
-            <div>
-              <Label htmlFor="task">Task</Label>
-              <Select
-                value={entryForm.task_id}
-                onValueChange={(value) => setEntryForm(prev => ({ ...prev, task_id: value }))}
+                <div className="space-y-2">
+                  <Label htmlFor="hours" className="text-slate-700 font-semibold">Hours</Label>
+                  <Input
+                    id="hours"
+                    type="number"
+                    step="0.25"
+                    min="0.25"
+                    max="24"
+                    placeholder="e.g., 2.5"
+                    value={entryForm.hours}
+                    onChange={(e) => setEntryForm(prev => ({ ...prev, hours: e.target.value }))}
+                    className="bg-slate-50 border-slate-200 h-11 focus:ring-indigo-500"
+                  />
+                </div>
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="description" className="text-slate-700 font-semibold">Description</Label>
+                <Textarea
+                  id="description"
+                  placeholder="What did you work on?"
+                  value={entryForm.description}
+                  onChange={(e) => setEntryForm(prev => ({ ...prev, description: e.target.value }))}
+                  rows={3}
+                  className="bg-slate-50 border-slate-200 min-h-[100px] focus:ring-indigo-500 resize-none"
+                />
+              </div>
+            </div>
+
+            <div className="flex justify-end gap-2 mt-6 pt-4 border-t border-slate-100">
+              <Button variant="outline" onClick={() => setEntryDialogOpen(false)} className="border-slate-200 text-slate-600 hover:bg-slate-50">
+                Cancel
+              </Button>
+              <Button
+                onClick={handleSaveEntry}
+                disabled={addEntryMutation.isPending || updateEntryMutation.isPending}
+                className="bg-indigo-600 hover:bg-indigo-700 text-white shadow-lg shadow-indigo-200"
               >
-                <SelectTrigger>
-                  <SelectValue placeholder="Select a task" />
-                </SelectTrigger>
-                <SelectContent>
-                  {assignedTasks.map(task => (
-                    <SelectItem key={task.id} value={task.id}>
-                      {task.title}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+                {addEntryMutation.isPending || updateEntryMutation.isPending ? (
+                  <>Saving...</>
+                ) : (
+                  <>
+                    <Save className="w-4 h-4 mr-2" />
+                    Save Entry
+                  </>
+                )}
+              </Button>
             </div>
+          </DialogContent>
+        </Dialog>
 
-            <div>
-              <Label htmlFor="date">Date</Label>
-              <Input
-                id="date"
-                type="date"
-                value={entryForm.date}
-                onChange={(e) => setEntryForm(prev => ({ ...prev, date: e.target.value }))}
-                min={format(weekStart, 'yyyy-MM-dd')}
-                max={format(weekEnd, 'yyyy-MM-dd')}
-              />
-            </div>
-
-            <div>
-              <Label htmlFor="hours">Hours</Label>
-              <Input
-                id="hours"
-                type="number"
-                step="0.25"
-                min="0.25"
-                max="24"
-                placeholder="e.g., 2.5"
-                value={entryForm.hours}
-                onChange={(e) => setEntryForm(prev => ({ ...prev, hours: e.target.value }))}
-              />
-            </div>
-
-            <div>
-              <Label htmlFor="description">Description</Label>
-              <Textarea
-                id="description"
-                placeholder="What did you work on?"
-                value={entryForm.description}
-                onChange={(e) => setEntryForm(prev => ({ ...prev, description: e.target.value }))}
-                rows={3}
-              />
-            </div>
-          </div>
-
-          <div className="flex justify-end gap-2 mt-6">
-            <Button variant="outline" onClick={() => setEntryDialogOpen(false)}>
-              Cancel
-            </Button>
-            <Button
-              onClick={handleSaveEntry}
-              disabled={addEntryMutation.isPending || updateEntryMutation.isPending}
-            >
-              {addEntryMutation.isPending || updateEntryMutation.isPending ? (
-                <>Saving...</>
-              ) : (
-                <>
-                  <Save className="w-4 h-4 mr-2" />
-                  Save Entry
-                </>
-              )}
-            </Button>
-          </div>
-        </DialogContent>
-      </Dialog>
-
-      {/* Submit Confirmation Dialog */}
-      <AlertDialog open={submitDialogOpen} onOpenChange={setSubmitDialogOpen}>
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>Submit Timesheet for Approval</AlertDialogTitle>
-            <AlertDialogDescription>
-              Once submitted, you won't be able to make changes until it's reviewed by an administrator.
-              Are you sure all your time entries are correct?
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel>Cancel</AlertDialogCancel>
-            <AlertDialogAction
-              onClick={handleSubmitTimesheet}
-              disabled={submitTimesheetMutation.isPending}
-              className="bg-blue-600 hover:bg-blue-700"
-            >
-              {submitTimesheetMutation.isPending ? 'Submitting...' : 'Submit for Approval'}
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
+        {/* Submit Confirmation Dialog */}
+        <AlertDialog open={submitDialogOpen} onOpenChange={setSubmitDialogOpen}>
+          <AlertDialogContent className="bg-white border-0 shadow-2xl rounded-2xl">
+            <AlertDialogHeader>
+              <AlertDialogTitle className="text-xl font-bold text-slate-900">Submit Timesheet for Approval</AlertDialogTitle>
+              <AlertDialogDescription className="text-slate-500 text-base mt-2">
+                Once submitted, you won't be able to make changes until it's reviewed by an administrator.
+                Are you sure all your time entries are correct?
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter className="mt-6">
+              <AlertDialogCancel className="border-slate-200 text-slate-600 hover:bg-slate-50">Cancel</AlertDialogCancel>
+              <AlertDialogAction
+                onClick={handleSubmitTimesheet}
+                disabled={submitTimesheetMutation.isPending}
+                className="bg-blue-600 hover:bg-blue-700 text-white"
+              >
+                {submitTimesheetMutation.isPending ? 'Submitting...' : 'Submit for Approval'}
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
+      </div>
     </div>
   );
 }

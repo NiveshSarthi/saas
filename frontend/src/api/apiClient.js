@@ -1,6 +1,6 @@
 import { appParams } from '@/lib/app-params';
 
-const API_BASE = import.meta.env.VITE_BACKEND_URL || 'http://localhost:3001';
+const API_BASE = import.meta.env.VITE_BACKEND_URL || 'http://localhost:3000';
 
 /**
  * @typedef {Object} EntityManager

@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { base44 } from '@/api/base44Client';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { format, startOfWeek, endOfWeek, addDays } from 'date-fns';
+import { format, addDays } from 'date-fns';
 import { cn } from '@/lib/utils';
 import {
   Clock,
@@ -14,7 +14,10 @@ import {
   MessageSquare,
   ChevronLeft,
   ChevronRight,
-  Filter
+  Filter,
+  Check,
+  X,
+  FileText
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -43,16 +46,6 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
-import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-} from '@/components/ui/alert-dialog';
 import { toast } from 'sonner';
 
 export default function TimesheetApproval() {
@@ -92,14 +85,14 @@ export default function TimesheetApproval() {
 
       return await base44.entities.Timesheet.filter(filter, '-submitted_at');
     },
-    enabled: !!user?.role === 'admin',
+    enabled: !!user?.email && (user?.role === 'admin' || user?.role === 'manager'),
   });
 
   // Get freelancers for filter
   const { data: freelancers = [] } = useQuery({
     queryKey: ['freelancers-for-filter'],
     queryFn: () => base44.entities.User.filter({ role: 'freelancer' }),
-    enabled: !!user?.role === 'admin',
+    enabled: !!user?.email && (user?.role === 'admin' || user?.role === 'manager'),
   });
 
   const approveTimesheetMutation = useMutation({
@@ -176,17 +169,17 @@ export default function TimesheetApproval() {
 
   const getStatusBadge = (status) => {
     const statusConfig = {
-      draft: { label: 'Draft', color: 'bg-gray-100 text-gray-700', icon: AlertCircle },
-      submitted: { label: 'Submitted', color: 'bg-blue-100 text-blue-700', icon: Clock },
-      approved: { label: 'Approved', color: 'bg-green-100 text-green-700', icon: CheckCircle },
-      rejected: { label: 'Rejected', color: 'bg-red-100 text-red-700', icon: XCircle },
+      draft: { label: 'Draft', color: 'bg-slate-100 text-slate-700 border-slate-200', icon: AlertCircle },
+      submitted: { label: 'Submitted', color: 'bg-blue-50 text-blue-700 border-blue-200', icon: Clock },
+      approved: { label: 'Approved', color: 'bg-emerald-50 text-emerald-700 border-emerald-200', icon: CheckCircle },
+      rejected: { label: 'Rejected', color: 'bg-rose-50 text-rose-700 border-rose-200', icon: XCircle },
     };
     const config = statusConfig[status] || statusConfig.draft;
     const IconComponent = config.icon;
 
     return (
-      <Badge className={cn("flex items-center gap-1", config.color)}>
-        <IconComponent className="w-3 h-3" />
+      <Badge className={cn("flex items-center gap-1.5 px-2.5 py-0.5 rounded-full border shadow-sm", config.color)}>
+        <IconComponent className="w-3.5 h-3.5" />
         {config.label}
       </Badge>
     );
@@ -200,354 +193,443 @@ export default function TimesheetApproval() {
 
   if (!user) {
     return (
-      <div className="p-6 lg:p-8 text-center">
-        <h2 className="text-xl font-semibold text-slate-900">Access Denied</h2>
-        <p className="text-slate-500 mt-2">Please log in to access timesheet approval.</p>
+      <div className="min-h-screen bg-slate-50 flex items-center justify-center p-4">
+        <div className="bg-white p-8 rounded-2xl shadow-xl text-center max-w-md w-full">
+          <div className="w-16 h-16 bg-slate-100 rounded-full flex items-center justify-center mx-auto mb-4">
+            <User className="w-8 h-8 text-slate-400" />
+          </div>
+          <h2 className="text-2xl font-bold text-slate-900 mb-2">Access Denied</h2>
+          <p className="text-slate-500">Please log in to access timesheet approval.</p>
+        </div>
       </div>
     );
   }
 
-  if (user.role !== 'admin') {
+  if (user.role !== 'admin' && user.role !== 'manager') {
     return (
-      <div className="p-6 lg:p-8 text-center">
-        <h2 className="text-xl font-semibold text-slate-900">Access Restricted</h2>
-        <p className="text-slate-500 mt-2">Only administrators can access timesheet approval.</p>
+      <div className="min-h-screen bg-slate-50 flex items-center justify-center p-4">
+        <div className="bg-white p-8 rounded-2xl shadow-xl text-center max-w-md w-full">
+          <div className="w-16 h-16 bg-rose-50 rounded-full flex items-center justify-center mx-auto mb-4">
+            <XCircle className="w-8 h-8 text-rose-400" />
+          </div>
+          <h2 className="text-2xl font-bold text-slate-900 mb-2">Access Restricted</h2>
+          <p className="text-slate-500">Only administrators and managers can access timesheet approval.</p>
+        </div>
       </div>
     );
   }
 
   return (
-    <div className="p-6 lg:p-8 max-w-7xl mx-auto">
-      {/* Header */}
-      <div className="mb-8">
-        <h1 className="text-3xl font-bold text-slate-900">Timesheet Approval</h1>
-        <p className="text-slate-600 mt-1">Review and approve freelancer timesheets</p>
-      </div>
+    <div className="min-h-screen bg-slate-50/50 pb-20">
+      <div className="p-6 lg:p-8 max-w-7xl mx-auto space-y-8">
 
-      {/* Filters */}
-      <div className="bg-white rounded-2xl border border-slate-200 p-6 mb-6">
-        <div className="flex items-center gap-4 flex-wrap">
-          <div className="flex items-center gap-2">
-            <Filter className="w-4 h-4 text-slate-500" />
-            <span className="text-sm font-medium text-slate-700">Filters:</span>
-          </div>
-
-          <div className="flex items-center gap-2">
-            <Label htmlFor="status-filter" className="text-sm">Status</Label>
-            <Select value={statusFilter} onValueChange={setStatusFilter}>
-              <SelectTrigger className="w-40">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">All Status</SelectItem>
-                <SelectItem value="submitted">Submitted</SelectItem>
-                <SelectItem value="approved">Approved</SelectItem>
-                <SelectItem value="rejected">Rejected</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
-
-          <div className="flex items-center gap-2">
-            <Label htmlFor="freelancer-filter" className="text-sm">Freelancer</Label>
-            <Select value={freelancerFilter} onValueChange={setFreelancerFilter}>
-              <SelectTrigger className="w-48">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">All Freelancers</SelectItem>
-                {freelancers.map(freelancer => (
-                  <SelectItem key={freelancer.email} value={freelancer.email}>
-                    {freelancer.full_name || freelancer.email}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+        {/* Header */}
+        <div className="flex flex-col md:flex-row md:items-center justify-between gap-6">
+          <div className="animate-in slide-in-from-left-4 duration-500">
+            <h1 className="text-3xl font-bold text-slate-900">Timesheet Approval</h1>
+            <p className="text-slate-500 mt-1 flex items-center gap-2">
+              <CheckCircle className="w-4 h-4" />
+              Review and approve freelancer timesheets
+            </p>
           </div>
         </div>
-      </div>
 
-      {/* Timesheets Table */}
-      <div className="bg-white rounded-2xl border border-slate-200 overflow-hidden">
-        <div className="p-6 border-b border-slate-200">
-          <h3 className="text-lg font-semibold text-slate-900">
-            Timesheets ({timesheets.length})
-          </h3>
-        </div>
+        {/* Filters and Stats */}
+        <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
+          {/* Filters Card */}
+          <div className="lg:col-span-3 bg-white rounded-2xl border border-slate-200 p-6 shadow-sm">
+            <div className="flex items-center gap-2 mb-4">
+              <Filter className="w-4 h-4 text-indigo-500" />
+              <h3 className="font-semibold text-slate-900">Filters</h3>
+            </div>
 
-        {isLoading ? (
-          <div className="p-12 text-center">
-            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-indigo-600 mx-auto"></div>
-            <p className="text-slate-500 mt-4">Loading timesheets...</p>
-          </div>
-        ) : timesheets.length > 0 ? (
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>Freelancer</TableHead>
-                <TableHead>Week</TableHead>
-                <TableHead>Period</TableHead>
-                <TableHead>Total Hours</TableHead>
-                <TableHead>Status</TableHead>
-                <TableHead>Submitted</TableHead>
-                <TableHead className="w-48">Actions</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {timesheets.map((timesheet) => (
-                <TableRow key={timesheet.id}>
-                  <TableCell className="font-medium">
-                    {timesheet.freelancer_name}
-                    <div className="text-xs text-slate-500">{timesheet.freelancer_email}</div>
-                  </TableCell>
-                  <TableCell>{formatWeekRange(timesheet.week_start_date)}</TableCell>
-                  <TableCell>
-                    {format(new Date(timesheet.period_start), 'MMM d')} - {format(new Date(timesheet.period_end), 'MMM d, yyyy')}
-                  </TableCell>
-                  <TableCell className="font-medium">{timesheet.total_hours}h</TableCell>
-                  <TableCell>{getStatusBadge(timesheet.status)}</TableCell>
-                  <TableCell>
-                    {timesheet.submitted_at ? format(new Date(timesheet.submitted_at), 'MMM d, yyyy') : '-'}
-                  </TableCell>
-                  <TableCell>
-                    <div className="flex items-center gap-2">
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={() => setSelectedTimesheet(timesheet)}
-                      >
-                        <Eye className="w-4 h-4 mr-1" />
-                        View
-                      </Button>
-
-                      {timesheet.status === 'submitted' && (
-                        <>
-                          <Button
-                            size="sm"
-                            onClick={() => handleApprove(timesheet)}
-                            className="bg-green-600 hover:bg-green-700"
-                          >
-                            <CheckCircle className="w-4 h-4 mr-1" />
-                            Approve
-                          </Button>
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            onClick={() => handleReject(timesheet)}
-                            className="border-red-500 text-red-600 hover:bg-red-50"
-                          >
-                            <XCircle className="w-4 h-4 mr-1" />
-                            Reject
-                          </Button>
-                        </>
-                      )}
-                    </div>
-                  </TableCell>
-                </TableRow>
-              ))}
-            </TableBody>
-          </Table>
-        ) : (
-          <div className="p-12 text-center">
-            <Clock className="w-16 h-16 text-slate-300 mx-auto mb-4" />
-            <h3 className="text-lg font-medium text-slate-900 mb-2">No timesheets found</h3>
-            <p className="text-slate-500">No timesheets match the current filters</p>
-          </div>
-        )}
-      </div>
-
-      {/* Timesheet Details Dialog */}
-      <Dialog open={!!selectedTimesheet && !reviewDialogOpen} onOpenChange={() => setSelectedTimesheet(null)}>
-        <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
-          <DialogHeader>
-            <DialogTitle className="flex items-center gap-2">
-              <User className="w-5 h-5" />
-              {selectedTimesheet?.freelancer_name} - Timesheet Details
-            </DialogTitle>
-            <DialogDescription>
-              Week of {selectedTimesheet ? formatWeekRange(selectedTimesheet.week_start_date) : ''}
-            </DialogDescription>
-          </DialogHeader>
-
-          {selectedTimesheet && (
-            <div className="space-y-6">
-              {/* Summary */}
-              <div className="bg-slate-50 rounded-lg p-4">
-                <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                  <div>
-                    <p className="text-sm text-slate-500">Status</p>
-                    {getStatusBadge(selectedTimesheet.status)}
-                  </div>
-                  <div>
-                    <p className="text-sm text-slate-500">Total Hours</p>
-                    <p className="text-2xl font-bold text-indigo-600">{selectedTimesheet.total_hours}h</p>
-                  </div>
-                  <div>
-                    <p className="text-sm text-slate-500">Submitted</p>
-                    <p className="text-sm">{selectedTimesheet.submitted_at ? format(new Date(selectedTimesheet.submitted_at), 'MMM d, yyyy HH:mm') : '-'}</p>
-                  </div>
-                  <div>
-                    <p className="text-sm text-slate-500">Entries</p>
-                    <p className="text-lg font-semibold">{selectedTimesheet.entries?.length || 0}</p>
-                  </div>
-                </div>
+            <div className="flex flex-col sm:flex-row items-center gap-4">
+              <div className="w-full sm:w-auto">
+                <Select value={statusFilter} onValueChange={setStatusFilter}>
+                  <SelectTrigger className="w-full sm:w-[180px] bg-slate-50 border-slate-200 h-10 rounded-lg">
+                    <SelectValue placeholder="Status" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">All Status</SelectItem>
+                    <SelectItem value="submitted">Submitted</SelectItem>
+                    <SelectItem value="approved">Approved</SelectItem>
+                    <SelectItem value="rejected">Rejected</SelectItem>
+                  </SelectContent>
+                </Select>
               </div>
 
-              {/* Time Entries */}
-              <div>
-                <h4 className="text-lg font-semibold text-slate-900 mb-4">Time Entries</h4>
-                {selectedTimesheet.entries?.length > 0 ? (
-                  <div className="space-y-3">
-                    {selectedTimesheet.entries.map((entry, index) => (
-                      <div key={index} className="bg-white border border-slate-200 rounded-lg p-4">
-                        <div className="flex items-start justify-between">
-                          <div className="flex-1">
-                            <div className="flex items-center gap-4 mb-2">
-                              <span className="font-medium text-slate-900">{entry.task_title}</span>
-                              <Badge variant="outline">{entry.project_name}</Badge>
-                              <span className="text-sm text-slate-500">{entry.hours}h</span>
-                            </div>
-                            <p className="text-sm text-slate-600 mb-2">{entry.description}</p>
-                            <p className="text-xs text-slate-400">
-                              {format(new Date(entry.date), 'EEEE, MMMM d, yyyy')}
-                            </p>
-                          </div>
+              <div className="w-full sm:w-auto">
+                <Select value={freelancerFilter} onValueChange={setFreelancerFilter}>
+                  <SelectTrigger className="w-full sm:w-[220px] bg-slate-50 border-slate-200 h-10 rounded-lg">
+                    <SelectValue placeholder="Freelancer" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">All Freelancers</SelectItem>
+                    {freelancers.map(freelancer => (
+                      <SelectItem key={freelancer.email} value={freelancer.email}>
+                        {freelancer.full_name || freelancer.email}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <div className="ml-auto text-sm text-slate-500">
+                Showing {timesheets.length} result{timesheets.length !== 1 ? 's' : ''}
+              </div>
+            </div>
+          </div>
+
+          {/* Quick Stats */}
+          <div className="bg-gradient-to-br from-indigo-600 to-purple-700 rounded-2xl p-6 text-white shadow-lg shadow-indigo-200">
+            <h3 className="text-sm font-medium text-indigo-100 mb-1">Pending Reviews</h3>
+            <div className="flex items-baseline gap-2">
+              <span className="text-3xl font-bold">
+                {timesheets.filter(t => t.status === 'submitted').length}
+              </span>
+              <span className="text-sm text-indigo-200">timesheets</span>
+            </div>
+            <div className="mt-4 pt-4 border-t border-white/10 text-xs text-indigo-100 flex items-center gap-2">
+              <Clock className="w-3 h-3" />
+              Needs attention
+            </div>
+          </div>
+        </div>
+
+        {/* Timesheets Table */}
+        <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
+          {isLoading ? (
+            <div className="p-20 text-center">
+              <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-indigo-600 mx-auto mb-4"></div>
+              <p className="text-slate-500">Loading timesheets...</p>
+            </div>
+          ) : timesheets.length > 0 ? (
+            <Table>
+              <TableHeader>
+                <TableRow className="hover:bg-transparent border-slate-100">
+                  <TableHead className="text-slate-500 font-semibold bg-slate-50/50 pl-6">Freelancer</TableHead>
+                  <TableHead className="text-slate-500 font-semibold bg-slate-50/50">Week</TableHead>
+                  <TableHead className="text-slate-500 font-semibold bg-slate-50/50">Period</TableHead>
+                  <TableHead className="text-slate-500 font-semibold bg-slate-50/50">Total Hours</TableHead>
+                  <TableHead className="text-slate-500 font-semibold bg-slate-50/50">Status</TableHead>
+                  <TableHead className="text-slate-500 font-semibold bg-slate-50/50">Submitted</TableHead>
+                  <TableHead className="text-center text-slate-500 font-semibold bg-slate-50/50 w-[200px] pr-6">Actions</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {timesheets.map((timesheet) => (
+                  <TableRow key={timesheet.id} className="hover:bg-slate-50/80 border-slate-100 transition-colors group">
+                    <TableCell className="pl-6">
+                      <div className="flex items-center gap-3">
+                        <div className="w-8 h-8 rounded-full bg-indigo-100 text-indigo-600 flex items-center justify-center text-xs font-bold">
+                          {timesheet.freelancer_name?.charAt(0) || 'U'}
+                        </div>
+                        <div>
+                          <div className="font-semibold text-slate-900">{timesheet.freelancer_name}</div>
+                          <div className="text-xs text-slate-500">{timesheet.freelancer_email}</div>
                         </div>
                       </div>
-                    ))}
-                  </div>
-                ) : (
-                  <p className="text-slate-500 text-center py-8">No time entries found</p>
-                )}
-              </div>
-
-              {/* Approval/Rejection Info */}
-              {selectedTimesheet.status !== 'submitted' && (
-                <div className="bg-slate-50 rounded-lg p-4">
-                  <h4 className="text-lg font-semibold text-slate-900 mb-3">
-                    {selectedTimesheet.status === 'approved' ? 'Approval' : 'Rejection'} Details
-                  </h4>
-                  <div className="space-y-2">
-                    <div className="flex items-center gap-2">
-                      <span className="text-sm text-slate-500">By:</span>
-                      <span className="text-sm">{selectedTimesheet.approved_by || selectedTimesheet.rejected_by}</span>
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <span className="text-sm text-slate-500">Date:</span>
-                      <span className="text-sm">
-                        {selectedTimesheet.approved_at ?
-                          format(new Date(selectedTimesheet.approved_at), 'MMM d, yyyy HH:mm') :
-                          selectedTimesheet.rejected_at ?
-                          format(new Date(selectedTimesheet.rejected_at), 'MMM d, yyyy HH:mm') : '-'
-                        }
+                    </TableCell>
+                    <TableCell>
+                      <span className="font-medium text-slate-700">{formatWeekRange(timesheet.week_start_date)}</span>
+                    </TableCell>
+                    <TableCell>
+                      <span className="text-sm text-slate-600">
+                        {format(new Date(timesheet.period_start), 'MMM d')} - {format(new Date(timesheet.period_end), 'MMM d')}
                       </span>
-                    </div>
-                    {selectedTimesheet.rejection_reason && (
-                      <div>
-                        <span className="text-sm text-slate-500">Reason:</span>
-                        <p className="text-sm text-red-600 mt-1">{selectedTimesheet.rejection_reason}</p>
+                    </TableCell>
+                    <TableCell>
+                      <span className="font-bold text-slate-900 bg-slate-100 px-2 py-1 rounded text-sm">{timesheet.total_hours}h</span>
+                    </TableCell>
+                    <TableCell>
+                      {getStatusBadge(timesheet.status)}
+                    </TableCell>
+                    <TableCell>
+                      <span className="text-sm text-slate-500">
+                        {timesheet.submitted_at ? format(new Date(timesheet.submitted_at), 'MMM d, yyyy') : '-'}
+                      </span>
+                    </TableCell>
+                    <TableCell className="pr-6">
+                      <div className="flex items-center justify-center gap-2 opacity-100 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity">
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => setSelectedTimesheet(timesheet)}
+                          className="text-slate-500 hover:text-indigo-600 hover:bg-indigo-50"
+                        >
+                          <Eye className="w-4 h-4 mr-1" />
+                          View
+                        </Button>
+
+                        {timesheet.status === 'submitted' && (
+                          <div className="flex items-center gap-1">
+                            <Button
+                              size="sm"
+                              onClick={() => handleApprove(timesheet)}
+                              className="h-8 w-8 p-0 bg-emerald-100 text-emerald-600 hover:bg-emerald-200 hover:text-emerald-700 rounded-full shadow-sm border border-emerald-200"
+                            >
+                              <Check className="w-4 h-4" />
+                            </Button>
+                            <Button
+                              size="sm"
+                              onClick={() => handleReject(timesheet)}
+                              className="h-8 w-8 p-0 bg-rose-100 text-rose-600 hover:bg-rose-200 hover:text-rose-700 rounded-full shadow-sm border border-rose-200"
+                            >
+                              <X className="w-4 h-4" />
+                            </Button>
+                          </div>
+                        )}
                       </div>
-                    )}
-                    {selectedTimesheet.comments && (
-                      <div>
-                        <span className="text-sm text-slate-500">Comments:</span>
-                        <p className="text-sm mt-1">{selectedTimesheet.comments}</p>
-                      </div>
-                    )}
-                  </div>
-                </div>
-              )}
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          ) : (
+            <div className="p-20 text-center flex flex-col items-center">
+              <div className="w-20 h-20 bg-slate-50 rounded-full flex items-center justify-center mb-6">
+                <FileText className="w-10 h-10 text-slate-300" />
+              </div>
+              <h3 className="text-lg font-bold text-slate-900 mb-2">No timesheets found</h3>
+              <p className="text-slate-500 max-w-sm">No timesheets match the current filters. Adjust the filters or check back later.</p>
             </div>
           )}
-        </DialogContent>
-      </Dialog>
+        </div>
 
-      {/* Review Dialog */}
-      <Dialog open={reviewDialogOpen} onOpenChange={setReviewDialogOpen}>
-        <DialogContent className="sm:max-w-md">
-          <DialogHeader>
-            <DialogTitle className={cn(
-              "flex items-center gap-2",
-              reviewAction === 'approve' ? "text-green-600" : "text-red-600"
-            )}>
-              {reviewAction === 'approve' ? (
-                <CheckCircle className="w-5 h-5" />
-              ) : (
-                <XCircle className="w-5 h-5" />
-              )}
-              {reviewAction === 'approve' ? 'Approve' : 'Reject'} Timesheet
-            </DialogTitle>
-            <DialogDescription>
-              {selectedTimesheet && (
-                <span>
-                  {selectedTimesheet.freelancer_name}'s timesheet for {formatWeekRange(selectedTimesheet.week_start_date)}
-                </span>
-              )}
-            </DialogDescription>
-          </DialogHeader>
+        {/* Timesheet Details Dialog */}
+        <Dialog open={!!selectedTimesheet && !reviewDialogOpen} onOpenChange={() => setSelectedTimesheet(null)}>
+          <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto bg-white border-0 shadow-2xl rounded-2xl">
+            <DialogHeader className="pb-4 border-b border-slate-100">
+              <div className="flex items-center justify-between pr-8">
+                <DialogTitle className="flex items-center gap-3 text-xl font-bold text-slate-900">
+                  <User className="w-6 h-6 text-indigo-500" />
+                  {selectedTimesheet?.freelancer_name}
+                </DialogTitle>
+                {selectedTimesheet && getStatusBadge(selectedTimesheet.status)}
+              </div>
+              <DialogDescription className="text-slate-500 mt-1">
+                Week range: {selectedTimesheet ? formatWeekRange(selectedTimesheet.week_start_date) : ''}
+              </DialogDescription>
+            </DialogHeader>
 
-          <div className="space-y-4">
-            {reviewAction === 'reject' && (
-              <div>
-                <Label htmlFor="rejection-reason" className="text-red-600">
-                  Reason for Rejection <span className="text-red-500">*</span>
-                </Label>
-                <Textarea
-                  id="rejection-reason"
-                  placeholder="Please provide a reason for rejecting this timesheet..."
-                  value={rejectionReason}
-                  onChange={(e) => setRejectionReason(e.target.value)}
-                  rows={3}
-                  className="mt-1"
-                />
+            {selectedTimesheet && (
+              <div className="space-y-8 pt-4">
+                {/* Stats Grid */}
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                  <div className="bg-slate-50 p-4 rounded-xl border border-slate-100">
+                    <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1">Total Hours</p>
+                    <p className="text-2xl font-bold text-slate-900">{selectedTimesheet.total_hours}h</p>
+                  </div>
+                  <div className="bg-slate-50 p-4 rounded-xl border border-slate-100">
+                    <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1">Entries</p>
+                    <p className="text-2xl font-bold text-slate-900">{selectedTimesheet.entries?.length || 0}</p>
+                  </div>
+                  <div className="bg-slate-50 p-4 rounded-xl border border-slate-100 col-span-2">
+                    <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1">Submitted On</p>
+                    <p className="text-lg font-medium text-slate-900">
+                      {selectedTimesheet.submitted_at ? format(new Date(selectedTimesheet.submitted_at), 'MMM d, yyyy HH:mm') : 'Not submitted yet'}
+                    </p>
+                  </div>
+                </div>
+
+                {/* Time Entries */}
+                <div>
+                  <h4 className="text-lg font-bold text-slate-900 mb-4 flex items-center gap-2">
+                    <Clock className="w-5 h-5 text-slate-400" />
+                    Time Entries
+                  </h4>
+                  {selectedTimesheet.entries?.length > 0 ? (
+                    <div className="space-y-3">
+                      {selectedTimesheet.entries.map((entry, index) => (
+                        <div key={index} className="bg-white border border-slate-200 rounded-xl p-4 hover:shadow-sm transition-shadow">
+                          <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-4">
+                            <div className="flex-1 space-y-2">
+                              <div className="flex items-center flex-wrap gap-2">
+                                <span className="font-bold text-slate-900 text-lg">{entry.task_title}</span>
+                                <Badge variant="outline" className="bg-indigo-50 text-indigo-700 border-indigo-100">{entry.project_name}</Badge>
+                              </div>
+                              <p className="text-slate-600 text-sm leading-relaxed">{entry.description}</p>
+                            </div>
+                            <div className="flex flex-row sm:flex-col items-center sm:items-end gap-3 sm:gap-1">
+                              <div className="flex items-center gap-2 text-slate-500 text-sm">
+                                <Calendar className="w-4 h-4" />
+                                {format(new Date(entry.date), 'MMM d, yyyy')}
+                              </div>
+                              <Badge className="bg-emerald-100 text-emerald-700 text-base font-bold px-3 py-1">
+                                {entry.hours}h
+                              </Badge>
+                            </div>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
+                    <div className="py-12 text-center bg-slate-50 rounded-xl border border-dashed border-slate-300">
+                      <p className="text-slate-500">No time entries found</p>
+                    </div>
+                  )}
+                </div>
+
+                {/* Approval/Rejection Info */}
+                {selectedTimesheet.status !== 'submitted' && selectedTimesheet.status !== 'draft' && (
+                  <div className={cn(
+                    "rounded-xl p-6 border",
+                    selectedTimesheet.status === 'approved' ? "bg-emerald-50 border-emerald-100" : "bg-rose-50 border-rose-100"
+                  )}>
+                    <h4 className={cn(
+                      "text-lg font-bold mb-4 flex items-center gap-2",
+                      selectedTimesheet.status === 'approved' ? "text-emerald-800" : "text-rose-800"
+                    )}>
+                      {selectedTimesheet.status === 'approved' ? <CheckCircle className="w-5 h-5" /> : <XCircle className="w-5 h-5" />}
+                      {selectedTimesheet.status === 'approved' ? 'Approval Details' : 'Rejection Details'}
+                    </h4>
+
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                      <div>
+                        <p className={cn("text-xs font-bold uppercase tracking-wider mb-1", selectedTimesheet.status === 'approved' ? "text-emerald-600" : "text-rose-600")}>Reviewed By</p>
+                        <p className="font-medium text-slate-900">{selectedTimesheet.approved_by || selectedTimesheet.rejected_by}</p>
+                      </div>
+                      <div>
+                        <p className={cn("text-xs font-bold uppercase tracking-wider mb-1", selectedTimesheet.status === 'approved' ? "text-emerald-600" : "text-rose-600")}>Date</p>
+                        <p className="font-medium text-slate-900">
+                          {selectedTimesheet.approved_at ?
+                            format(new Date(selectedTimesheet.approved_at), 'MMM d, yyyy HH:mm') :
+                            selectedTimesheet.rejected_at ?
+                              format(new Date(selectedTimesheet.rejected_at), 'MMM d, yyyy HH:mm') : '-'
+                          }
+                        </p>
+                      </div>
+                    </div>
+
+                    {selectedTimesheet.rejection_reason && (
+                      <div className="mt-4 pt-4 border-t border-rose-200">
+                        <p className="text-xs font-bold text-rose-600 uppercase tracking-wider mb-1">Reason for Rejection</p>
+                        <p className="text-rose-800 bg-white/50 p-3 rounded-lg border border-rose-100">{selectedTimesheet.rejection_reason}</p>
+                      </div>
+                    )}
+
+                    {selectedTimesheet.comments && (
+                      <div className={cn("mt-4 pt-4 border-t", selectedTimesheet.status === 'approved' ? "border-emerald-200" : "border-rose-200")}>
+                        <p className={cn("text-xs font-bold uppercase tracking-wider mb-1", selectedTimesheet.status === 'approved' ? "text-emerald-600" : "text-rose-600")}>Comments</p>
+                        <p className="text-slate-700 italic">"{selectedTimesheet.comments}"</p>
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                {selectedTimesheet.status === 'submitted' && (
+                  <div className="flex justify-end gap-3 pt-6 border-t border-slate-100">
+                    <Button
+                      variant="outline"
+                      onClick={() => handleReject(selectedTimesheet)}
+                      className="border-rose-200 text-rose-700 hover:bg-rose-50 h-10 px-6 font-semibold"
+                    >
+                      <X className="w-4 h-4 mr-2" />
+                      Reject
+                    </Button>
+                    <Button
+                      onClick={() => handleApprove(selectedTimesheet)}
+                      className="bg-emerald-600 hover:bg-emerald-700 text-white h-10 px-6 font-semibold shadow-lg shadow-emerald-200"
+                    >
+                      <Check className="w-4 h-4 mr-2" />
+                      Approve
+                    </Button>
+                  </div>
+                )}
               </div>
             )}
+          </DialogContent>
+        </Dialog>
 
-            <div>
-              <Label htmlFor="review-comments">Comments (Optional)</Label>
-              <Textarea
-                id="review-comments"
-                placeholder="Add any additional comments..."
-                value={reviewComments}
-                onChange={(e) => setReviewComments(e.target.value)}
-                rows={3}
-                className="mt-1"
-              />
+        {/* Review Dialog */}
+        <Dialog open={reviewDialogOpen} onOpenChange={setReviewDialogOpen}>
+          <DialogContent className="sm:max-w-md bg-white border-0 shadow-2xl rounded-2xl">
+            <DialogHeader className="pb-4 border-b border-slate-100">
+              <DialogTitle className={cn(
+                "flex items-center gap-2 text-xl font-bold",
+                reviewAction === 'approve' ? "text-emerald-600" : "text-rose-600"
+              )}>
+                {reviewAction === 'approve' ? (
+                  <CheckCircle className="w-6 h-6" />
+                ) : (
+                  <XCircle className="w-6 h-6" />
+                )}
+                {reviewAction === 'approve' ? 'Approve' : 'Reject'} Timesheet
+              </DialogTitle>
+              <DialogDescription className="text-slate-500 mt-1">
+                {selectedTimesheet && (
+                  <span>
+                    Confirm action for <strong>{selectedTimesheet.freelancer_name}</strong>'s timesheet?
+                  </span>
+                )}
+              </DialogDescription>
+            </DialogHeader>
+
+            <div className="space-y-4 pt-4">
+              {reviewAction === 'reject' && (
+                <div>
+                  <Label htmlFor="rejection-reason" className="text-rose-600 font-semibold">
+                    Reason for Rejection <span className="text-rose-500">*</span>
+                  </Label>
+                  <Textarea
+                    id="rejection-reason"
+                    placeholder="Please explain why the timesheet is being rejected..."
+                    value={rejectionReason}
+                    onChange={(e) => setRejectionReason(e.target.value)}
+                    rows={3}
+                    className="mt-1 bg-rose-50 border-rose-200 focus:ring-rose-500 resize-none placeholder:text-rose-300"
+                  />
+                </div>
+              )}
+
+              <div>
+                <Label htmlFor="review-comments" className="text-slate-700 font-semibold">Comments (Optional)</Label>
+                <Textarea
+                  id="review-comments"
+                  placeholder="Add any additional notes..."
+                  value={reviewComments}
+                  onChange={(e) => setReviewComments(e.target.value)}
+                  rows={3}
+                  className="mt-1 bg-slate-50 border-slate-200 focus:ring-indigo-500 resize-none"
+                />
+              </div>
             </div>
-          </div>
 
-          <div className="flex justify-end gap-2 mt-6">
-            <Button variant="outline" onClick={() => setReviewDialogOpen(false)}>
-              Cancel
-            </Button>
-            <Button
-              onClick={handleConfirmReview}
-              disabled={
-                approveTimesheetMutation.isPending ||
-                rejectTimesheetMutation.isPending ||
-                (reviewAction === 'reject' && !rejectionReason.trim())
-              }
-              className={cn(
-                reviewAction === 'approve'
-                  ? "bg-green-600 hover:bg-green-700"
-                  : "bg-red-600 hover:bg-red-700"
-              )}
-            >
-              {approveTimesheetMutation.isPending || rejectTimesheetMutation.isPending ? (
-                'Processing...'
-              ) : (
-                <>
-                  {reviewAction === 'approve' ? (
-                    <CheckCircle className="w-4 h-4 mr-2" />
-                  ) : (
-                    <XCircle className="w-4 h-4 mr-2" />
-                  )}
-                  {reviewAction === 'approve' ? 'Approve' : 'Reject'} Timesheet
-                </>
-              )}
-            </Button>
-          </div>
-        </DialogContent>
-      </Dialog>
+            <div className="flex justify-end gap-2 mt-6 pt-4 border-t border-slate-100">
+              <Button variant="outline" onClick={() => setReviewDialogOpen(false)} className="border-slate-200 text-slate-600 hover:bg-slate-50">
+                Cancel
+              </Button>
+              <Button
+                onClick={handleConfirmReview}
+                disabled={
+                  approveTimesheetMutation.isPending ||
+                  rejectTimesheetMutation.isPending ||
+                  (reviewAction === 'reject' && !rejectionReason.trim())
+                }
+                className={cn(
+                  "shadow-lg text-white font-semibold transition-all hover:scale-105 active:scale-95",
+                  reviewAction === 'approve'
+                    ? "bg-emerald-600 hover:bg-emerald-700 shadow-emerald-200"
+                    : "bg-rose-600 hover:bg-rose-700 shadow-rose-200"
+                )}
+              >
+                {approveTimesheetMutation.isPending || rejectTimesheetMutation.isPending ? (
+                  'Processing...'
+                ) : (
+                  <>
+                    {reviewAction === 'approve' ? (
+                      <CheckCircle className="w-4 h-4 mr-2" />
+                    ) : (
+                      <XCircle className="w-4 h-4 mr-2" />
+                    )}
+                    {reviewAction === 'approve' ? 'Confirm Approval' : 'Confirm Rejection'}
+                  </>
+                )}
+              </Button>
+            </div>
+          </DialogContent>
+        </Dialog>
+      </div>
     </div>
   );
 }

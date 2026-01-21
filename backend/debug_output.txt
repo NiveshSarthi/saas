@@ -1,0 +1,52 @@
+Connected to DB
+--- Inspecting Tasks & Activities ---
+ID: 696c84c3a0477a29ee6605c2
+Title: work on openllm integration
+Created By: undefined
+Activity Found: No
+-------------------------
+ID: 696c830da0477a29ee66053a
+Title: deploy whatsapp markeitng flow on through coolify on server
+Created By: undefined
+Activity Found: No
+-------------------------
+ID: 696c8292a0477a29ee660531
+Title: setup whats lead view in LMS
+Created By: undefined
+Activity Found: No
+-------------------------
+ID: 696c8236a0477a29ee6604cf
+Title: marketing  collateral logo module
+Created By: undefined
+Activity Found: No
+-------------------------
+ID: 696c81d7a0477a29ee660483
+Title: Create a architect plan for portal
+Created By: undefined
+Activity Found: No
+-------------------------
+ID: 696c8198a0477a29ee66047c
+Title: Find a gap in industry of portals and market place
+Created By: undefined
+Activity Found: No
+-------------------------
+ID: 696c8164a0477a29ee660456
+Title: Marketplace_portal
+Created By: admin@sarthi.com
+Activity Found: No
+-------------------------
+ID: 696a2539592d170eb3d7032f
+Title: Custom Dates Reports
+Created By: undefined
+Activity Found: No
+-------------------------
+ID: 696a2528592d170eb3d70325
+Title: Monthly Reports
+Created By: undefined
+Activity Found: No
+-------------------------
+ID: 696a251a592d170eb3d702fb
+Title: Daily Reports
+Created By: undefined
+Activity Found: No
+-------------------------
