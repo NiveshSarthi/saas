@@ -221,7 +221,7 @@ export default function NewTask() {
         ...prev,
         project_id: marketingProject.id,
         assigned_group_id: marketingGroup.id,
-        assignees: marketingMemberEmails
+        assignees: marketingMemberEmails.map(e => e.toLowerCase())
       }));
     }
   }, [taskCategory, marketingProject, marketingGroup, marketingDepartment, users]);
@@ -241,7 +241,7 @@ export default function NewTask() {
           tags: template.tags,
           project_id: marketingProject.id,
           assigned_group_id: marketingGroup?.id || '',
-          assignees: marketingMemberEmails,
+          assignees: marketingMemberEmails.map(e => e.toLowerCase()),
           task_type: 'feature'
         }));
       }
