@@ -154,7 +154,7 @@ export default function LeadManagement() {
     queryKey: ['users-for-leads'],
     queryFn: async () => {
       const response = await base44.functions.invoke('getDashboardUsers');
-      return response.data?.users || [];
+      return response.data?.data?.users || [];
     },
     enabled: !!user,
     staleTime: 30 * 60 * 1000, // 30 minutes

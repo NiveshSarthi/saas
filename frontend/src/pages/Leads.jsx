@@ -134,7 +134,7 @@ export default function Leads() {
     queryKey: ['users-for-leads'],
     queryFn: async () => {
       const response = await base44.functions.invoke('getDashboardUsers');
-      return response.data?.users || [];
+      return response.data?.data?.users || [];
     },
     enabled: !!user,
     staleTime: 30 * 60 * 1000,
@@ -770,13 +770,13 @@ export default function Leads() {
                               </Badge>
                             )}
                             <Badge className={`flex items-center gap-1 w-fit text-xs ${!lead.contact_status || lead.contact_status === 'not_contacted' ? 'bg-slate-100 text-slate-700' :
-                                lead.contact_status === 'connected' ? 'bg-green-100 text-green-700' :
-                                  lead.contact_status === 'follow_up' ? 'bg-blue-100 text-blue-700' :
-                                    lead.contact_status === 'not_interested' ? 'bg-red-100 text-red-700' :
-                                      lead.contact_status === 'not_picked' ? 'bg-amber-100 text-amber-700' :
-                                        lead.contact_status === 'switched_off' ? 'bg-orange-100 text-orange-700' :
-                                          lead.contact_status === 'wrong_number' ? 'bg-rose-100 text-rose-700' :
-                                            'bg-slate-100 text-slate-700'
+                              lead.contact_status === 'connected' ? 'bg-green-100 text-green-700' :
+                                lead.contact_status === 'follow_up' ? 'bg-blue-100 text-blue-700' :
+                                  lead.contact_status === 'not_interested' ? 'bg-red-100 text-red-700' :
+                                    lead.contact_status === 'not_picked' ? 'bg-amber-100 text-amber-700' :
+                                      lead.contact_status === 'switched_off' ? 'bg-orange-100 text-orange-700' :
+                                        lead.contact_status === 'wrong_number' ? 'bg-rose-100 text-rose-700' :
+                                          'bg-slate-100 text-slate-700'
                               }`}>
                               <span className="w-1.5 h-1.5 rounded-full bg-current" />
                               {!lead.contact_status || lead.contact_status === 'not_contacted' ? 'Not Contacted' :
@@ -984,14 +984,14 @@ export default function Leads() {
                           </Badge>
                         )}
                         <Badge className={`flex items-center gap-1.5 ${!lead.contact_status || lead.contact_status === 'not_contacted' ? 'bg-slate-100 text-slate-700' :
-                            lead.contact_status === 'connected' ? 'bg-green-100 text-green-700' :
-                              lead.contact_status === 'follow_up' ? 'bg-blue-100 text-blue-700' :
-                                lead.contact_status === 'not_interested' ? 'bg-red-100 text-red-700' :
-                                  lead.contact_status === 'not_picked' ? 'bg-amber-100 text-amber-700' :
-                                    lead.contact_status === 'switched_off' ? 'bg-orange-100 text-orange-700' :
-                                      lead.contact_status === 'wrong_number' ? 'bg-rose-100 text-rose-700' :
-                                        lead.contact_status === 'out_of_network' ? 'bg-purple-100 text-purple-700' :
-                                          'bg-slate-100 text-slate-700'
+                          lead.contact_status === 'connected' ? 'bg-green-100 text-green-700' :
+                            lead.contact_status === 'follow_up' ? 'bg-blue-100 text-blue-700' :
+                              lead.contact_status === 'not_interested' ? 'bg-red-100 text-red-700' :
+                                lead.contact_status === 'not_picked' ? 'bg-amber-100 text-amber-700' :
+                                  lead.contact_status === 'switched_off' ? 'bg-orange-100 text-orange-700' :
+                                    lead.contact_status === 'wrong_number' ? 'bg-rose-100 text-rose-700' :
+                                      lead.contact_status === 'out_of_network' ? 'bg-purple-100 text-purple-700' :
+                                        'bg-slate-100 text-slate-700'
                           }`}>
                           <span className="w-2 h-2 rounded-full bg-current" />
                           {!lead.contact_status || lead.contact_status === 'not_contacted' ? 'Not Contacted' :
@@ -999,9 +999,9 @@ export default function Leads() {
                         </Badge>
                         {lead.priority && (
                           <Badge className={`flex items-center gap-1.5 ${lead.priority === 'urgent' ? 'border-red-500 text-red-700 bg-red-50 border' :
-                              lead.priority === 'high' ? 'border-orange-500 text-orange-700 bg-orange-50 border' :
-                                lead.priority === 'medium' ? 'border-blue-500 text-blue-700 bg-blue-50 border' :
-                                  'border-slate-300 text-slate-600 border'
+                            lead.priority === 'high' ? 'border-orange-500 text-orange-700 bg-orange-50 border' :
+                              lead.priority === 'medium' ? 'border-blue-500 text-blue-700 bg-blue-50 border' :
+                                'border-slate-300 text-slate-600 border'
                             }`}>
                             {lead.priority}
                           </Badge>
