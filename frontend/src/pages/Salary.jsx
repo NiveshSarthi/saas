@@ -30,7 +30,8 @@ import {
   Filter,
   ArrowUpRight,
   ArrowDownRight,
-  Info
+  Info,
+  HelpCircle
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -62,6 +63,7 @@ export default function SalaryPage() {
   const [historyDialogOpen, setHistoryDialogOpen] = useState(false);
   const [selectedEmployee, setSelectedEmployee] = useState(null);
   const [advanceDialogOpen, setAdvanceDialogOpen] = useState(false);
+  const [rulesDialogOpen, setRulesDialogOpen] = useState(false);
   const [isCalculating, setIsCalculating] = useState(false);
   const [expandedRows, setExpandedRows] = useState({});
   const [viewMode, setViewMode] = useState('cards');
@@ -944,13 +946,30 @@ export default function SalaryPage() {
                     </Button>
                     <Button
                       variant="outline"
+                      onClick={() => setRulesDialogOpen(true)}
+                      className="gap-2 bg-slate-50 border-slate-200 text-slate-600 hover:bg-slate-100 h-12 rounded-xl font-semibold hover:text-indigo-600 transition-colors"
+                    >
+                      <HelpCircle className="w-4 h-4" />
+                      Attendance Rules
+                    </Button>
+                    <Button
+                      variant="outline"
                       onClick={() => exportCSVMutation.mutate()}
                       className="gap-2 bg-slate-50 border-slate-200 text-slate-600 hover:bg-slate-100 h-12 rounded-xl font-semibold hover:text-emerald-600 transition-colors"
                     >
                       <Download className="w-4 h-4" />
-                      Export
+                      Export CSV
                     </Button>
                   </div>
+                     <Button
+                       variant="outline"
+                       onClick={() => exportPDFMutation.mutate()}
+                       disabled={exportPDFMutation.isPending}
+                       className="gap-2 bg-slate-50 border-slate-200 text-slate-600 hover:bg-slate-100 h-12 rounded-xl font-semibold hover:text-blue-600 transition-colors"
+                     >
+                       <FileText className="w-4 h-4" />
+                       Export PDF
+                     </Button>
                 </div>
 
                 {/* Bulk Actions */}
@@ -974,6 +993,21 @@ export default function SalaryPage() {
                       >
                         <Lock className="w-4 h-4" />
                         Lock
+                      </Button>
+                      <Button
+                        variant="outline"
+                        onClick={async () => {
+                          if (!confirm(`Unlock selected salary records?`)) return;
+                          for (const id of selectedRecords) {
+                            await base44.entities.SalaryRecord.update(id, { locked: false });
+                          }
+                          queryClient.invalidateQueries(['salary-records']);
+                          setSelectedRecords([]);
+                          toast.success('Salaries unlocked successfully');
+                        }}
+                        className="gap-2 border-slate-200 bg-white text-slate-700 hover:bg-slate-50 font-semibold"
+                      >
+                        Unlock
                       </Button>
                       <Button
                         onClick={() => approveMutation.mutate(selectedRecords)}
@@ -1622,6 +1656,75 @@ export default function SalaryPage() {
         allUsers={allUsers}
         onAdvanceCreated={() => recalculateMutation.mutate()}
       />
+
+      <Dialog open={rulesDialogOpen} onOpenChange={setRulesDialogOpen}>
+        <DialogContent className="max-w-2xl">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <HelpCircle className="w-5 h-5 text-indigo-600" />
+              Attendance Timing Rules
+            </DialogTitle>
+            <DialogDescription>
+              Salary deductions are applied based on check-in and check-out times according to these mandatory rules.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-6">
+            <div>
+              <h4 className="font-semibold text-slate-900 mb-3">Check-In Rules (Expected: 10:00 AM)</h4>
+              <div className="space-y-2 text-sm">
+                <div className="flex justify-between items-center py-2 px-3 bg-red-50 rounded-lg border border-red-200">
+                  <span>10:01 AM - 11:00 AM</span>
+                  <span className="font-semibold text-red-700">Deduct 25% of daily salary</span>
+                </div>
+                <div className="flex justify-between items-center py-2 px-3 bg-red-50 rounded-lg border border-red-200">
+                  <span>11:01 AM - 12:00 PM</span>
+                  <span className="font-semibold text-red-700">Deduct 50% of daily salary</span>
+                </div>
+                <div className="flex justify-between items-center py-2 px-3 bg-red-50 rounded-lg border border-red-200">
+                  <span>12:01 PM - 2:00 PM</span>
+                  <span className="font-semibold text-red-700">Deduct 50% of daily salary</span>
+                </div>
+                <div className="flex justify-between items-center py-2 px-3 bg-red-50 rounded-lg border border-red-200">
+                  <span>2:01 PM - 4:00 PM</span>
+                  <span className="font-semibold text-red-700">Pay only 25% of daily salary (75% deduction)</span>
+                </div>
+                <div className="flex justify-between items-center py-2 px-3 bg-red-50 rounded-lg border border-red-200">
+                  <span>4:01 PM - 6:00 PM</span>
+                  <span className="font-semibold text-red-700">Deduct 100% of daily salary</span>
+                </div>
+              </div>
+            </div>
+
+            <div>
+              <h4 className="font-semibold text-slate-900 mb-3">Check-Out Rules (Only if check-in ≤10:00 AM)</h4>
+              <div className="space-y-2 text-sm">
+                <div className="flex justify-between items-center py-2 px-3 bg-orange-50 rounded-lg border border-orange-200">
+                  <span>Before 2:00 PM</span>
+                  <span className="font-semibold text-orange-700">Deduct 100% of daily salary</span>
+                </div>
+                <div className="flex justify-between items-center py-2 px-3 bg-orange-50 rounded-lg border border-orange-200">
+                  <span>2:01 PM - 5:00 PM</span>
+                  <span className="font-semibold text-orange-700">Deduct 50% of daily salary</span>
+                </div>
+                <div className="flex justify-between items-center py-2 px-3 bg-orange-50 rounded-lg border border-orange-200">
+                  <span>5:01 PM - 6:00 PM</span>
+                  <span className="font-semibold text-orange-700">Deduct 25% of daily salary</span>
+                </div>
+              </div>
+            </div>
+
+            <div className="bg-blue-50 p-4 rounded-lg border border-blue-200">
+              <h4 className="font-semibold text-slate-900 mb-2">Additional Information</h4>
+              <ul className="text-sm text-slate-700 space-y-1">
+                <li>• Daily salary = (Basic + HRA + Travel + Child Edu + Fixed Incentive + Employer Incentive) ÷ Calendar days</li>
+                <li>• Late penalty: Late days × Per minute rate × 10 (from salary policy)</li>
+                <li>• First absent day is paid, additional absents are deducted prorated</li>
+                <li>• Leave, half-day, weekoff, holiday: Paid as applicable</li>
+              </ul>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div >
   );
 }
