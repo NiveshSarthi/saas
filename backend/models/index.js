@@ -403,12 +403,42 @@ const marketingExpenseSchema = new mongoose.Schema({
 });
 
 const pettyCashReimbursementSchema = new mongoose.Schema({
-    amount: Number,
-    status: String, // pending, approved, paid
-    description: String,
-    user_email: String,
-    date: Date,
-    created_at: { type: Date, default: Date.now }
+    transaction_type: {
+        type: String,
+        enum: ['reimbursement', 'advance', 'credit', 'debit'],
+        default: 'reimbursement'
+    },
+    amount: { type: Number, required: true },
+    status: {
+        type: String,
+        enum: ['submitted', 'approved', 'rejected', 'paid'],
+        default: 'submitted'
+    },
+    category: String,
+    subcategory: String,
+    purpose: { type: String, required: true },
+    notes: String,
+    employee_email: { type: String, required: true },
+    employee_name: String,
+    expense_date: String, // YYYY-MM-DD
+    receipt_urls: [String],
+    receipt_url: String, // Legacy support
+    gst_amount: { type: Number, default: 0 },
+    approved_by: String,
+    approved_date: Date,
+    rejection_reason: String,
+    payment_date: String,
+    payment_mode: String,
+    payment_reference: String,
+    comments: [{
+        author: String,
+        text: String,
+        timestamp: { type: Date, default: Date.now }
+    }],
+    is_duplicate_flag: Boolean,
+    duplicate_warning: String,
+    created_at: { type: Date, default: Date.now },
+    updated_at: { type: Date, default: Date.now }
 });
 
 export const PaymentReceivable = mongoose.model('PaymentReceivable', paymentReceivableSchema);
@@ -613,6 +643,30 @@ export const SalesTarget = mongoose.model('SalesTarget', salesTargetSchema);
 export const SalesKPISettings = mongoose.model('SalesKPISettings', salesKPISettingsSchema);
 export const HRTarget = mongoose.model('HRTarget', hrTargetSchema);
 export const DailySalesPerformance = mongoose.model('DailySalesPerformance', dailySalesPerformanceSchema);
+
+const officePurchaseRequestSchema = new mongoose.Schema({
+    item_name: { type: String, required: true },
+    category: {
+        type: String,
+        enum: ['Stationery', 'Confectionery', 'Maintenance', 'Other'],
+        required: true
+    },
+    quantity: { type: Number, required: true },
+    estimated_unit_price: { type: Number, required: true },
+    total_amount: { type: Number, required: true },
+    status: {
+        type: String,
+        enum: ['pending', 'approved', 'rejected', 'linked_to_petty_cash', 'received'],
+        default: 'pending'
+    },
+    requester_email: { type: String, required: true },
+    approved_by: String,
+    notes: String,
+    created_at: { type: Date, default: Date.now },
+    updated_at: { type: Date, default: Date.now }
+});
+
+export const OfficePurchaseRequest = mongoose.model('OfficePurchaseRequest', officePurchaseRequestSchema);
 
 const timesheetSchema = new mongoose.Schema({
     freelancer_email: String,
