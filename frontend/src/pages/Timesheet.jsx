@@ -98,18 +98,24 @@ export default function Timesheet() {
 
   // Get all tasks (consistent with MyTasks logic)
   const { data: allTasks = [] } = useQuery({
-    queryKey: ['my-tasks'],
+    queryKey: ['timesheet-tasks'],
     queryFn: async () => {
-      // Generate recurring instances first (as done in MyTasks)
-      try {
-        await base44.functions.invoke('generateRecurringTaskInstances', {});
-      } catch (e) {
-        console.error('Failed to generate recurring instances', e);
-      }
       return await base44.entities.Task.list('-updated_date', 1000);
     },
     enabled: !!user?.email,
   });
+
+  // Call recurring task generation once on mount
+  useEffect(() => {
+    const syncTasks = async () => {
+      try {
+        await base44.functions.invoke('generateRecurringTaskInstances', {});
+      } catch (e) {
+        console.error('Failed to sync recurring tasks', e);
+      }
+    };
+    if (user?.email) syncTasks();
+  }, [user?.email]);
 
   // Filter tasks assigned to me or created by me
   const allMyTasks = useMemo(() => {

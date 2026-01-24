@@ -132,10 +132,7 @@ export default function MyTasks() {
   const { data: tasks = [], isLoading } = useQuery({
     queryKey: ['my-tasks'],
     queryFn: async () => {
-      // Generate recurring instances first
-      await base44.functions.invoke('generateRecurringTaskInstances', {});
-
-      // Fetch all tasks including new instances
+      // Fetch all tasks
       const allTasks = await base44.entities.Task.list('-updated_date', 1000);
 
       const today = format(new Date(), 'yyyy-MM-dd');
@@ -160,6 +157,18 @@ export default function MyTasks() {
     },
     enabled: !!user,
   });
+
+  // Call recurring task generation once on mount
+  useEffect(() => {
+    const syncTasks = async () => {
+      try {
+        await base44.functions.invoke('generateRecurringTaskInstances', {});
+      } catch (e) {
+        console.error('Failed to sync recurring tasks', e);
+      }
+    };
+    if (user) syncTasks();
+  }, [user]);
 
   const { data: users = [] } = useQuery({
     queryKey: ['users'],

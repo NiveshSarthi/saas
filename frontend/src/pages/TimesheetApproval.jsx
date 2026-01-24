@@ -60,6 +60,8 @@ export default function TimesheetApproval() {
   const [rejectionReason, setRejectionReason] = useState('');
   const [statusFilter, setStatusFilter] = useState('submitted');
   const [freelancerFilter, setFreelancerFilter] = useState('all');
+  const [startDateFilter, setStartDateFilter] = useState('');
+  const [endDateFilter, setEndDateFilter] = useState('');
   const queryClient = useQueryClient();
 
   useEffect(() => {
@@ -76,7 +78,7 @@ export default function TimesheetApproval() {
 
   // Get all timesheets for approval
   const { data: timesheets = [], isLoading } = useQuery({
-    queryKey: ['timesheets-approval', statusFilter, freelancerFilter],
+    queryKey: ['timesheets-approval', statusFilter, freelancerFilter, startDateFilter, endDateFilter],
     queryFn: async () => {
       let filter = {};
       if (statusFilter !== 'all') {
@@ -84,6 +86,16 @@ export default function TimesheetApproval() {
       }
       if (freelancerFilter !== 'all') {
         filter.freelancer_email = freelancerFilter;
+      }
+      if (startDateFilter || endDateFilter) {
+        if (startDateFilter && endDateFilter) {
+          filter.period_start = { $gte: startDateFilter };
+          filter.period_end = { $lte: endDateFilter };
+        } else if (startDateFilter) {
+          filter.period_start = { $gte: startDateFilter };
+        } else if (endDateFilter) {
+          filter.period_end = { $lte: endDateFilter };
+        }
       }
 
       return await base44.entities.Timesheet.filter(filter, '-submitted_at');
@@ -212,6 +224,10 @@ export default function TimesheetApproval() {
     doc.setTextColor(100, 100, 100);
     doc.text(`Generated on ${format(new Date(), 'MMM d, yyyy HH:mm')}`, 14, 28);
     doc.text(`Filter: ${statusFilter === 'all' ? 'All Status' : statusFilter.charAt(0).toUpperCase() + statusFilter.slice(1)}`, 14, 34);
+    if (startDateFilter || endDateFilter) {
+      const dateText = `Period: ${startDateFilter ? format(new Date(startDateFilter), 'MMM d, yyyy') : 'Start'} - ${endDateFilter ? format(new Date(endDateFilter), 'MMM d, yyyy') : 'End'}`;
+      doc.text(dateText, 14, 40);
+    }
 
     let yPos = 45;
 
@@ -366,6 +382,40 @@ export default function TimesheetApproval() {
                     ))}
                   </SelectContent>
                 </Select>
+              </div>
+
+              <div className="flex items-center gap-3 w-full sm:w-auto">
+                <div className="flex items-center gap-2">
+                  <Calendar className="w-4 h-4 text-slate-400" />
+                  <Input
+                    type="date"
+                    value={startDateFilter}
+                    onChange={(e) => setStartDateFilter(e.target.value)}
+                    className="w-[140px] h-10 bg-slate-50 border-slate-200 rounded-lg text-sm"
+                  />
+                </div>
+                <span className="text-slate-400">to</span>
+                <div className="flex items-center gap-2">
+                  <Input
+                    type="date"
+                    value={endDateFilter}
+                    onChange={(e) => setEndDateFilter(e.target.value)}
+                    className="w-[140px] h-10 bg-slate-50 border-slate-200 rounded-lg text-sm"
+                  />
+                </div>
+                {(startDateFilter || endDateFilter) && (
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => {
+                      setStartDateFilter('');
+                      setEndDateFilter('');
+                    }}
+                    className="h-10 px-2 text-slate-400 hover:text-indigo-600"
+                  >
+                    <X className="w-4 h-4" />
+                  </Button>
+                )}
               </div>
 
               <div className="ml-auto flex items-center gap-3">

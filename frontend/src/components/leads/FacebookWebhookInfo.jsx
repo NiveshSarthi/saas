@@ -16,11 +16,11 @@ import { toast } from 'sonner';
 export default function FacebookWebhookInfo() {
   const [copied, setCopied] = useState(false);
   const [testing, setTesting] = useState(false);
-  
-  const productionUrl = 'https://tracker.niveshsarthi.com/api/functions/metaWebhook';
+
+  const productionUrl = 'https://tracker.niveshsarthi.com/api/functions/v1/metaWebhook';
   const isPreview = window.location.hostname.includes('preview-sandbox');
-  const webhookUrl = isPreview ? productionUrl : `${window.location.origin}/api/functions/metaWebhook`;
-  
+  const webhookUrl = isPreview ? productionUrl : `${window.location.origin}/api/functions/v1/metaWebhook`;
+
   const copyToClipboard = () => {
     navigator.clipboard.writeText(webhookUrl);
     setCopied(true);
@@ -43,7 +43,7 @@ export default function FacebookWebhookInfo() {
           secret: 'base44_meta_verify_token'
         })
       });
-      
+
       if (response.ok) {
         toast.success('Test successful! Check your leads list for the test lead.');
       } else {

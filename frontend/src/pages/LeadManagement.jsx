@@ -27,6 +27,7 @@ import {
   Trash2,
   Users,
   Facebook,
+  MessageSquare,
   ArrowUpDown,
   ArrowUp,
   ArrowDown
@@ -68,6 +69,7 @@ import ImportLeadsDialog from '@/components/leads/ImportLeadsDialog';
 import AssignLeadsDialog from '@/components/leads/AssignLeadsDialog';
 import AdvancedFilterPanel from '@/components/filters/AdvancedFilterPanel';
 import FilterChips from '@/components/filters/FilterChips';
+import WhatsAppImportDialog from '@/components/leads/WhatsAppImportDialog';
 import { LEAD_FILTERS } from '@/components/filters/filterConfigs';
 import {
   AlertDialog,
@@ -130,6 +132,7 @@ export default function LeadManagement() {
   const [autoAssignPaused, setAutoAssignPaused] = useState(false);
   const [currentPage, setCurrentPage] = useState(1);
   const [pageSize, setPageSize] = useState(50);
+  const [whatsappImportOpen, setWhatsappImportOpen] = useState(false);
 
   const queryClient = useQueryClient();
 
@@ -593,7 +596,7 @@ export default function LeadManagement() {
         {/* Header */}
         <div className="p-4 bg-white border-b flex flex-col gap-3">
           <div className="flex items-center justify-between">
-            <h1 className="text-xl font-bold text-slate-900">Lead Pilot</h1>
+            <h1 className="text-xl font-bold text-slate-900">Lead Management</h1>
             <div className="flex items-center gap-2">
               {user?.role === 'admin' && (
                 <>
@@ -628,36 +631,52 @@ export default function LeadManagement() {
                 {sortedLeads.length} leads
               </Badge>
               {user?.role === 'admin' && (
-                <>
+                <div className="flex flex-wrap items-center gap-2">
                   <Button
-                    size="sm"
+                    variant="outline"
+                    onClick={() => setWhatsappImportOpen(true)}
+                    className="border-green-300 hover:bg-green-50 text-green-700 font-medium h-9"
+                  >
+                    <MessageSquare className="w-4 h-4 mr-2" />
+                    WhatsApp Import
+                  </Button>
+                  <Button
                     variant="outline"
                     onClick={() => syncLeadsMutation.mutate()}
                     disabled={syncLeadsMutation.isPending}
+                    className="border-indigo-300 hover:bg-indigo-50 text-indigo-700 font-medium h-9"
                   >
-                    <Facebook className="w-4 h-4 mr-1" />
-                    {syncLeadsMutation.isPending ? 'Syncing...' : 'Sync Leads'}
+                    <Facebook className="w-4 h-4 mr-2" />
+                    {syncLeadsMutation.isPending ? 'Syncing...' : 'Facebook Sync'}
                   </Button>
-                  <Button size="sm" variant="outline" onClick={() => setShowAdvancedFilter(true)}>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={() => setShowAdvancedFilter(true)}
+                    className="h-9"
+                  >
                     <Filter className="w-4 h-4 mr-1" />
                     Advanced Filters
                   </Button>
-                </>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={() => setImportDialogOpen(true)}
+                    className="h-9"
+                  >
+                    <Upload className="w-4 h-4 mr-1" />
+                    Import CSV
+                  </Button>
+                  <Button
+                    size="sm"
+                    onClick={() => setCreateDialogOpen(true)}
+                    className="h-9"
+                  >
+                    <Plus className="w-4 h-4 mr-1" />
+                    New Lead
+                  </Button>
+                </div>
               )}
-              <Button size="sm" variant="outline" onClick={handleExportCSV}>
-                <Download className="w-4 h-4 mr-1" />
-                Export CSV
-              </Button>
-              {user?.role === 'admin' && (
-                <Button size="sm" variant="outline" onClick={() => setImportDialogOpen(true)}>
-                  <Upload className="w-4 h-4 mr-1" />
-                  Import CSV
-                </Button>
-              )}
-              <Button size="sm" onClick={() => setCreateDialogOpen(true)}>
-                <Plus className="w-4 h-4 mr-1" />
-                New Lead
-              </Button>
             </div>
           </div>
 
@@ -1204,6 +1223,11 @@ export default function LeadManagement() {
           open={importDialogOpen}
           onOpenChange={setImportDialogOpen}
           salesUsers={users}
+        />
+
+        <WhatsAppImportDialog
+          open={whatsappImportOpen}
+          onOpenChange={setWhatsappImportOpen}
         />
 
         <AssignLeadsDialog

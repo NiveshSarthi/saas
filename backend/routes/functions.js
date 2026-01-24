@@ -15,6 +15,85 @@ const getAppSecretProof = (accessToken) => {
     return crypto.createHmac('sha256', appSecret).update(accessToken).digest('hex');
 };
 
+// Helper to perform Round Robin Lead Assignment
+const autoAssignLead = async (leadId) => {
+    try {
+        const { Lead, User, Organization, RELeadActivity, Department } = models;
+
+        // 1. Check if auto-assign is paused
+        const orgs = await Organization.find();
+        if (orgs[0]?.settings?.autoAssignPaused) {
+            console.log('Auto-assignment is paused in organization settings');
+            return null;
+        }
+
+        const lead = await Lead.findById(leadId);
+        if (!lead || lead.assigned_to) return null;
+
+        // 2. Identify eligible sales members
+        const salesDept = await Department.findOne({ name: /Sales/i });
+        let eligibleUsers = [];
+
+        if (salesDept) {
+            eligibleUsers = await User.find({
+                department_id: salesDept._id.toString(),
+                is_active: true
+            }).sort({ email: 1 });
+        }
+
+        if (eligibleUsers.length === 0) {
+            eligibleUsers = await User.find({
+                $or: [
+                    { job_title: /Sales/i },
+                    { role_id: /Sales/i }
+                ],
+                is_active: true
+            }).sort({ email: 1 });
+        }
+
+        if (eligibleUsers.length === 0) {
+            console.warn('No eligible sales users found for auto-assignment');
+            return null;
+        }
+
+        // 3. Determine whose turn it is
+        const lastAssignedLead = await Lead.findOne({
+            lead_source: 'facebook',
+            assigned_to: { $exists: true, $ne: null }
+        }).sort({ created_date: -1 });
+
+        let nextAssigneeIndex = 0;
+        if (lastAssignedLead) {
+            const lastAssigneeEmail = lastAssignedLead.assigned_to;
+            const lastIndex = eligibleUsers.findIndex(u => u.email === lastAssigneeEmail);
+            if (lastIndex !== -1) {
+                nextAssigneeIndex = (lastIndex + 1) % eligibleUsers.length;
+            }
+        }
+
+        const selectedUser = eligibleUsers[nextAssigneeIndex];
+
+        // 4. Perform assignment
+        lead.assigned_to = selectedUser.email;
+        await lead.save();
+
+        // 5. Create activity record
+        await RELeadActivity.create({
+            lead_id: lead.id,
+            activity_type: 'assignment',
+            description: `Lead automatically assigned to ${selectedUser.full_name || selectedUser.email} via Round Robin`,
+            actor_email: 'system_auto_assign',
+            created_date: new Date()
+        });
+
+        console.log(`Lead ${leadId} auto-assigned to ${selectedUser.email}`);
+        return selectedUser.email;
+    } catch (err) {
+        console.error('Auto-assignment failed:', err);
+        return null;
+    }
+};
+
 router.post('/invoke/calculateMonthlySalary', calculateMonthlySalary);
 
 // Invoke AI Task Assistant
@@ -245,12 +324,13 @@ router.post('/invoke/syncFacebookForms', async (req, res) => {
             }
         }
         res.json({ success: true, data: { results: [{ new_forms: newFormsCount }] } });
+        res.json({ success: true, data: { fieldsFound } });
     } catch (e) {
         res.status(500).json({ error: e.message });
     }
 });
 
-router.post('/invoke/fetchFacebookLeads', async (req, res) => {
+export const syncAllFacebookLeads = async () => {
     try {
         const Lead = models.Lead;
         const FacebookPageConnection = models.FacebookPageConnection;
@@ -258,38 +338,30 @@ router.post('/invoke/fetchFacebookLeads', async (req, res) => {
 
         let newLeadsCreated = 0;
         let duplicatesSkipped = 0;
-        const errors = [];
+        const syncErrors = [];
 
-        console.log('Active pages:', activePages.length);
+        console.log(`[Auto-Sync] Starting for ${activePages.length} active pages...`);
 
         for (const page of activePages) {
-            console.log('Processing page:', page.page_name, 'Forms:', page.lead_forms.length);
+            console.log(`[Auto-Sync] Processing page: ${page.page_name} (Forms: ${page.lead_forms.length})`);
             for (const form of page.lead_forms) {
-                if (!form.subscribed) {
-                    console.log('Form not subscribed:', form.form_name);
-                    continue;
-                }
+                if (!form.subscribed) continue;
 
                 try {
-                    console.log('Fetching leads for form:', form.form_name, form.form_id);
                     const proof = getAppSecretProof(page.access_token);
                     const proofParam = proof ? `&appsecret_proof=${proof}` : '';
 
                     const fbRes = await fetch(`https://graph.facebook.com/${FB_API_VERSION}/${form.form_id}/leads?access_token=${page.access_token}${proofParam}&limit=1000`);
                     const fbData = await fbRes.json();
 
-                    console.log('Facebook response:', fbData);
-
                     if (fbData.error) {
-                        console.error('Facebook error for form:', form.form_name, fbData.error);
-                        errors.push({ form: form.form_name, error: fbData.error.message });
+                        console.error(`[Auto-Sync] FB error for form ${form.form_name}:`, fbData.error.message);
+                        syncErrors.push({ form: form.form_name, error: fbData.error.message });
                         continue;
                     }
 
                     if (fbData.data) {
-                        console.log('Leads found:', fbData.data.length);
                         for (const fbLead of fbData.data) {
-                            // Helper to find field value by loose matching
                             const getField = (keys) => {
                                 const field = fbLead.field_data.find(f => keys.some(k => f.name.toLowerCase().includes(k)));
                                 return field ? field.values[0] : null;
@@ -297,37 +369,29 @@ router.post('/invoke/fetchFacebookLeads', async (req, res) => {
 
                             const fullName = getField(['full_name', 'fullname', 'name']) ||
                                 `${getField(['first_name']) || ''} ${getField(['last_name']) || ''}`.trim();
-                            const email = getField(['email', 'e-mail']);
-                            const phone = getField(['phone', 'mobile', 'contact']);
-                            const city = getField(['city', 'location', 'town']);
-                            const company = getField(['company', 'business']);
-                            const jobTitle = getField(['job', 'title', 'position']);
 
                             const leadUpdateData = {
-                                lead_name: fullName || 'Facebook Lead', // Fallback
-                                email: email,
-                                phone: phone,
-                                location: city,
-                                company: company,
-                                job_title: jobTitle,
+                                lead_name: fullName || 'Facebook Lead',
+                                email: getField(['email', 'e-mail']),
+                                phone: getField(['phone', 'mobile', 'contact']),
+                                location: getField(['city', 'location', 'town']),
+                                company: getField(['company', 'business']),
+                                job_title: getField(['job', 'title', 'position']),
                                 lead_source: 'facebook',
                                 fb_form_id: form.form_id,
                                 fb_page_id: page.page_id,
                                 fb_created_time: fbLead.created_time,
-                                raw_facebook_data: fbLead.field_data, // Save all fields
+                                raw_facebook_data: fbLead.field_data,
                                 notes: `Form Name: ${form.form_name}\nPage ID: ${page.page_id}\nFacebook ID: ${fbLead.id}`,
                                 last_activity_date: new Date()
                             };
 
-                            // Upsert: Update if exists, Create if new
                             const existingLead = await Lead.findOne({ fb_lead_id: fbLead.id });
 
                             if (existingLead) {
-                                // Only update if significantly changed or missing data
-                                if (!existingLead.lead_name || existingLead.lead_name === 'undefined' || !existingLead.raw_facebook_data || !existingLead.fb_page_id) {
+                                if (!existingLead.lead_name || existingLead.lead_name === 'undefined' || !existingLead.raw_facebook_data) {
                                     Object.assign(existingLead, leadUpdateData);
                                     await existingLead.save();
-                                    console.log(`Updated existing lead: ${fbLead.id}`);
                                 } else {
                                     duplicatesSkipped++;
                                 }
@@ -335,27 +399,37 @@ router.post('/invoke/fetchFacebookLeads', async (req, res) => {
                                 leadUpdateData.status = 'new';
                                 leadUpdateData.created_date = new Date();
                                 leadUpdateData.fb_lead_id = fbLead.id;
-                                await Lead.create(leadUpdateData);
+                                const newLead = await Lead.create(leadUpdateData);
                                 newLeadsCreated++;
+
+                                try {
+                                    await autoAssignLead(newLead._id);
+                                } catch (assignErr) {
+                                    console.error('[Auto-Sync] Assignment failed:', assignErr);
+                                }
                             }
                         }
                     }
                 } catch (formError) {
-                    errors.push({ form: form.form_name, error: formError.message });
+                    syncErrors.push({ form: form.form_name, error: formError.message });
                 }
             }
         }
 
-        res.json({
-            success: true,
-            data: {
-                newLeadsCreated,
-                duplicatesSkipped,
-                errors
-            }
-        });
+        console.log(`[Auto-Sync] Completed: ${newLeadsCreated} new leads, ${duplicatesSkipped} duplicates.`);
+        return { success: true, newLeadsCreated, duplicatesSkipped, errors: syncErrors };
     } catch (e) {
-        res.status(500).json({ error: e.message });
+        console.error('[Auto-Sync] Fatal error:', e);
+        return { success: false, error: e.message };
+    }
+};
+
+router.post('/invoke/fetchFacebookLeads', async (req, res) => {
+    const result = await syncAllFacebookLeads();
+    if (result.success) {
+        res.json({ success: true, data: result });
+    } else {
+        res.status(500).json({ error: result.error });
     }
 });
 router.post('/invoke/testFacebookToken', async (req, res) => {
@@ -857,26 +931,53 @@ router.post('/invoke/debugFacebookToken', async (req, res) => {
 });
 
 // Facebook Webhooks
-router.get('/webhooks/facebook', (req, res) => {
+router.get(['/webhooks/facebook', '/metaWebhook'], (req, res) => {
     const mode = req.query['hub.mode'];
     const token = req.query['hub.verify_token'];
     const challenge = req.query['hub.challenge'];
 
-    // Replace with your verify token
-    const VERIFY_TOKEN = process.env.FACEBOOK_VERIFY_TOKEN || 'your_verify_token';
+    // Replace with your verify token - standardizing to base44_meta_verify_token
+    const VERIFY_TOKEN = process.env.FACEBOOK_VERIFY_TOKEN || 'base44_meta_verify_token';
 
     if (mode && token) {
         if (mode === 'subscribe' && token === VERIFY_TOKEN) {
             console.log('Webhook verified');
             res.status(200).send(challenge);
         } else {
+            console.warn('Webhook verification failed: token mismatch');
             res.sendStatus(403);
         }
     }
 });
 
-router.post('/webhooks/facebook', async (req, res) => {
+router.post(['/webhooks/facebook', '/metaWebhook'], async (req, res) => {
     const body = req.body;
+    const Lead = models.Lead;
+
+    // Support for frontend test button
+    if (body && body.secret === 'base44_meta_verify_token' && body.email === 'test@example.com') {
+        console.log('Test lead received from frontend');
+        try {
+            const newLead = await Lead.create({
+                lead_name: body.full_name || 'Test Lead',
+                email: body.email,
+                phone: body.phone_number,
+                lead_source: 'facebook',
+                status: 'new',
+                notes: `Manual Test Lead\nCampaign: ${body.campaign_id}\nAd: ${body.ad_id}`,
+                created_date: new Date()
+            });
+            console.log('Test lead created successfully');
+
+            // Auto-assign the test lead
+            await autoAssignLead(newLead._id);
+
+            return res.status(200).json({ success: true, message: 'Test lead created' });
+        } catch (err) {
+            console.error('Error creating test lead:', err);
+            return res.status(500).json({ error: err.message });
+        }
+    }
 
     if (body.object === 'page') {
         body.entry.forEach(async entry => {
@@ -917,7 +1018,7 @@ router.post('/webhooks/facebook', async (req, res) => {
                                 const formRecord = page.lead_forms.find(f => f.form_id === formId);
                                 const formName = formRecord ? formRecord.form_name : (leadData.form_id || formId);
 
-                                await models.Lead.create({
+                                const newLead = await models.Lead.create({
                                     lead_name: fieldData.full_name || fieldData.first_name + ' ' + (fieldData.last_name || ''),
                                     email: fieldData.email,
                                     phone: fieldData.phone_number || fieldData.phone,
@@ -930,6 +1031,13 @@ router.post('/webhooks/facebook', async (req, res) => {
                                     created_date: new Date()
                                 });
                                 console.log('Lead created via webhook:', leadId, 'Form:', formName);
+
+                                // NEW: Auto-assign the lead
+                                try {
+                                    await autoAssignLead(newLead._id);
+                                } catch (assignErr) {
+                                    console.error('Webhook Assignment failed:', assignErr);
+                                }
                             }
                         }
                     }

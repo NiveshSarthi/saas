@@ -107,6 +107,23 @@ app.use('/api/users', userRoutes); // Secure user management API
 app.use('/rest/v1', entityRoutes); // Emulate Base44 entity API
 app.use('/functions/v1', functionRoutes); // Emulate Base44 function API
 
+import { syncAllFacebookLeads } from './routes/functions.js';
+
+// Set up background sync for Facebook Leads every 1 hour
+const SYNC_INTERVAL = 60 * 60 * 1000; // 1 hour
+setInterval(async () => {
+  try {
+    await syncAllFacebookLeads();
+  } catch (err) {
+    console.error('Background sync failed:', err);
+  }
+}, SYNC_INTERVAL);
+
+// Run initial sync shortly after server start
+setTimeout(() => {
+  syncAllFacebookLeads().catch(err => console.error('Initial background sync failed:', err));
+}, 120000); // 2 minute delay to allow server to stabilize
+
 // Debug Route: Dump complete database
 app.get('/debug/db-dump', async (req, res) => {
   try {
