@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -9,6 +8,7 @@ import { MapPin, Timer, Navigation, CheckCircle2, AlertTriangle } from 'lucide-r
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { differenceInMinutes, addMinutes, format } from 'date-fns';
 import { toast } from 'sonner';
+import { base44 } from '@/api/base44Client';
 
 export default function ActiveVisitCard({ visit, currentLocation }) {
     const [timeLeft, setTimeLeft] = useState(0);
@@ -18,45 +18,27 @@ export default function ActiveVisitCard({ visit, currentLocation }) {
 
     const queryClient = useQueryClient();
 
-    // Timer Logic
-    useEffect(() => {
-        if (!visit) return;
-
-        const calculateTime = () => {
-            const start = new Date(visit.start_time);
-            const end = addMinutes(start, visit.estimated_duration_minutes);
-            const now = new Date();
-            const diff = differenceInMinutes(end, now);
-
-            setTimeLeft(diff);
-            setIsOverdue(diff < 0);
-        };
-
-        calculateTime();
-        const timer = setInterval(calculateTime, 60000); // Update every minute
-        return () => clearInterval(timer);
-    }, [visit]);
+    // ... (keep useEffect)
 
     const endVisitMutation = useMutation({
         mutationFn: async () => {
-            const response = await fetch(`http://localhost:3001/api/visits/${visit._id}/end`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    notes,
-                    location: currentLocation
-                })
+            if (!visit?._id && !visit?.id) throw new Error('Invalid visit ID');
+
+            return await base44.entities.SiteVisit.update(visit._id || visit.id, {
+                status: 'completed',
+                approval_status: 'pending', // Trigger Admin Approval
+                end_time: new Date().toISOString(),
+                end_location: currentLocation,
+                notes: notes ? (visit.notes ? visit.notes + '\n\nOutcome: ' + notes : notes) : visit.notes
             });
-            const result = await response.json();
-            if (!result.success) throw new Error(result.error);
-            return result.data;
         },
         onSuccess: () => {
             queryClient.invalidateQueries(['active-visit']);
-            toast.success('Site Visit Completed!');
+            queryClient.invalidateQueries(['site-visits']);
+            toast.success('Site Visit Completed! Sent for Approval.');
             setShowEndDialog(false);
         },
-        onError: (e) => toast.error(e.message)
+        onError: (e) => toast.error('Failed to end visit: ' + e.message)
     });
 
     if (!visit) return null;

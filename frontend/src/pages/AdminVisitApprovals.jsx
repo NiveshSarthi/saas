@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { base44 } from '@/api/base44Client';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -17,26 +18,18 @@ export default function AdminVisitApprovals({ user }) {
     const { data: pendingVisits, isLoading } = useQuery({
         queryKey: ['pending-visits'],
         queryFn: async () => {
-            const res = await fetch('http://localhost:3001/api/visits?approval_status=pending');
-            const json = await res.json();
-            return json.data;
+            return await base44.entities.SiteVisit.filter({ approval_status: 'pending' });
         }
     });
 
     const updateStatusMutation = useMutation({
         mutationFn: async ({ id, status, reason }) => {
-            const res = await fetch(`http://localhost:3001/api/visits/${id}/status`, {
-                method: 'PUT',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    status,
-                    rejection_reason: reason,
-                    approved_by: user?.email || 'Admin'
-                })
+            return await base44.entities.SiteVisit.update(id, {
+                approval_status: status,
+                rejection_reason: reason,
+                approved_by: user?.email || 'Admin',
+                approved_at: new Date().toISOString()
             });
-            const json = await res.json();
-            if (!json.success) throw new Error(json.error);
-            return json.data;
         },
         onSuccess: (data, variables) => {
             queryClient.invalidateQueries(['pending-visits']);
@@ -48,7 +41,7 @@ export default function AdminVisitApprovals({ user }) {
                 setRejectionReason('');
             }
         },
-        onError: (e) => toast.error(e.message)
+        onError: (e) => toast.error('Failed to update status: ' + e.message)
     });
 
     const handleApprove = (id) => {
