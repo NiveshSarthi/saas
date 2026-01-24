@@ -29,7 +29,9 @@ export default function CheckInOutWidget({ user, todayRecord, onUpdate }) {
   const isSalesUser = React.useMemo(() => {
     if (!user || departments.length === 0) return false;
     const dept = departments.find(d => d.id === user.department_id);
-    return dept?.name?.toLowerCase().includes('sales') || user.role_id === 'sales_rep' || user.role_id === 'sales';
+    // Strict check: Only members of a department with "Sales" in the name can see the Visit button
+    // This is for Gate Pass creation
+    return dept?.name?.toLowerCase().includes('sales');
   }, [user, departments]);
 
   // Fetch active site visit
@@ -50,7 +52,7 @@ export default function CheckInOutWidget({ user, todayRecord, onUpdate }) {
     queryKey: ['attendance-settings'],
     queryFn: async () => {
       const res = await base44.entities.AttendanceSettings.list();
-      return res[0];
+      return res[0] || null;
     }
   });
 
@@ -114,11 +116,16 @@ export default function CheckInOutWidget({ user, todayRecord, onUpdate }) {
   }, [settings, workDays]);
 
   const canCheckIn = React.useMemo(() => {
-    if (!settings) return true;
-    if (todayRecord && !settings.allow_multiple_checkins) return false;
-    if (todayRecord && todayRecord.status === 'checked_in') return false; // Already checked in
-    // If checked out, can we check in again? Only if multiple allowed.
-    if (todayRecord && todayRecord.check_out && !settings.allow_multiple_checkins) return false;
+    // 1. Safety check for active session (already checked in but not out)
+    if (todayRecord?.status === 'checked_in' && !todayRecord?.check_out) return false;
+
+    // 2. If we have a completed record (checked out)
+    if (todayRecord?.check_out) {
+      // Only allow if settings EXIST and EXPLICITLY set allow_multiple_checkins to true
+      return settings?.allow_multiple_checkins === true;
+    }
+
+    // 3. No record for today yet -> Allow
     return true;
   }, [settings, todayRecord]);
 
@@ -133,7 +140,7 @@ export default function CheckInOutWidget({ user, todayRecord, onUpdate }) {
   }, []);
 
 
-  const getLocation = () => {
+  const getLocation = (useHighAccuracy = true) => {
     return new Promise((resolve) => {
       if (!navigator.geolocation) {
         toast.error('Location services not available');
@@ -142,7 +149,14 @@ export default function CheckInOutWidget({ user, todayRecord, onUpdate }) {
       }
 
       setGettingLocation(true);
-      setLocationPermissionDenied(false); // Reset state on new attempt
+      setLocationPermissionDenied(false);
+
+      const options = {
+        timeout: useHighAccuracy ? 8000 : 5000,
+        enableHighAccuracy: useHighAccuracy,
+        maximumAge: 30000 // Use cached location if it's fresh (30s)
+      };
+
       navigator.geolocation.getCurrentPosition(
         (position) => {
           setGettingLocation(false);
@@ -152,18 +166,24 @@ export default function CheckInOutWidget({ user, todayRecord, onUpdate }) {
             accuracy: position.coords.accuracy
           });
         },
-        (error) => {
-          setGettingLocation(false);
-
+        async (error) => {
           if (error.code === 1) { // Permission Denied
+            setGettingLocation(false);
             setLocationPermissionDenied(true);
             toast.error('Location access is required for attendance.');
+            resolve(null);
+          } else if (useHighAccuracy) {
+            // Fallback to standard accuracy if high accuracy fails/times out
+            console.warn('High accuracy location failed, trying standard accuracy...');
+            const standardLocation = await getLocation(false);
+            resolve(standardLocation);
           } else {
-            console.warn('Location detection failed:', error);
+            setGettingLocation(false);
+            console.warn('Location detection failed:', error.message);
+            resolve(null);
           }
-          resolve(null);
         },
-        { timeout: 20000, enableHighAccuracy: true } // Try high accuracy for geofencing
+        options
       );
     });
   };
@@ -190,8 +210,8 @@ export default function CheckInOutWidget({ user, todayRecord, onUpdate }) {
       location = await getLocation();
 
       // If geofencing enabled and no location -> BLOCK
-      if (settings && settings.enable_geofencing && !location) {
-        throw new Error("Location access is MANDATORY for attendance. Please enable location services.");
+      if (settings?.enable_geofencing && !location) {
+        throw new Error("Location access is MANDATORY for attendance geofencing. Please ensure GPS is active.");
       }
 
       ip = await getIPAddress();
@@ -251,7 +271,7 @@ export default function CheckInOutWidget({ user, todayRecord, onUpdate }) {
       let location = await getLocation();
 
       if (settings?.enable_geofencing && !location) {
-        throw new Error("Location access is MANDATORY for checkout. Please enable location services.");
+        throw new Error("Location access is MANDATORY for checkout geofencing. Please ensure GPS is active.");
       }
 
       const checkInTime = new Date(todayRecord.check_in);
@@ -418,7 +438,7 @@ export default function CheckInOutWidget({ user, todayRecord, onUpdate }) {
                 )}
               >
                 <LogIn className="w-5 h-5 mr-2 sm:mr-3" />
-                {gettingLocation ? 'Locating...' : 'Check In'}
+                {gettingLocation ? 'Locating...' : (todayRecord?.check_out && !canCheckIn ? 'Completed' : 'Check In')}
               </Button>
             )}
 
