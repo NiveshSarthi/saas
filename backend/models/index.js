@@ -70,9 +70,15 @@ const attendanceSchema = new mongoose.Schema({
     status: String, // present, absent, leave, half_day, weekoff, holiday
     check_in: Date,
     check_out: Date,
+    total_hours: Number,
     is_late: Boolean,
     late_minutes: Number,
     is_early_checkout: Boolean,
+    source: String,
+    marked_by: String,
+    location: mongoose.Schema.Types.Mixed,
+    ip_address: String,
+    device_info: String,
     notes: String,
     created_at: { type: Date, default: Date.now }
 });

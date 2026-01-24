@@ -9,9 +9,19 @@ import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Upload, FileSpreadsheet, AlertCircle, CheckCircle, Loader2, Download } from 'lucide-react';
 import { toast } from 'sonner';
 
-export default function BulkUploadDialog({ isOpen, onClose, selectedMonth }) {
+export default function BulkUploadDialog({ open, onOpenChange, selectedMonth }) {
   const [file, setFile] = useState(null);
-  const [uploadMonth, setUploadMonth] = useState(selectedMonth || '');
+  const [uploadMonth, setUploadMonth] = useState('');
+
+  React.useEffect(() => {
+    if (open) {
+      if (selectedMonth instanceof Date) {
+        setUploadMonth(selectedMonth.toISOString().slice(0, 7));
+      } else if (typeof selectedMonth === 'string') {
+        setUploadMonth(selectedMonth);
+      }
+    }
+  }, [open, selectedMonth]);
   const [uploadResult, setUploadResult] = useState(null);
   const queryClient = useQueryClient();
 
@@ -19,17 +29,21 @@ export default function BulkUploadDialog({ isOpen, onClose, selectedMonth }) {
     mutationFn: async ({ file, month }) => {
       // Read file as text
       const fileText = await file.text();
-      
-      const response = await base44.functions.invoke('uploadBulkAttendance', {
-        fileContent: fileText,
-        month: month
-      });
-      return response.data;
+
+      const resData = response.data;
+      return {
+        ...(resData?.data || resData),
+        success: resData?.success !== false
+      };
     },
     onSuccess: (data) => {
       setUploadResult(data);
       queryClient.invalidateQueries(['attendance']);
-      toast.success(data.message || 'Bulk upload successful!');
+      if (data.errorCount > 0) {
+        toast.warning(`Processed with ${data.errorCount} errors. Please check the log below.`);
+      } else {
+        toast.success(data.message || 'Bulk upload successful!');
+      }
     },
     onError: (error) => {
       toast.error('Upload failed: ' + error.message);
@@ -44,7 +58,7 @@ export default function BulkUploadDialog({ isOpen, onClose, selectedMonth }) {
         toast.error('Please upload a valid CSV file (.csv)');
         return;
       }
-      
+
       setFile(selectedFile);
       setUploadResult(null);
     }
@@ -65,37 +79,48 @@ export default function BulkUploadDialog({ isOpen, onClose, selectedMonth }) {
 
   const handleDownloadTemplate = async () => {
     try {
-      const response = await base44.functions.invoke('generateBulkAttendanceTemplate', { 
-        month: uploadMonth || selectedMonth 
+      const response = await base44.functions.invoke('generateBulkAttendanceTemplate', {
+        month: uploadMonth || selectedMonth
       });
-      
+
+      // Handle both double-wrapped and single-wrapped responses
+      let payload = response.data;
+      if (payload && payload.data) {
+        payload = payload.data;
+      }
+
+      if (!payload?.csv_content) {
+        throw new Error('Template data not found in response');
+      }
+
       // Create blob from CSV content
-      const blob = new Blob([response.data.csv_content], { type: 'text/csv' });
-      
+      const blob = new Blob([payload.csv_content], { type: 'text/csv' });
+
       // Create download link
       const url = window.URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = url;
-      a.download = response.data.filename;
+      a.download = payload.filename || `attendance_template_${uploadMonth}.csv`;
       document.body.appendChild(a);
       a.click();
       document.body.removeChild(a);
       window.URL.revokeObjectURL(url);
-      
+
       toast.success('Template downloaded successfully');
     } catch (error) {
-      toast.error('Failed to download template: ' + error.message);
+      console.error('Download error:', error);
+      toast.error('Failed to download template: ' + (error.message || 'Unknown error'));
     }
   };
 
   const handleClose = () => {
     setFile(null);
     setUploadResult(null);
-    onClose();
+    onOpenChange(false);
   };
 
   return (
-    <Dialog open={isOpen} onOpenChange={handleClose}>
+    <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-2xl max-h-[80vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">

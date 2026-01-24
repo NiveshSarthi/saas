@@ -1044,6 +1044,7 @@ export default function AttendancePage() {
       <BulkUploadDialog
         open={bulkUploadOpen}
         onOpenChange={setBulkUploadOpen}
+        selectedMonth={selectedMonth}
         onSuccess={() => {
           queryClient.invalidateQueries(['attendance']);
           setBulkUploadOpen(false);
