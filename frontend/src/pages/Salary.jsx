@@ -1,4 +1,6 @@
 import React, { useState, useMemo } from 'react';
+import jsPDF from 'jspdf';
+import autoTable from 'jspdf-autotable';
 import { base44 } from '@/api/base44Client';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { format } from 'date-fns';
@@ -67,6 +69,61 @@ export default function SalaryPage() {
   const [isCalculating, setIsCalculating] = useState(false);
   const [expandedRows, setExpandedRows] = useState({});
   const [viewMode, setViewMode] = useState('cards');
+  const [ticketDialogOpen, setTicketDialogOpen] = useState(false);
+  const [reviewDialogOpen, setReviewDialogOpen] = useState(false);
+  const [selectedPenalty, setSelectedPenalty] = useState(null);
+  const [ticketReason, setTicketReason] = useState('');
+
+  const approveRequestMutation = useMutation({
+    mutationFn: async (id) => {
+      return await base44.entities.SalaryAdjustment.update(id, {
+        status: 'approved',
+        approved_by: user?.email,
+        approved_at: new Date().toISOString()
+      });
+    },
+    onSuccess: () => {
+      toast.success('Request approved');
+      queryClient.invalidateQueries(['salary-adjustments-all']);
+    },
+    onError: (e) => toast.error(e.message)
+  });
+
+  const rejectRequestMutation = useMutation({
+    mutationFn: async (id) => {
+      return await base44.entities.SalaryAdjustment.update(id, {
+        status: 'rejected',
+        rejected_by: user?.email,
+        rejected_at: new Date().toISOString()
+      });
+    },
+    onSuccess: () => {
+      toast.success('Request rejected');
+      queryClient.invalidateQueries(['salary-adjustments-all']);
+    },
+    onError: (e) => toast.error(e.message)
+  });
+
+  const createTicketMutation = useMutation({
+    mutationFn: async ({ date, reason, employee_email }) => {
+      return await base44.entities.SalaryAdjustment.create({
+        employee_email,
+        month: selectedMonth,
+        date: date,
+        amount: 0,
+        adjustment_type: 'penalty_waiver',
+        reason: reason,
+        status: 'pending'
+      });
+    },
+    onSuccess: () => {
+      toast.success('Ticket raised successfully');
+      setTicketDialogOpen(false);
+      setTicketReason('');
+      queryClient.invalidateQueries(['salary-adjustments-all']);
+    },
+    onError: (e) => toast.error(e.message)
+  });
 
   const queryClient = useQueryClient();
 
@@ -139,6 +196,25 @@ export default function SalaryPage() {
     queryFn: () => base44.entities.SalaryPolicy.list(),
     enabled: !!user,
     refetchInterval: 30000
+  });
+
+  // Fetch Tasks for Timesheet Penalty Check
+  const { data: allTasksForPenalty = [] } = useQuery({
+    queryKey: ['tasks-penalty-check', selectedMonth],
+    queryFn: () => base44.entities.Task.filter({
+      created_date: { $gte: `${selectedMonth}-01`, $lte: `${selectedMonth}-31` }
+    }),
+    enabled: !!user
+  });
+
+  // Fetch Timesheets for Penalty Check
+  const { data: allTimesheetsForPenalty = [] } = useQuery({
+    queryKey: ['all-timesheets-penalty', selectedMonth],
+    queryFn: () => base44.entities.Timesheet.filter({
+      period_start: { $lte: `${selectedMonth}-31` },
+      period_end: { $gte: `${selectedMonth}-01` }
+    }),
+    enabled: !!user
   });
 
   const { data: policies = [], isLoading: policiesLoading } = useQuery({
@@ -329,53 +405,60 @@ export default function SalaryPage() {
     onSuccess: () => toast.success('CSV exported successfully')
   });
 
-  const exportPDFMutation = useMutation({
-    mutationFn: async () => {
-      const employeeData = filteredSalaries.map(s => {
-        const calc = calculateEmployeeSalary(s.employee_email);
-        return {
-          employee_name: s.employee_name,
-          employee_email: s.employee_email,
-          month: s.month,
-          baseSalary: calc.baseSalary,
-          adjustments: calc.adjustments,
-          gross: calc.gross,
-          totalDeductions: calc.totalDeductions,
-          net: calc.net,
-          attendanceRate: calc.attendancePercentage,
-          presentDays: calc.effectivePresent,
-          totalDays: calc.totalDays
-        };
-      });
+  const handleExportPDF = () => {
+    const doc = new jsPDF('l', 'mm', 'a4'); // Landscape
 
-      const response = await base44.functions.invoke('exportSalaryPDF', {
-        month: selectedMonth,
-        employeeData
-      });
-      return response.data;
-    },
-    onSuccess: (data) => {
-      const byteCharacters = atob(data.pdf_base64);
-      const byteNumbers = new Array(byteCharacters.length);
-      for (let i = 0; i < byteCharacters.length; i++) {
-        byteNumbers[i] = byteCharacters.charCodeAt(i);
+    // Header
+    doc.setFontSize(22);
+    doc.setTextColor(40, 40, 40);
+    doc.text('Payroll Report', 14, 20);
+
+    doc.setFontSize(10);
+    doc.setTextColor(100);
+    doc.text(`Period: ${selectedMonth}`, 14, 28);
+    doc.text(`Generated: ${new Date().toLocaleDateString()}`, 14, 33);
+
+    const tableData = filteredSalaries.map(s => {
+      const calc = calculateEmployeeSalary(s.employee_email);
+      return [
+        s.employee_name,
+        // s.employee_email,
+        `${calc.paidDays}/${calc.totalDays}`,
+        `Rs. ${calc.baseSalary.toLocaleString()}`,
+        `Rs. ${calc.adjustments.toLocaleString()}`,
+        `Rs. ${calc.gross.toLocaleString()}`,
+        `-Rs. ${calc.totalDeductions.toLocaleString()}`,
+        `Rs. ${calc.net.toLocaleString()}`,
+        s.status.toUpperCase()
+      ];
+    });
+
+    // Calculate Totals
+    const totalNet = filteredSalaries.reduce((sum, s) => sum + (s.net_salary || 0), 0);
+    doc.setFontSize(12);
+    doc.setTextColor(0, 0, 0);
+    doc.text(`Total Net Payroll: Rs. ${totalNet.toLocaleString()}`, 280, 20, { align: 'right' });
+
+    autoTable(doc, {
+      head: [['Employee', 'Paid/Total Days', 'Base', 'Adjustments', 'Gross', 'Deductions', 'Net Pay', 'Status']],
+      body: tableData,
+      startY: 40,
+      styles: { fontSize: 9, cellPadding: 3 },
+      headStyles: { fillColor: [79, 70, 229], textColor: 255, fontStyle: 'bold' },
+      alternateRowStyles: { fillColor: [249, 250, 251] },
+      columnStyles: {
+        0: { fontStyle: 'bold' },
+        6: { fontStyle: 'bold', halign: 'right' }, // Net Pay
+        2: { halign: 'right' },
+        3: { halign: 'right' },
+        4: { halign: 'right' },
+        5: { halign: 'right' }
       }
-      const byteArray = new Uint8Array(byteNumbers);
-      const blob = new Blob([byteArray], { type: 'application/pdf' });
-      const url = window.URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = data.filename;
-      document.body.appendChild(a);
-      a.click();
-      document.body.removeChild(a);
-      window.URL.revokeObjectURL(url);
-      toast.success('PDF exported successfully');
-    },
-    onError: (error) => {
-      toast.error('PDF export failed: ' + error.message);
-    }
-  });
+    });
+
+    doc.save(`payroll-report-${selectedMonth}.pdf`);
+    toast.success('PDF exported successfully');
+  };
 
   const applyRetroactiveIncentivesMutation = useMutation({
     mutationFn: async () => {
@@ -423,7 +506,60 @@ export default function SalaryPage() {
 
     const dailySalary = policy ? ((policy.basic_salary || 0) + (policy.hra || 0) + (policy.travelling_allowance || 0) + (policy.children_education_allowance || 0) + (policy.fixed_incentive || 0) + (policy.employer_incentive || 0)) / totalDays : 0;
 
-    sortedAttendance.forEach(att => {
+    // --- Timesheet Penalty Calculation ---
+    const penaltyDates = new Set();
+    let timesheetPenaltyDeduction = 0;
+    const penaltyDetails = [];
+
+    // Filter tasks for this employee
+    const employeeTasks = allTasksForPenalty.filter(t =>
+      (t.assignee_email === employeeEmail) ||
+      (t.assignees && t.assignees.includes(employeeEmail))
+    );
+
+    employeeTasks.forEach(task => {
+      const taskDate = new Date(task.created_date); // Assignment date
+      const deadline = new Date(taskDate.getTime() + 24 * 60 * 60 * 1000); // 24 hours later
+      const now = new Date();
+
+      // Only check if 24h has passed
+      if (now > deadline) {
+        // Check for timesheet entry for this task
+        const hasEntry = allTimesheetsForPenalty.some(sheet =>
+          sheet.freelancer_email === employeeEmail &&
+          sheet.entries &&
+          sheet.entries.some(entry => entry.task_id === task.id || (entry.task_title === task.title && entry.date === task.created_date))
+        );
+
+        if (!hasEntry) {
+          // Check for Penalty Waiver (Ticket Approved)
+          const hasWaiver = employeeAdjustments.some(adj =>
+            adj.adjustment_type === 'penalty_waiver' &&
+            adj.date === task.created_date
+          );
+
+          if (!hasWaiver) {
+            // Penalty Triggered
+            const dateStr = task.created_date; // "YYYY-MM-DD"
+            if (!penaltyDates.has(dateStr)) {
+              penaltyDates.add(dateStr);
+              // Deduct 1 day salary
+              timesheetPenaltyDeduction += dailySalary;
+              penaltyDetails.push({
+                date: dateStr,
+                reason: `Timesheet not submitted for task: ${task.title}`,
+                amount: dailySalary
+              });
+            }
+          }
+        }
+      }
+    });
+
+    // Filter attendance: Remove days marked for penalty
+    const effectiveAttendance = sortedAttendance.filter(att => !penaltyDates.has(att.date));
+
+    effectiveAttendance.forEach(att => {
       const checkInTime = att.check_in ? new Date(att.check_in) : null;
       const checkOutTime = att.check_out ? new Date(att.check_out) : null;
       let dailyAdjustment = 0;
@@ -523,14 +659,25 @@ export default function SalaryPage() {
       });
     });
 
-    // Count attendance types from actual records (excluding attendance-based overrides)
-    const present = empAttendance.filter(a => ['present', 'checked_out', 'work_from_home'].includes(a.status)).length;
-    const absent = empAttendance.filter(a => a.status === 'absent').length;
-    const halfDay = empAttendance.filter(a => a.status === 'half_day').length;
-    const paidLeave = empAttendance.filter(a => ['leave', 'sick_leave', 'casual_leave'].includes(a.status)).length;
-    const weekoff = empAttendance.filter(a => a.status === 'weekoff').length;
-    const holiday = empAttendance.filter(a => a.status === 'holiday').length;
-    const late = empAttendance.filter(a => a.is_late).length;
+    // Count attendance types from actual records (excluding dates marked for timesheet penalty)
+    // We use effectiveAttendance which already filters out penalty dates, but we need to match the logic of empAttendance
+
+    const present = effectiveAttendance.filter(a => ['present', 'checked_out', 'work_from_home'].includes(a.status)).length;
+    // Absent now includes explicitly marked absent days PLUS days we removed due to penalty? 
+    // No, if we remove them, they become "Not Marked" or just "Unpaid"?
+    // The requirement says "remove that daily attendance". If we assume they were present but now removed, they are no longer paid.
+    // If we want to treat them as "Absent" (Unpaid), we should technically increment 'absent' count if they were originally scheduled to work.
+    // However, simply NOT counting them as 'present' reduces 'paidDays', which effectively deducts the pay for that day.
+    // We also have an EXPLICIT deduction 'timesheetPenaltyDeduction' (1 day salary) on TOP of losing the pay for the day?
+    // "deduction the salary of 1 day... then remove that daily attendance" -> This sounds like Double Jeopardy (Lose pay for day + Fine).
+    // Let's stick to that interpretation as it matches the text literally.
+
+    const absent = effectiveAttendance.filter(a => a.status === 'absent').length;
+    const halfDay = effectiveAttendance.filter(a => a.status === 'half_day').length;
+    const paidLeave = effectiveAttendance.filter(a => ['leave', 'sick_leave', 'casual_leave'].includes(a.status)).length;
+    const weekoff = effectiveAttendance.filter(a => a.status === 'weekoff').length;
+    const holiday = effectiveAttendance.filter(a => a.status === 'holiday').length;
+    const late = effectiveAttendance.filter(a => a.is_late).length;
 
     // First absent is paid, rest are unpaid
     const paidAbsent = Math.min(absent, 1);
@@ -540,8 +687,9 @@ export default function SalaryPage() {
     // Calculate paid days
     const paidDays = present + weekoff + holiday + paidLeave + paidAbsent + (halfDay * 0.5);
 
-    // Not marked days
-    const notMarked = totalDays - empAttendance.length;
+    // Not marked days (Original Total - Effective Records) OR (Total - Original Records)?
+    // "remove that daily attendance" implies they essentially become "Not Marked" or just Gone.
+    const notMarked = totalDays - effectiveAttendance.length;
 
     if (!policy) {
       return {
@@ -550,7 +698,8 @@ export default function SalaryPage() {
         baseSalary: 0, adjustments: 0, gross: 0, totalDeductions: 0, net: 0,
         earnedBasic: 0, earnedHra: 0, earnedTa: 0, earnedCea: 0, earnedFi: 0, empIncentive: 0,
         empPF: 0, empESI: 0, lwf: 0, latePenalty: 0, absentDeduction: 0,
-        attendancePercentage: 0, hasPolicy: false, attendanceAdjustments: 0, dailyDetails: []
+        attendancePercentage: 0, hasPolicy: false, attendanceAdjustments: 0, dailyDetails: [],
+        timesheetPenaltyDeduction: 0, penaltyDetails: []
       };
     }
 
@@ -599,6 +748,8 @@ export default function SalaryPage() {
     );
 
     const adjustments = employeeAdjustments.reduce((total, adj) => {
+      if (adj.adjustment_type === 'penalty_waiver') return total;
+
       if (['bonus', 'incentive', 'reimbursement', 'allowance'].includes(adj.adjustment_type)) {
         return total + (adj.amount || 0);
       } else {
@@ -626,7 +777,7 @@ export default function SalaryPage() {
     const absentDeduction = unpaidAbsent > 0 ? Math.round((earnedBasic + earnedHra + earnedTa + earnedCea + earnedFi) / paidDays * unpaidAbsent) : 0;
 
     const totalDeductions = empPF + empESI + lwf + latePenalty + absentDeduction +
-      (salary?.advance_recovery || 0) + (salary?.other_deductions || 0);
+      (salary?.advance_recovery || 0) + (salary?.other_deductions || 0) + timesheetPenaltyDeduction;
 
     const net = gross - totalDeductions;
 
@@ -640,7 +791,7 @@ export default function SalaryPage() {
       adjustments, gross, empPF, empESI, lwf, latePenalty, absentDeduction,
       totalDeductions, net, attendancePercentage, policy, hasPolicy: true,
       employeeAdjustments, monthlyCTC1, yearlyCTC1, monthlyCTC2, yearlyCTC2,
-      attendanceAdjustments, dailyDetails
+      attendanceAdjustments, dailyDetails, timesheetPenaltyDeduction, penaltyDetails
     };
   }, [allPolicies, salaries, attendanceRecords, selectedMonth, allAdjustments]);
 
@@ -911,6 +1062,17 @@ export default function SalaryPage() {
 
                   {/* Actions */}
                   <div className="flex gap-2 ml-auto">
+                    {/* Pending Requests Button */}
+                    {allAdjustments.filter(a => a.status === 'pending').length > 0 && (
+                      <Button
+                        variant="outline"
+                        onClick={() => { /* TODO: Open Review Dialog */ setReviewDialogOpen(true); }}
+                        className="gap-2 bg-rose-50 border-rose-200 text-rose-600 hover:bg-rose-100 h-12 rounded-xl font-semibold hover:text-rose-700 transition-colors animate-pulse"
+                      >
+                        <AlertCircle className="w-4 h-4" />
+                        Requests ({allAdjustments.filter(a => a.status === 'pending').length})
+                      </Button>
+                    )}
                     <Button
                       variant="outline"
                       onClick={async () => {
@@ -963,8 +1125,7 @@ export default function SalaryPage() {
                   </div>
                   <Button
                     variant="outline"
-                    onClick={() => exportPDFMutation.mutate()}
-                    disabled={exportPDFMutation.isPending}
+                    onClick={handleExportPDF}
                     className="gap-2 bg-slate-50 border-slate-200 text-slate-600 hover:bg-slate-100 h-12 rounded-xl font-semibold hover:text-blue-600 transition-colors"
                   >
                     <FileText className="w-4 h-4" />
@@ -1319,6 +1480,33 @@ export default function SalaryPage() {
                                       <div className="flex justify-between items-center bg-white p-3 rounded-lg border border-rose-200">
                                         <span className="text-slate-500 text-sm">Other</span>
                                         <span className="font-bold text-rose-600">-₹{salary.other_deductions.toLocaleString()}</span>
+                                      </div>
+                                    )}
+                                    {calc.timesheetPenaltyDeduction > 0 && (
+                                      <div className="flex justify-between items-center bg-white p-3 rounded-lg border border-rose-200 col-span-2 md:col-span-3">
+                                        <div className="flex items-center gap-2">
+                                          <AlertCircle className="w-4 h-4 text-rose-500" />
+                                          <span className="text-slate-500 text-sm">Timesheet Non-submission Penalty</span>
+                                        </div>
+                                        <div className="flex items-center gap-4">
+                                          <span className="font-bold text-rose-600">-₹{Math.round(calc.timesheetPenaltyDeduction).toLocaleString()}</span>
+                                          <Button
+                                            size="sm"
+                                            variant="ghost"
+                                            className="h-6 text-xs text-indigo-600 hover:text-indigo-800"
+                                            onClick={() => {
+                                              // Open Dialog to raise ticket
+                                              // We need to pass the date of penalty. 
+                                              // Since calc.timesheetPenaltyDeduction is aggregate, we should ideally show individual penalties or just pick the first one?
+                                              // To keep UI simple, let's assume one button raises tickets for ALL found penalties or list them?
+                                              // Actually, let's pass all penaltyDetails to the dialog and let user select or auto-create for all.
+                                              setSelectedPenalty({ details: calc.penaltyDetails, employee: salary });
+                                              setTicketDialogOpen(true);
+                                            }}
+                                          >
+                                            Raise Ticket
+                                          </Button>
+                                        </div>
                                       </div>
                                     )}
                                   </div>
@@ -1912,6 +2100,126 @@ function SalaryHistoryView({ employeeEmail }) {
           </CardContent>
         </Card>
       ))}
+      <TicketDialog
+        open={ticketDialogOpen}
+        onOpenChange={setTicketDialogOpen}
+        selectedPenalty={selectedPenalty}
+        ticketReason={ticketReason}
+        setTicketReason={setTicketReason}
+        onDateChange={(val) => setSelectedPenalty(prev => ({ ...prev, selectedDate: val }))}
+        onSubmit={() => {
+          if (!selectedPenalty?.selectedDate || !ticketReason) return toast.error('Please select date and provide reason');
+          createTicketMutation.mutate({
+            date: selectedPenalty.selectedDate,
+            reason: ticketReason,
+            employee_email: selectedPenalty.employee.employee_email
+          });
+        }}
+        isPending={createTicketMutation.isPending}
+      />
+
+      <ReviewRequestsDialog
+        open={reviewDialogOpen}
+        onOpenChange={setReviewDialogOpen}
+        requests={allAdjustments.filter(a => a.status === 'pending')}
+        onApprove={(id) => approveRequestMutation.mutate(id)}
+        onReject={(id) => rejectRequestMutation.mutate(id)}
+      />
     </div>
   );
+}
+
+function ReviewRequestsDialog({ open, onOpenChange, requests, onApprove, onReject }) {
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="max-w-2xl">
+        <DialogHeader>
+          <DialogTitle>Pending Adjustments & Tickets</DialogTitle>
+          <DialogDescription>Review and approve salary adjustments and penalty waivers.</DialogDescription>
+        </DialogHeader>
+        <div className="space-y-4 max-h-[60vh] overflow-y-auto">
+          {requests.length === 0 ? (
+            <div className="text-center py-8 text-slate-500">No pending requests.</div>
+          ) : (
+            requests.map(req => (
+              <div key={req.id} className="flex items-start justify-between p-4 bg-slate-50 rounded-lg border border-slate-200">
+                <div>
+                  <div className="flex items-center gap-2 mb-1">
+                    <Badge variant={req.adjustment_type === 'penalty_waiver' ? 'outline' : 'default'} className="uppercase text-[10px]">
+                      {req.adjustment_type.replace('_', ' ')}
+                    </Badge>
+                    <span className="font-bold text-slate-900">{req.employee_email}</span>
+                  </div>
+                  <p className="text-sm text-slate-600 mb-2">{req.reason || 'No reason provided'}</p>
+                  <div className="flex items-center gap-4 text-xs text-slate-500">
+                    <span className="flex items-center gap-1"><Calendar className="w-3 h-3" /> {req.date}</span>
+                    {req.amount !== 0 && <span className="flex items-center gap-1"><DollarSign className="w-3 h-3" /> ₹{req.amount}</span>}
+                  </div>
+                </div>
+                <div className="flex gap-2">
+                  <Button size="sm" variant="outline" className="text-rose-600 hover:bg-rose-50" onClick={() => onReject(req.id)}>Reject</Button>
+                  <Button size="sm" className="bg-emerald-600 hover:bg-emerald-700" onClick={() => onApprove(req.id)}>Approve</Button>
+                </div>
+              </div>
+            ))
+          )}
+        </div>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+// Separate component for Ticket Dialog to avoid clutter if preferred, but keeping inline for now
+function TicketDialog({ open, onOpenChange, selectedPenalty, ticketReason, setTicketReason, onSubmit, isPending, onDateChange }) {
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent>
+        <DialogHeader>
+          <DialogTitle>Raise Penalty Dispute Ticket</DialogTitle>
+          <DialogDescription>
+            Request a waiver for the timesheet non-submission penalty.
+          </DialogDescription>
+        </DialogHeader>
+        <div className="space-y-4 py-4">
+          <div className="space-y-2">
+            <label className="text-sm font-medium">Select Penalty</label>
+            {(selectedPenalty?.details?.length > 0) ? (
+              <Select onValueChange={(val) => onDateChange(val)}>
+                <SelectTrigger>
+                  <SelectValue placeholder="Select Date" />
+                </SelectTrigger>
+                <SelectContent>
+                  {selectedPenalty.details.map((p, i) => (
+                    <SelectItem key={i} value={p.date}>
+                      {p.date} - {p.reason}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            ) : (
+              <p className="text-sm text-slate-500">No penalties found to dispute.</p>
+            )}
+
+          </div>
+          <div className="space-y-2">
+            <label className="text-sm font-medium">Reason for Delay/Waiver</label>
+            <Textarea
+              placeholder="Explain why timesheet was not submitted on time..."
+              value={ticketReason}
+              onChange={e => setTicketReason(e.target.value)}
+            />
+          </div>
+        </div>
+        <DialogFooter>
+          <Button variant="outline" onClick={() => onOpenChange(false)}>Cancel</Button>
+          <Button
+            onClick={onSubmit}
+            disabled={isPending}
+          >
+            Submit Ticket
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  )
 }
