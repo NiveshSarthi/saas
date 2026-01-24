@@ -151,11 +151,11 @@ export const calculateMonthlySalary = async (req, res) => {
                                 dailyAdjustment -= dailySalary * 0.5;
                                 consecutiveLateCheckIn = 0;
                             } else if (checkInHour >= 14 && checkInHour < 16) {
-                                // 2:00 - 4:00
-                                dailyAdjustment += dailySalary * 0.25;
+                                // 2:00 - 4:00 (Deduction, not bonus)
+                                dailyAdjustment -= dailySalary * 0.75;
                                 consecutiveLateCheckIn = 0;
-                            } else if (checkInHour >= 16 && checkInHour < 18) {
-                                // 4:00 - 6:00
+                            } else if (checkInHour >= 16) {
+                                // 4:00 PM or onwards 
                                 dailyAdjustment -= dailySalary;
                                 consecutiveLateCheckIn = 0;
                             }

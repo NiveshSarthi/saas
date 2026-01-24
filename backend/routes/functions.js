@@ -632,7 +632,7 @@ router.post('/invoke/uploadBulkAttendance', async (req, res) => {
                     if (checkInInput && checkInInput !== '-') {
                         const [h, m] = checkInInput.split(':');
                         if (h !== undefined) {
-                            checkIn = new Date(`${dateStr}T${h.padStart(2, '0')}:${(m || '00').padStart(2, '0')}:00`);
+                            checkIn = new Date(`${dateStr}T${h.padStart(2, '0')}:${(m || '00').padStart(2, '0')}:00+05:30`);
 
                             // Simple late check
                             if (workStartTime) {
@@ -646,7 +646,7 @@ router.post('/invoke/uploadBulkAttendance', async (req, res) => {
                     if (checkOutInput && checkOutInput !== '-') {
                         const [h, m] = checkOutInput.split(':');
                         if (h !== undefined) {
-                            checkOut = new Date(`${dateStr}T${h.padStart(2, '0')}:${(m || '00').padStart(2, '0')}:00`);
+                            checkOut = new Date(`${dateStr}T${h.padStart(2, '0')}:${(m || '00').padStart(2, '0')}:00+05:30`);
                         }
                     }
 

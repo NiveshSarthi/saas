@@ -459,12 +459,12 @@ export default function SalaryPage() {
             adjustmentReason = 'Extremely late check-in';
             consecutiveLateCheckIn = 0;
           } else if (checkInHour >= 14 && checkInHour < 16) {
-            // 2:00 - 4:00
-            dailyAdjustment += dailySalary * 0.25;
-            adjustmentReason = 'Bonus for late check-in';
+            // 2:00 - 4:00 (Deduction, not bonus)
+            dailyAdjustment -= dailySalary * 0.75;
+            adjustmentReason = 'Excessively late check-in';
             consecutiveLateCheckIn = 0;
-          } else if (checkInHour >= 16 && checkInHour < 18) {
-            // 4:00 - 6:00
+          } else if (checkInHour >= 16) {
+            // 4:00 PM or onwards
             dailyAdjustment -= dailySalary;
             adjustmentReason = 'Full deduction for very late check-in';
             consecutiveLateCheckIn = 0;
@@ -961,15 +961,15 @@ export default function SalaryPage() {
                       Export CSV
                     </Button>
                   </div>
-                     <Button
-                       variant="outline"
-                       onClick={() => exportPDFMutation.mutate()}
-                       disabled={exportPDFMutation.isPending}
-                       className="gap-2 bg-slate-50 border-slate-200 text-slate-600 hover:bg-slate-100 h-12 rounded-xl font-semibold hover:text-blue-600 transition-colors"
-                     >
-                       <FileText className="w-4 h-4" />
-                       Export PDF
-                     </Button>
+                  <Button
+                    variant="outline"
+                    onClick={() => exportPDFMutation.mutate()}
+                    disabled={exportPDFMutation.isPending}
+                    className="gap-2 bg-slate-50 border-slate-200 text-slate-600 hover:bg-slate-100 h-12 rounded-xl font-semibold hover:text-blue-600 transition-colors"
+                  >
+                    <FileText className="w-4 h-4" />
+                    Export PDF
+                  </Button>
                 </div>
 
                 {/* Bulk Actions */}
