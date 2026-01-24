@@ -17,10 +17,10 @@ import {
   Eye,
   ChevronLeft,
   ChevronRight,
-  Briefcase,
-  Layers,
-  FileText
+  FileText,
+  AlertTriangle
 } from 'lucide-react';
+import RowTimer from '@/components/tasks/RowTimer';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -75,7 +75,8 @@ export default function Timesheet() {
     task_id: '',
     date: format(new Date(), 'yyyy-MM-dd'),
     hours: '',
-    description: ''
+    description: '',
+    overtime_reason: ''
   });
 
   useEffect(() => {
@@ -171,11 +172,20 @@ export default function Timesheet() {
         hours: parseFloat(entryData.hours),
         description: entryData.description,
         project_id: task?.project_id,
-        project_name: project?.name || 'Unknown Project'
+        project_name: project?.name || 'Unknown Project',
+        overtime_reason: entryData.overtime_reason || ''
       };
 
       const updatedEntries = [...(currentTimesheet?.entries || []), newEntry];
       const totalHours = updatedEntries.reduce((sum, entry) => sum + entry.hours, 0);
+
+      // Sync with Task actual_hours
+      if (task) {
+        const currentActual = task.actual_hours || 0;
+        await base44.entities.Task.update(task.id, {
+          actual_hours: parseFloat((currentActual + newEntry.hours).toFixed(2))
+        });
+      }
 
       if (currentTimesheet) {
         return await base44.entities.Timesheet.update(currentTimesheet.id, {
@@ -199,12 +209,14 @@ export default function Timesheet() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['timesheet'] });
+      queryClient.invalidateQueries({ queryKey: ['my-tasks'] });
       setEntryDialogOpen(false);
       setEntryForm({
         task_id: '',
         date: format(new Date(), 'yyyy-MM-dd'),
         hours: '',
-        description: ''
+        description: '',
+        overtime_reason: ''
       });
       toast.success('Time entry added successfully');
     },
@@ -226,12 +238,23 @@ export default function Timesheet() {
         hours: parseFloat(entryData.hours),
         description: entryData.description,
         project_id: task?.project_id,
-        project_name: project?.name || 'Unknown Project'
+        project_name: project?.name || 'Unknown Project',
+        overtime_reason: entryData.overtime_reason || ''
       };
 
+      const previousEntry = currentTimesheet.entries[entryIndex];
       const updatedEntries = [...currentTimesheet.entries];
       updatedEntries[entryIndex] = updatedEntry;
       const totalHours = updatedEntries.reduce((sum, entry) => sum + entry.hours, 0);
+
+      // Sync with Task actual_hours (difference)
+      if (task) {
+        const diff = updatedEntry.hours - (previousEntry?.hours || 0);
+        const currentActual = task.actual_hours || 0;
+        await base44.entities.Task.update(task.id, {
+          actual_hours: parseFloat((currentActual + diff).toFixed(2))
+        });
+      }
 
       return await base44.entities.Timesheet.update(currentTimesheet.id, {
         entries: updatedEntries,
@@ -241,13 +264,15 @@ export default function Timesheet() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['timesheet'] });
+      queryClient.invalidateQueries({ queryKey: ['my-tasks'] });
       setEntryDialogOpen(false);
       setEditingEntry(null);
       setEntryForm({
         task_id: '',
         date: format(new Date(), 'yyyy-MM-dd'),
         hours: '',
-        description: ''
+        description: '',
+        overtime_reason: ''
       });
       toast.success('Time entry updated successfully');
     },
@@ -259,8 +284,20 @@ export default function Timesheet() {
 
   const deleteEntryMutation = useMutation({
     mutationFn: async (entryIndex) => {
+      const entryToRemove = currentTimesheet.entries[entryIndex];
       const updatedEntries = currentTimesheet.entries.filter((_, index) => index !== entryIndex);
       const totalHours = updatedEntries.reduce((sum, entry) => sum + entry.hours, 0);
+
+      // Sync with Task actual_hours (decrement)
+      if (entryToRemove?.task_id) {
+        const task = allMyTasks.find(t => t.id === entryToRemove.task_id);
+        if (task) {
+          const currentActual = task.actual_hours || 0;
+          await base44.entities.Task.update(task.id, {
+            actual_hours: Math.max(0, parseFloat((currentActual - entryToRemove.hours).toFixed(2)))
+          });
+        }
+      }
 
       return await base44.entities.Timesheet.update(currentTimesheet.id, {
         entries: updatedEntries,
@@ -270,6 +307,7 @@ export default function Timesheet() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['timesheet'] });
+      queryClient.invalidateQueries({ queryKey: ['my-tasks'] });
       toast.success('Time entry deleted successfully');
     },
   });
@@ -295,7 +333,8 @@ export default function Timesheet() {
       task_id: '',
       date: format(new Date(), 'yyyy-MM-dd'),
       hours: '',
-      description: ''
+      description: '',
+      overtime_reason: ''
     });
     setEntryDialogOpen(true);
   };
@@ -306,12 +345,37 @@ export default function Timesheet() {
       task_id: entry.task_id,
       date: entry.date,
       hours: entry.hours.toString(),
-      description: entry.description
+      description: entry.description,
+      overtime_reason: entry.overtime_reason || ''
     });
     setEntryDialogOpen(true);
   };
 
+  const selectedTaskData = useMemo(() => {
+    return allMyTasks.find(t => t.id === entryForm.task_id);
+  }, [entryForm.task_id, allMyTasks]);
+
+  const isOverTime = useMemo(() => {
+    if (!selectedTaskData || !selectedTaskData.estimated_hours) return false;
+    const currentHours = parseFloat(entryForm.hours) || 0;
+
+    // Calculate total hours for this task across all entries in the week, EXCEPT the one we are editing
+    const otherEntriesHours = (currentTimesheet?.entries || [])
+      .filter((_, idx) => idx !== editingEntry)
+      .filter(e => e.task_id === entryForm.task_id)
+      .reduce((sum, e) => sum + e.hours, 0);
+
+    // We also need to consider actual_hours from task, but subtract what's already in the current weekly timesheet to avoid double counting
+    const taskActualOutsideThisWeek = Math.max(0, (selectedTaskData.actual_hours || 0) - (currentTimesheet?.entries || []).filter(e => e.task_id === entryForm.task_id).reduce((sum, e) => sum + e.hours, 0));
+
+    return (taskActualOutsideThisWeek + otherEntriesHours + currentHours) > selectedTaskData.estimated_hours;
+  }, [selectedTaskData, entryForm.hours, currentTimesheet, editingEntry, entryForm.task_id]);
+
   const handleSaveEntry = () => {
+    if (isOverTime && !entryForm.overtime_reason?.trim()) {
+      toast.error('Overtime detected. Please provide a reason.');
+      return;
+    }
     if (editingEntry !== null) {
       updateEntryMutation.mutate({ entryIndex: editingEntry, entryData: entryForm });
     } else {
@@ -520,9 +584,9 @@ export default function Timesheet() {
                     <TableHead className="w-[180px] text-slate-500 font-semibold bg-slate-50/50">Date</TableHead>
                     <TableHead className="text-slate-500 font-semibold bg-slate-50/50">Task</TableHead>
                     <TableHead className="text-slate-500 font-semibold bg-slate-50/50">Project</TableHead>
-                    <TableHead className="text-right text-slate-500 font-semibold bg-slate-50/50">Hours</TableHead>
-                    <TableHead className="w-[30%] text-slate-500 font-semibold bg-slate-50/50">Description</TableHead>
-                    <TableHead className="w-[100px] text-center text-slate-500 font-semibold bg-slate-50/50">Actions</TableHead>
+                    <TableHead className="w-[120px] text-right text-slate-500 font-semibold bg-slate-50/50">Hours</TableHead>
+                    <TableHead className="w-[25%] text-slate-500 font-semibold bg-slate-50/50">Description & Alerts</TableHead>
+                    <TableHead className="w-[200px] text-center text-slate-500 font-semibold bg-slate-50/50">Tracking & Actions</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -546,17 +610,38 @@ export default function Timesheet() {
                         <span className="font-bold text-slate-700 bg-slate-100 px-2 py-1 rounded-md">{entry.hours}h</span>
                       </TableCell>
                       <TableCell className="max-w-xs">
-                        <p className="truncate text-slate-600 text-sm" title={entry.description}>{entry.description}</p>
+                        <div className="flex flex-col gap-1">
+                          <p className="truncate text-slate-600 text-sm" title={entry.description || 'No description'}>{entry.description || 'No description'}</p>
+                          {entry.overtime_reason && (
+                            <div className="flex items-center gap-1.5 text-rose-500 text-[10px] font-medium bg-rose-50 px-2 py-0.5 rounded-full w-fit">
+                              <AlertTriangle className="w-2.5 h-2.5" />
+                              Overtime Reason: {entry.overtime_reason}
+                            </div>
+                          )}
+                        </div>
                       </TableCell>
                       <TableCell>
-                        <div className="flex items-center justify-center gap-1">
+                        <div className="flex items-center justify-center gap-2">
                           {currentTimesheet.status === 'draft' ? (
                             <>
+                              <RowTimer
+                                uniqueKey={`${user?.email}_${entry.task_id}_${entry.date}_${index}`}
+                                onSave={(newHours) => {
+                                  const updatedHours = entry.hours + newHours;
+                                  // Prompt for reason if new total is overtime
+                                  // For simplicity in RowTimer stop/save, we might just update hours
+                                  // But if it becomes overtime, we should ideally show the dialog.
+                                  // To meet "Make reason mandatory", I will open the edit dialog instead of silent update
+                                  // if it's overtime.
+                                  handleEditEntry({ ...entry, hours: updatedHours.toString() }, index);
+                                }}
+                              />
                               <Button
                                 variant="ghost"
                                 size="sm"
                                 onClick={() => handleEditEntry(entry, index)}
                                 className="h-8 w-8 p-0 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-full"
+                                title="Edit Entry"
                               >
                                 <Edit className="w-4 h-4" />
                               </Button>
@@ -565,6 +650,7 @@ export default function Timesheet() {
                                 size="sm"
                                 onClick={() => deleteEntryMutation.mutate(index)}
                                 className="h-8 w-8 p-0 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-full"
+                                title="Delete Entry"
                               >
                                 <Trash2 className="w-4 h-4" />
                               </Button>
@@ -613,7 +699,15 @@ export default function Timesheet() {
                 <Label htmlFor="task" className="text-slate-700 font-semibold">Task</Label>
                 <Select
                   value={entryForm.task_id}
-                  onValueChange={(value) => setEntryForm(prev => ({ ...prev, task_id: value }))}
+                  onValueChange={(value) => {
+                    const task = allMyTasks.find(t => t.id === value);
+                    setEntryForm(prev => ({
+                      ...prev,
+                      task_id: value,
+                      // Auto-fill hours if estimate exists and currently empty or manual override
+                      hours: task?.estimated_hours ? task.estimated_hours.toString() : prev.hours
+                    }));
+                  }}
                 >
                   <SelectTrigger className="bg-slate-50 border-slate-200 h-11 focus:ring-indigo-500">
                     <SelectValue placeholder="Select a task" />
@@ -675,6 +769,32 @@ export default function Timesheet() {
                   className="bg-slate-50 border-slate-200 min-h-[100px] focus:ring-indigo-500 resize-none"
                 />
               </div>
+
+              {isOverTime && (
+                <div className="space-y-3 animate-in fade-in slide-in-from-top-2 duration-300">
+                  <div className="flex items-center gap-2 text-rose-600 bg-rose-50 p-3 rounded-xl border border-rose-100">
+                    <AlertTriangle className="w-5 h-5 flex-shrink-0" />
+                    <div className="text-xs">
+                      <p className="font-bold">Overtime Detected</p>
+                      <p>Hours exceed the estimate ({selectedTaskData?.estimated_hours}h). Reason is required.</p>
+                    </div>
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="overtime_reason" className="text-rose-700 font-semibold flex items-center gap-1">
+                      Reason for Overtime <span className="text-rose-500">*</span>
+                    </Label>
+                    <Textarea
+                      id="overtime_reason"
+                      placeholder="Why is more time needed for this task?"
+                      value={entryForm.overtime_reason}
+                      onChange={(e) => setEntryForm(prev => ({ ...prev, overtime_reason: e.target.value }))}
+                      rows={2}
+                      className="bg-rose-50/30 border-rose-200 focus:ring-rose-500 resize-none"
+                      required
+                    />
+                  </div>
+                </div>
+              )}
             </div>
 
             <div className="flex justify-end gap-2 mt-6 pt-4 border-t border-slate-100">
