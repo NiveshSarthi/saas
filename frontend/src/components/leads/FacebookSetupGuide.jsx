@@ -9,9 +9,9 @@ import {
 } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { 
-  BookOpen, 
-  Facebook, 
+import {
+  BookOpen,
+  Facebook,
   CheckCircle2,
   ArrowRight,
   Zap,
@@ -45,7 +45,7 @@ export default function FacebookSetupGuide() {
           <div className="bg-gradient-to-r from-blue-50 to-indigo-50 border border-blue-200 rounded-lg p-4">
             <h3 className="font-semibold text-blue-900 mb-2">🎯 What This Does</h3>
             <p className="text-sm text-blue-800">
-              Connects ALL lead forms from your Facebook Pages automatically. Any lead submitted through Facebook/Instagram ads 
+              Connects ALL lead forms from your Facebook Pages automatically. Any lead submitted through Facebook/Instagram ads
               instantly appears in your Lead Management system - no manual webhook setup per form required.
             </p>
           </div>
@@ -66,7 +66,7 @@ export default function FacebookSetupGuide() {
                   <div className="pl-4">└── Lead Form C</div>
                 </div>
               </div>
-              
+
               <div className="bg-amber-50 border border-amber-200 rounded p-3 text-sm">
                 <div className="font-semibold text-amber-900 mb-1">❌ Common Misconception</div>
                 <div className="text-amber-800">
@@ -89,7 +89,7 @@ export default function FacebookSetupGuide() {
               <CheckCircle2 className="w-5 h-5 text-green-600" />
               Setup Instructions (One-Time)
             </h3>
-            
+
             <div className="space-y-3">
               {/* Step 1 */}
               <div className="flex gap-3 p-4 bg-white border rounded-lg">
@@ -249,12 +249,10 @@ export default function FacebookSetupGuide() {
               <LinkIcon className="w-4 h-4 text-slate-600 mt-0.5" />
               <div className="flex-1">
                 <div className="font-semibold text-slate-900 text-sm mb-1">Webhook Endpoint</div>
-                <code className="text-xs bg-white px-2 py-1 rounded border block">
-                  https://tracker.niveshsarthi.com/api/functions/metaWebhook
-                </code>
-                <div className="text-xs text-slate-500 mt-1">
-                  Verify Token: <code className="bg-white px-1 rounded">base44_meta_verify_token</code>
-                </div>
+                <ul className="text-xs text-slate-600 space-y-1">
+                  <li><strong>Callback URL:</strong> <code className="bg-amber-100 px-1 py-0.5 rounded text-[10px]">{import.meta.env.VITE_BACKEND_URL || window.location.origin}/functions/v1/metaWebhook</code></li>
+                  <li><strong>Verify Token:</strong> <code className="bg-amber-100 px-1 py-0.5 rounded text-[10px]">base44_meta_verify_token</code></li>
+                </ul>
               </div>
             </div>
           </div>

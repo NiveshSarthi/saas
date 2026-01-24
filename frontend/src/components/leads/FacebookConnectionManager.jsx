@@ -413,8 +413,8 @@ export default function FacebookConnectionManager() {
                 <li>Enter the Page ID and Token above to connect.</li>
                 <li className="pt-2 font-semibold">Webhooks for Real-time Sync:</li>
                 <ul className="pl-4 list-disc space-y-1">
-                  <li><strong>Callback URL:</strong> <code className="bg-amber-100 px-1 py-0.5 rounded text-[10px]">{import.meta.env.VITE_BACKEND_URL || window.location.origin}/functions/webhooks/facebook</code></li>
-                  <li><strong>Verify Token:</strong> Use the value of <code className="bg-amber-100 px-1 py-0.5 rounded text-[10px]">FACEBOOK_VERIFY_TOKEN</code> from your backend .env</li>
+                  <li><strong>Callback URL:</strong> <code className="bg-amber-100 px-1 py-0.5 rounded text-[10px]">{import.meta.env.VITE_BACKEND_URL || window.location.origin}/api/functions/v1/metaWebhook</code></li>
+                  <li><strong>Verify Token:</strong> <code className="bg-amber-100 px-1 py-0.5 rounded text-[10px]">base44_meta_verify_token</code></li>
                   <li><strong>Subscription:</strong> Subscribe to <code className="bg-amber-100 px-1 py-0.5 rounded text-[10px]">leadgen</code> field in the "Page" object.</li>
                 </ul>
               </ol>

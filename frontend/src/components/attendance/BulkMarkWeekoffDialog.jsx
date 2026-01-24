@@ -19,34 +19,41 @@ export default function BulkMarkWeekoffDialog({ isOpen, onClose, allUsers = [], 
   const markWeekoffMutation = useMutation({
     mutationFn: async ({ dates, userEmail }) => {
       const users = userEmail === 'all' ? (allUsers || []).map(u => u.email) : [userEmail];
+      const promises = [];
 
       for (const user of users) {
         for (const date of dates) {
           const dateStr = format(date, 'yyyy-MM-dd');
 
-          // Check if record exists
-          const existing = await base44.entities.Attendance.filter({
-            user_email: user,
-            date: dateStr
-          });
-
-          if (existing.length > 0) {
-            // Update existing
-            await base44.entities.Attendance.update(existing[0].id, {
-              status: 'weekoff',
-              total_hours: 0
-            });
-          } else {
-            // Create new
-            await base44.entities.Attendance.create({
+          // We fire the check and update/create logic for each user/date pair
+          // To avoid overwhelming the server with too many concurrent requests, 
+          // we could batch them, but let's at least use Promise.all for blocks.
+          const task = (async () => {
+            const existing = await base44.entities.Attendance.filter({
               user_email: user,
-              date: dateStr,
-              status: 'weekoff',
-              total_hours: 0
+              date: dateStr
             });
-          }
+
+            if (existing.length > 0) {
+              await base44.entities.Attendance.update(existing[0].id, {
+                status: 'weekoff',
+                total_hours: 0
+              });
+            } else {
+              await base44.entities.Attendance.create({
+                user_email: user,
+                date: dateStr,
+                status: 'weekoff',
+                total_hours: 0
+              });
+            }
+          })();
+          promises.push(task);
         }
       }
+
+      // Execute all in parallel
+      await Promise.all(promises);
     },
     onSuccess: () => {
       queryClient.invalidateQueries(['attendance']);
