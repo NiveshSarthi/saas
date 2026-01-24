@@ -424,6 +424,7 @@ export default function UserManagement() {
 
   // Helper function to check if user is active (handles both active and status fields)
   const isUserActive = (user) => {
+    if (!user) return false;
     return user.active === true || user.status === 'active';
   };
 
