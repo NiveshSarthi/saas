@@ -141,6 +141,25 @@ export default function SalaryPage() {
     refetchInterval: 30000
   });
 
+  // Fetch Tasks for Timesheet Penalty Check
+  const { data: allTasksForPenalty = [] } = useQuery({
+    queryKey: ['tasks-penalty-check', selectedMonth],
+    queryFn: () => base44.entities.Task.filter({
+      created_date: { $gte: `${selectedMonth}-01`, $lte: `${selectedMonth}-31` }
+    }),
+    enabled: !!user
+  });
+
+  // Fetch Timesheets for Penalty Check
+  const { data: allTimesheetsForPenalty = [] } = useQuery({
+    queryKey: ['all-timesheets-penalty', selectedMonth],
+    queryFn: () => base44.entities.Timesheet.filter({
+      period_start: { $lte: `${selectedMonth}-31` },
+      period_end: { $gte: `${selectedMonth}-01` }
+    }),
+    enabled: !!user
+  });
+
   const { data: policies = [], isLoading: policiesLoading } = useQuery({
     queryKey: ['salary-policies'],
     queryFn: () => base44.entities.SalaryPolicy.list('-updated_date'),
@@ -423,7 +442,52 @@ export default function SalaryPage() {
 
     const dailySalary = policy ? ((policy.basic_salary || 0) + (policy.hra || 0) + (policy.travelling_allowance || 0) + (policy.children_education_allowance || 0) + (policy.fixed_incentive || 0) + (policy.employer_incentive || 0)) / totalDays : 0;
 
-    sortedAttendance.forEach(att => {
+    // --- Timesheet Penalty Calculation ---
+    const penaltyDates = new Set();
+    let timesheetPenaltyDeduction = 0;
+    const penaltyDetails = [];
+
+    // Filter tasks for this employee
+    const employeeTasks = allTasksForPenalty.filter(t =>
+      (t.assignee_email === employeeEmail) ||
+      (t.assignees && t.assignees.includes(employeeEmail))
+    );
+
+    employeeTasks.forEach(task => {
+      const taskDate = new Date(task.created_date); // Assignment date
+      const deadline = new Date(taskDate.getTime() + 24 * 60 * 60 * 1000); // 24 hours later
+      const now = new Date();
+
+      // Only check if 24h has passed
+      if (now > deadline) {
+        // Check for timesheet entry for this task
+        const hasEntry = allTimesheetsForPenalty.some(sheet =>
+          sheet.freelancer_email === employeeEmail &&
+          sheet.entries &&
+          sheet.entries.some(entry => entry.task_id === task.id || (entry.task_title === task.title && entry.date === task.created_date))
+        );
+
+        if (!hasEntry) {
+          // Penalty Triggered
+          const dateStr = task.created_date; // "YYYY-MM-DD"
+          if (!penaltyDates.has(dateStr)) {
+            penaltyDates.add(dateStr);
+            // Deduct 1 day salary
+            timesheetPenaltyDeduction += dailySalary;
+            penaltyDetails.push({
+              date: dateStr,
+              reason: `Timesheet not submitted for task: ${task.title}`,
+              amount: dailySalary
+            });
+          }
+        }
+      }
+    });
+
+    // Filter attendance: Remove days marked for penalty
+    const effectiveAttendance = sortedAttendance.filter(att => !penaltyDates.has(att.date));
+
+    effectiveAttendance.forEach(att => {
       const checkInTime = att.check_in ? new Date(att.check_in) : null;
       const checkOutTime = att.check_out ? new Date(att.check_out) : null;
       let dailyAdjustment = 0;
@@ -523,14 +587,25 @@ export default function SalaryPage() {
       });
     });
 
-    // Count attendance types from actual records (excluding attendance-based overrides)
-    const present = empAttendance.filter(a => ['present', 'checked_out', 'work_from_home'].includes(a.status)).length;
-    const absent = empAttendance.filter(a => a.status === 'absent').length;
-    const halfDay = empAttendance.filter(a => a.status === 'half_day').length;
-    const paidLeave = empAttendance.filter(a => ['leave', 'sick_leave', 'casual_leave'].includes(a.status)).length;
-    const weekoff = empAttendance.filter(a => a.status === 'weekoff').length;
-    const holiday = empAttendance.filter(a => a.status === 'holiday').length;
-    const late = empAttendance.filter(a => a.is_late).length;
+    // Count attendance types from actual records (excluding dates marked for timesheet penalty)
+    // We use effectiveAttendance which already filters out penalty dates, but we need to match the logic of empAttendance
+
+    const present = effectiveAttendance.filter(a => ['present', 'checked_out', 'work_from_home'].includes(a.status)).length;
+    // Absent now includes explicitly marked absent days PLUS days we removed due to penalty? 
+    // No, if we remove them, they become "Not Marked" or just "Unpaid"?
+    // The requirement says "remove that daily attendance". If we assume they were present but now removed, they are no longer paid.
+    // If we want to treat them as "Absent" (Unpaid), we should technically increment 'absent' count if they were originally scheduled to work.
+    // However, simply NOT counting them as 'present' reduces 'paidDays', which effectively deducts the pay for that day.
+    // We also have an EXPLICIT deduction 'timesheetPenaltyDeduction' (1 day salary) on TOP of losing the pay for the day?
+    // "deduction the salary of 1 day... then remove that daily attendance" -> This sounds like Double Jeopardy (Lose pay for day + Fine).
+    // Let's stick to that interpretation as it matches the text literally.
+
+    const absent = effectiveAttendance.filter(a => a.status === 'absent').length;
+    const halfDay = effectiveAttendance.filter(a => a.status === 'half_day').length;
+    const paidLeave = effectiveAttendance.filter(a => ['leave', 'sick_leave', 'casual_leave'].includes(a.status)).length;
+    const weekoff = effectiveAttendance.filter(a => a.status === 'weekoff').length;
+    const holiday = effectiveAttendance.filter(a => a.status === 'holiday').length;
+    const late = effectiveAttendance.filter(a => a.is_late).length;
 
     // First absent is paid, rest are unpaid
     const paidAbsent = Math.min(absent, 1);
@@ -540,8 +615,9 @@ export default function SalaryPage() {
     // Calculate paid days
     const paidDays = present + weekoff + holiday + paidLeave + paidAbsent + (halfDay * 0.5);
 
-    // Not marked days
-    const notMarked = totalDays - empAttendance.length;
+    // Not marked days (Original Total - Effective Records) OR (Total - Original Records)?
+    // "remove that daily attendance" implies they essentially become "Not Marked" or just Gone.
+    const notMarked = totalDays - effectiveAttendance.length;
 
     if (!policy) {
       return {
@@ -550,7 +626,8 @@ export default function SalaryPage() {
         baseSalary: 0, adjustments: 0, gross: 0, totalDeductions: 0, net: 0,
         earnedBasic: 0, earnedHra: 0, earnedTa: 0, earnedCea: 0, earnedFi: 0, empIncentive: 0,
         empPF: 0, empESI: 0, lwf: 0, latePenalty: 0, absentDeduction: 0,
-        attendancePercentage: 0, hasPolicy: false, attendanceAdjustments: 0, dailyDetails: []
+        attendancePercentage: 0, hasPolicy: false, attendanceAdjustments: 0, dailyDetails: [],
+        timesheetPenaltyDeduction: 0, penaltyDetails: []
       };
     }
 
@@ -626,7 +703,7 @@ export default function SalaryPage() {
     const absentDeduction = unpaidAbsent > 0 ? Math.round((earnedBasic + earnedHra + earnedTa + earnedCea + earnedFi) / paidDays * unpaidAbsent) : 0;
 
     const totalDeductions = empPF + empESI + lwf + latePenalty + absentDeduction +
-      (salary?.advance_recovery || 0) + (salary?.other_deductions || 0);
+      (salary?.advance_recovery || 0) + (salary?.other_deductions || 0) + timesheetPenaltyDeduction;
 
     const net = gross - totalDeductions;
 
@@ -640,7 +717,7 @@ export default function SalaryPage() {
       adjustments, gross, empPF, empESI, lwf, latePenalty, absentDeduction,
       totalDeductions, net, attendancePercentage, policy, hasPolicy: true,
       employeeAdjustments, monthlyCTC1, yearlyCTC1, monthlyCTC2, yearlyCTC2,
-      attendanceAdjustments, dailyDetails
+      attendanceAdjustments, dailyDetails, timesheetPenaltyDeduction, penaltyDetails
     };
   }, [allPolicies, salaries, attendanceRecords, selectedMonth, allAdjustments]);
 
@@ -1319,6 +1396,15 @@ export default function SalaryPage() {
                                       <div className="flex justify-between items-center bg-white p-3 rounded-lg border border-rose-200">
                                         <span className="text-slate-500 text-sm">Other</span>
                                         <span className="font-bold text-rose-600">-₹{salary.other_deductions.toLocaleString()}</span>
+                                      </div>
+                                    )}
+                                    {calc.timesheetPenaltyDeduction > 0 && (
+                                      <div className="flex justify-between items-center bg-white p-3 rounded-lg border border-rose-200 col-span-2 md:col-span-3">
+                                        <div className="flex items-center gap-2">
+                                          <AlertCircle className="w-4 h-4 text-rose-500" />
+                                          <span className="text-slate-500 text-sm">Timesheet Non-submission Penalty</span>
+                                        </div>
+                                        <span className="font-bold text-rose-600">-₹{Math.round(calc.timesheetPenaltyDeduction).toLocaleString()}</span>
                                       </div>
                                     )}
                                   </div>
