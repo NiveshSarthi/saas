@@ -403,12 +403,42 @@ const marketingExpenseSchema = new mongoose.Schema({
 });
 
 const pettyCashReimbursementSchema = new mongoose.Schema({
-    amount: Number,
-    status: String, // pending, approved, paid
-    description: String,
-    user_email: String,
-    date: Date,
-    created_at: { type: Date, default: Date.now }
+    transaction_type: {
+        type: String,
+        enum: ['reimbursement', 'advance', 'credit', 'debit'],
+        default: 'reimbursement'
+    },
+    amount: { type: Number, required: true },
+    status: {
+        type: String,
+        enum: ['submitted', 'approved', 'rejected', 'paid'],
+        default: 'submitted'
+    },
+    category: String,
+    subcategory: String,
+    purpose: { type: String, required: true },
+    notes: String,
+    employee_email: { type: String, required: true },
+    employee_name: String,
+    expense_date: String, // YYYY-MM-DD
+    receipt_urls: [String],
+    receipt_url: String, // Legacy support
+    gst_amount: { type: Number, default: 0 },
+    approved_by: String,
+    approved_date: Date,
+    rejection_reason: String,
+    payment_date: String,
+    payment_mode: String,
+    payment_reference: String,
+    comments: [{
+        author: String,
+        text: String,
+        timestamp: { type: Date, default: Date.now }
+    }],
+    is_duplicate_flag: Boolean,
+    duplicate_warning: String,
+    created_at: { type: Date, default: Date.now },
+    updated_at: { type: Date, default: Date.now }
 });
 
 export const PaymentReceivable = mongoose.model('PaymentReceivable', paymentReceivableSchema);
