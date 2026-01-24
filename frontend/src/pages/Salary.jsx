@@ -757,7 +757,7 @@ export default function SalaryPage() {
       }
     }, 0);
 
-    const gross = baseSalary + adjustments + attendanceAdjustments;
+    const gross = baseSalary + adjustments + (attendanceAdjustments > 0 ? attendanceAdjustments : 0);
 
     // CTC 2: Including adjustments
     const monthlyCTC2 = monthlyCTC1 + adjustments;
@@ -776,8 +776,11 @@ export default function SalaryPage() {
     const latePenalty = late * (policy.late_penalty_per_minute || 0) * 10;
     const absentDeduction = unpaidAbsent > 0 ? Math.round((earnedBasic + earnedHra + earnedTa + earnedCea + earnedFi) / paidDays * unpaidAbsent) : 0;
 
+    // Attendance penalty (from daily adjustments e.g. late check-in bracket)
+    const attendancePenalty = attendanceAdjustments < 0 ? Math.abs(attendanceAdjustments) : 0;
+
     const totalDeductions = empPF + empESI + lwf + latePenalty + absentDeduction +
-      (salary?.advance_recovery || 0) + (salary?.other_deductions || 0) + timesheetPenaltyDeduction;
+      (salary?.advance_recovery || 0) + (salary?.other_deductions || 0) + timesheetPenaltyDeduction + attendancePenalty;
 
     const net = gross - totalDeductions;
 
