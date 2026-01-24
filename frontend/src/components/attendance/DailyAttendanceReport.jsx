@@ -9,7 +9,7 @@ import {
 import { format } from 'date-fns';
 import { Progress } from '@/components/ui/progress';
 import { toast } from 'sonner';
-import { jsPDF } from 'jspdf';
+import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
 
 export default function DailyAttendanceReport({
