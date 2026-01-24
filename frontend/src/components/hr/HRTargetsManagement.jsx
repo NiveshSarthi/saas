@@ -1,5 +1,7 @@
 
 import React, { useState, useMemo } from 'react';
+import jsPDF from 'jspdf';
+import autoTable from 'jspdf-autotable';
 import { base44 } from '@/api/base44Client';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import {
@@ -308,6 +310,48 @@ export default function HRTargetsManagement({ user, attendanceStats = {}, users 
     };
   }, [hrTargets]);
 
+  const handleExportPDF = () => {
+    const doc = new jsPDF();
+
+    // Header
+    doc.setFontSize(20);
+    doc.setTextColor(40, 40, 40);
+    doc.text('HR Targets Report', 14, 22);
+
+    doc.setFontSize(10);
+    doc.setTextColor(100);
+    doc.text(`Generated on: ${new Date().toLocaleDateString()}`, 14, 30);
+    doc.text(`Total Active Targets: ${filteredTargets.length}`, 14, 35);
+
+    const tableData = filteredTargets.map(t => {
+      const progressStats = calculateProgress(t);
+      return [
+        t.target_name,
+        TARGET_TYPES.find(type => type.value === t.target_type)?.label || t.target_type,
+        getDepartmentName(t.department_id),
+        t.period,
+        `${progressStats.actual} / ${t.target_value} ${t.target_unit}`,
+        `${progressStats.progress.toFixed(1)}%`
+      ];
+    });
+
+    autoTable(doc, {
+      head: [['Target Name', 'Type', 'Department', 'Period', 'Current / Goal', 'Progress']],
+      body: tableData,
+      startY: 45,
+      styles: { fontSize: 9, cellPadding: 3 },
+      headStyles: { fillColor: [79, 70, 229], textColor: 255, fontStyle: 'bold' },
+      alternateRowStyles: { fillColor: [249, 250, 251] },
+      columnStyles: {
+        0: { fontStyle: 'bold', cellWidth: 50 },
+        5: { halign: 'right', fontStyle: 'bold' }
+      }
+    });
+
+    doc.save('hr-targets-report.pdf');
+    toast.success('Report exported successfully');
+  };
+
   if (!isHRorAdmin) {
     return (
       <div className="flex flex-col items-center justify-center p-12 text-center bg-slate-50 rounded-xl border border-dashed">
@@ -413,6 +457,15 @@ export default function HRTargetsManagement({ user, attendanceStats = {}, users 
               ))}
             </SelectContent>
           </Select>
+
+          <Button
+            variant="outline"
+            className="gap-2 bg-slate-50 hover:bg-white border-slate-200 text-slate-600 hover:text-indigo-600 transition-colors"
+            onClick={handleExportPDF}
+          >
+            <FileCheck className="w-4 h-4" />
+            Export PDF
+          </Button>
         </div>
       </div>
 
