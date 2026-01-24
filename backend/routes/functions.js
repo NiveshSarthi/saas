@@ -909,4 +909,62 @@ router.post('/webhooks/facebook', async (req, res) => {
     }
 });
 
+// --- Weather Grace Period APIs ---
+
+router.post('/invoke/getGracePeriod', async (req, res) => {
+    try {
+        const { date } = req.body; // YYYY-MM-DD
+        const period = await models.HRGracePeriod.findOne({ date });
+        res.json({ success: true, data: period || null });
+    } catch (e) {
+        res.status(500).json({ error: e.message });
+    }
+});
+
+router.post('/invoke/setGracePeriod', async (req, res) => {
+    try {
+        const { date, minutes, reason, created_by } = req.body;
+
+        let period = await models.HRGracePeriod.findOne({ date });
+        if (period) {
+            period.minutes = minutes;
+            period.reason = reason;
+            period.created_by = created_by; // Update creator if modified?
+            await period.save();
+        } else {
+            period = await models.HRGracePeriod.create({
+                date,
+                minutes,
+                reason,
+                created_by
+            });
+        }
+        res.json({ success: true, data: period });
+    } catch (e) {
+        res.status(500).json({ error: e.message });
+    }
+});
+
+router.post('/invoke/deleteGracePeriod', async (req, res) => {
+    try {
+        const { date } = req.body; // YYYY-MM-DD
+        await models.HRGracePeriod.deleteOne({ date });
+        res.json({ success: true });
+    } catch (e) {
+        res.status(500).json({ error: e.message });
+    }
+});
+
+router.post('/invoke/getMonthlyGracePeriods', async (req, res) => {
+    try {
+        const { month } = req.body; // YYYY-MM
+        // Regex to match "YYYY-MM-" prefix
+        const regex = new RegExp(`^${month}-`);
+        const periods = await models.HRGracePeriod.find({ date: { $regex: regex } });
+        res.json({ success: true, data: periods });
+    } catch (e) {
+        res.status(500).json({ error: e.message });
+    }
+});
+
 export default router;

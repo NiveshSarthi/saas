@@ -191,6 +191,16 @@ export default function SalaryPage() {
     refetchInterval: 30000
   });
 
+  const { data: gracePeriods = [] } = useQuery({
+    queryKey: ['grace-periods', selectedMonth],
+    queryFn: async () => {
+      const res = await base44.functions.invoke('getMonthlyGracePeriods', { month: selectedMonth });
+      return res.data || [];
+    },
+    enabled: !!user,
+    refetchInterval: 30000
+  });
+
   const { data: allPolicies = [] } = useQuery({
     queryKey: ['all-policies-management'],
     queryFn: () => base44.entities.SalaryPolicy.list(),
@@ -617,14 +627,18 @@ export default function SalaryPage() {
       let dailyAdjustment = 0;
       let adjustmentReason = '';
 
+      // Check for Grace Period
+      const graceDay = gracePeriods.find(g => g.date === att.date);
+      const graceMinutes = graceDay ? (graceDay.minutes || 30) : 0;
+      const effectiveExpectedCheckIn = (expectedCheckIn * 60) + graceMinutes;
+
       // Check-in rules (only if present or checked_out)
       if (['present', 'checked_out', 'work_from_home'].includes(att.status) && checkInTime) {
         const checkInHour = checkInTime.getHours();
         const checkInMinute = checkInTime.getMinutes();
         const checkInTotalMinutes = checkInHour * 60 + checkInMinute;
-        const expectedCheckInMinutes = expectedCheckIn * 60;
 
-        if (checkInTotalMinutes > expectedCheckInMinutes) {
+        if (checkInTotalMinutes > effectiveExpectedCheckIn) {
           // Check-in after 10 AM
           if (checkInHour >= 10 && checkInHour < 11) {
             // 10:01 - 11:00
@@ -849,7 +863,7 @@ export default function SalaryPage() {
       attendanceAdjustments, dailyDetails, timesheetPenaltyDeduction, penaltyDetails,
       employerPF, employerESI, employerLWF, exGratia, earnedBasic, earnedHra, earnedTa, earnedCea, earnedFi
     };
-  }, [allPolicies, salaries, attendanceRecords, selectedMonth, allAdjustments]);
+  }, [allPolicies, salaries, attendanceRecords, selectedMonth, allAdjustments, gracePeriods]);
 
   const handleSelectRecord = (recordId) => {
     setSelectedRecords(prev =>
