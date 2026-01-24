@@ -43,11 +43,12 @@ export default function AssignLeadDialog({ open, onOpenChange, lead, users, curr
   // Filter users to only sales department members for assignment
   const salesDepartment = departments.find(d => d.name?.toLowerCase().includes('sales'));
   const assignableUsers = useMemo(() => {
+    // Admins can assign to anyone, others can only see themselves
     if (!isAdmin) return users.filter(u => u.email === currentUser?.email);
-    if (!salesDepartment) return users; // Fallback if no sales department found
 
-    return users.filter(u => u.department_id === salesDepartment.id || u.email === currentUser?.email);
-  }, [users, departments, salesDepartment, currentUser?.email, isAdmin]);
+    // For Admins, show all valid users (filtering out empty names/emails)
+    return users.filter(u => u.email);
+  }, [users, currentUser?.email, isAdmin]);
 
   const assignMutation = useMutation({
     mutationFn: async () => {

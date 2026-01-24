@@ -193,7 +193,7 @@ export default function MarketingTaskModal({ isOpen, onClose, task, user }) {
     queryFn: async () => {
       if (!task?.related_task_id) return null;
       const res = await base44.entities.Task.filter({ id: task.related_task_id });
-      return res[0];
+      return res[0] || null;
     },
     enabled: !!task?.related_task_id
   });

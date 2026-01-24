@@ -1,5 +1,6 @@
 
 import React, { useState } from 'react';
+import { base44 } from '@/api/base44Client';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -20,25 +21,26 @@ export default function SalesVisitDialog({ open, onOpenChange, user, currentLoca
 
     const startVisitMutation = useMutation({
         mutationFn: async (data) => {
-            const response = await fetch('http://localhost:3001/api/visits/start', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    user_email: user.email,
-                    ...data,
-                    location: currentLocation
-                })
-            });
-            const result = await response.json();
-            if (!result.success) throw new Error(result.error);
-            return result.data;
+            const visitData = {
+                user_email: user.email,
+                client_name: data.client_name,
+                purpose: data.purpose,
+                estimated_duration_minutes: data.estimated_duration_minutes,
+                visit_start_time: new Date().toISOString(),
+                start_location: currentLocation,
+                status: 'ongoing', // Initial status
+                notes: `Visit started at ${new Date().toLocaleTimeString()} by ${user.full_name || user.email}`
+            };
+
+            return await base44.entities.SiteVisit.create(visitData);
         },
         onSuccess: () => {
             queryClient.invalidateQueries(['active-visit']);
+            queryClient.invalidateQueries(['site-visits']);
             toast.success('Gate Pass Generated! Site Visit Started.');
             onOpenChange(false);
         },
-        onError: (e) => toast.error(e.message)
+        onError: (e) => toast.error('Failed to start visit: ' + e.message)
     });
 
     const handleSubmit = (e) => {
