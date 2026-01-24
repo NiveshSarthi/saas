@@ -72,7 +72,7 @@ export default function OfficeNeedsManager({ user }) {
     });
 
     const queryClient = useQueryClient();
-    const isHRorAdmin = user?.role === 'admin' || user?.role_id === 'hr';
+    const isHRorAdmin = user?.role === 'admin' || user?.role_id === 'hr' || user?.email === 'chawlaheena1991@gmail.com';
 
     // Fetch purchase requests
     const { data: requests = [], isLoading } = useQuery({
