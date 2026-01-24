@@ -133,7 +133,7 @@ export default function CheckInOutWidget({ user, todayRecord, onUpdate }) {
   }, []);
 
 
-  const getLocation = () => {
+  const getLocation = (useHighAccuracy = true) => {
     return new Promise((resolve) => {
       if (!navigator.geolocation) {
         toast.error('Location services not available');
@@ -142,7 +142,14 @@ export default function CheckInOutWidget({ user, todayRecord, onUpdate }) {
       }
 
       setGettingLocation(true);
-      setLocationPermissionDenied(false); // Reset state on new attempt
+      setLocationPermissionDenied(false);
+
+      const options = {
+        timeout: useHighAccuracy ? 8000 : 5000,
+        enableHighAccuracy: useHighAccuracy,
+        maximumAge: 30000 // Use cached location if it's fresh (30s)
+      };
+
       navigator.geolocation.getCurrentPosition(
         (position) => {
           setGettingLocation(false);
@@ -152,18 +159,24 @@ export default function CheckInOutWidget({ user, todayRecord, onUpdate }) {
             accuracy: position.coords.accuracy
           });
         },
-        (error) => {
-          setGettingLocation(false);
-
+        async (error) => {
           if (error.code === 1) { // Permission Denied
+            setGettingLocation(false);
             setLocationPermissionDenied(true);
             toast.error('Location access is required for attendance.');
+            resolve(null);
+          } else if (useHighAccuracy) {
+            // Fallback to standard accuracy if high accuracy fails/times out
+            console.warn('High accuracy location failed, trying standard accuracy...');
+            const standardLocation = await getLocation(false);
+            resolve(standardLocation);
           } else {
-            console.warn('Location detection failed:', error);
+            setGettingLocation(false);
+            console.warn('Location detection failed:', error.message);
+            resolve(null);
           }
-          resolve(null);
         },
-        { timeout: 20000, enableHighAccuracy: true } // Try high accuracy for geofencing
+        options
       );
     });
   };
@@ -190,8 +203,8 @@ export default function CheckInOutWidget({ user, todayRecord, onUpdate }) {
       location = await getLocation();
 
       // If geofencing enabled and no location -> BLOCK
-      if (settings && settings.enable_geofencing && !location) {
-        throw new Error("Location access is MANDATORY for attendance. Please enable location services.");
+      if (settings?.enable_geofencing && !location) {
+        throw new Error("Location access is MANDATORY for attendance geofencing. Please ensure GPS is active.");
       }
 
       ip = await getIPAddress();
@@ -251,7 +264,7 @@ export default function CheckInOutWidget({ user, todayRecord, onUpdate }) {
       let location = await getLocation();
 
       if (settings?.enable_geofencing && !location) {
-        throw new Error("Location access is MANDATORY for checkout. Please enable location services.");
+        throw new Error("Location access is MANDATORY for checkout geofencing. Please ensure GPS is active.");
       }
 
       const checkInTime = new Date(todayRecord.check_in);
