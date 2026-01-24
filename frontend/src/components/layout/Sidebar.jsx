@@ -581,8 +581,8 @@ export default function Sidebar({ projects = [], currentPage, user, collapsed, o
               if (item.financeOnly && !can('finance_dashboard', 'read')) return null;
               // Skip HR-only items for non-HR users (unless admin)
               if (item.hrOnly && user?.role_id !== 'hr' && !isAdmin) return null;
-              // Show timesheet only for freelancers
-              if (item.freelancerOnly && !isFreelancer) return null;
+              // Show timesheet for freelancers and IT department members
+              if (item.freelancerOnly && !isFreelancer && !isITUser) return null;
               // Hide items from Sales Executives
               if (item.hiddenForSalesExec && isSalesExec) return null;
               // Hide Reports and Projects from Sales Managers and Executives
