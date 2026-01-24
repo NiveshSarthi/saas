@@ -29,7 +29,9 @@ export default function CheckInOutWidget({ user, todayRecord, onUpdate }) {
   const isSalesUser = React.useMemo(() => {
     if (!user || departments.length === 0) return false;
     const dept = departments.find(d => d.id === user.department_id);
-    return dept?.name?.toLowerCase().includes('sales') || user.role_id === 'sales_rep' || user.role_id === 'sales';
+    // Strict check: Only members of a department with "Sales" in the name can see the Visit button
+    // This is for Gate Pass creation
+    return dept?.name?.toLowerCase().includes('sales');
   }, [user, departments]);
 
   // Fetch active site visit
@@ -114,11 +116,16 @@ export default function CheckInOutWidget({ user, todayRecord, onUpdate }) {
   }, [settings, workDays]);
 
   const canCheckIn = React.useMemo(() => {
-    if (!settings) return true;
-    if (todayRecord && !settings.allow_multiple_checkins) return false;
-    if (todayRecord && todayRecord.status === 'checked_in') return false; // Already checked in
-    // If checked out, can we check in again? Only if multiple allowed.
-    if (todayRecord && todayRecord.check_out && !settings.allow_multiple_checkins) return false;
+    // 1. Safety check for active session (already checked in but not out)
+    if (todayRecord?.status === 'checked_in' && !todayRecord?.check_out) return false;
+
+    // 2. If we have a completed record (checked out)
+    if (todayRecord?.check_out) {
+      // Only allow if settings EXIST and EXPLICITLY set allow_multiple_checkins to true
+      return settings?.allow_multiple_checkins === true;
+    }
+
+    // 3. No record for today yet -> Allow
     return true;
   }, [settings, todayRecord]);
 
@@ -431,7 +438,7 @@ export default function CheckInOutWidget({ user, todayRecord, onUpdate }) {
                 )}
               >
                 <LogIn className="w-5 h-5 mr-2 sm:mr-3" />
-                {gettingLocation ? 'Locating...' : 'Check In'}
+                {gettingLocation ? 'Locating...' : (todayRecord?.check_out && !canCheckIn ? 'Completed' : 'Check In')}
               </Button>
             )}
 
