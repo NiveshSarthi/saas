@@ -178,6 +178,7 @@ export default function UserManagement() {
 
   const toggleUserActiveMutation = useMutation({
     mutationFn: async ({ userId, active, user }) => {
+      console.log('Toggling user:', userId, 'to active:', active);
       await base44.entities.User.update(userId, { active, status: active ? 'active' : 'inactive' });
       await base44.entities.AuditLog.create({
         user_email: currentUser?.email,
@@ -190,11 +191,16 @@ export default function UserManagement() {
       });
     },
     onSuccess: (_, { active }) => {
+      console.log('Toggle success, invalidating queries');
       queryClient.invalidateQueries({ queryKey: ['users'] });
       queryClient.invalidateQueries({ queryKey: ['users', 'dashboard'] });
       queryClient.invalidateQueries({ queryKey: ['team-data'] });
       toast.success(active ? 'User activated' : 'User deactivated');
     },
+    onError: (error) => {
+      console.error('Toggle error:', error);
+      toast.error('Failed to update user status: ' + error.message);
+    }
   });
 
   const toggleInvitationActiveMutation = useMutation({
