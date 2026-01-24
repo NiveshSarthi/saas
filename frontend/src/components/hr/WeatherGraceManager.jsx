@@ -112,6 +112,12 @@ export default function WeatherGraceManager({ user }) {
         }
     };
 
+    const isSevereWeather = () => {
+        if (!weather) return false;
+        // Severe if: Rain/Snow OR Wind > 25 km/h
+        return (weather.rain > 0 || weather.showers > 0 || weather.snowfall > 0 || weather.wind_speed_10m > 25);
+    };
+
     if (loading) return <div className="p-8 text-center text-slate-500">Loading weather data...</div>;
 
     return (
@@ -194,14 +200,16 @@ export default function WeatherGraceManager({ user }) {
                                 <div>
                                     <h3 className="text-lg font-semibold text-slate-900">No Grace Period</h3>
                                     <p className="text-slate-500 mt-1 max-w-xs mx-auto">
-                                        Activate if severe weather is impacting commute times.
+                                        {isSevereWeather()
+                                            ? 'Severe weather detected. You can activate grace period.'
+                                            : 'Grace period can only be activated during severe weather conditions.'}
                                     </p>
                                 </div>
                                 <Button
                                     size="lg"
                                     onClick={handleActivateGrace}
-                                    disabled={graceLoading}
-                                    className="w-full bg-indigo-600 hover:bg-indigo-700 shadow-lg shadow-indigo-200 transition-all font-bold"
+                                    disabled={graceLoading || !isSevereWeather()}
+                                    className="w-full bg-indigo-600 hover:bg-indigo-700 shadow-lg shadow-indigo-200 transition-all font-bold disabled:opacity-50 disabled:cursor-not-allowed"
                                 >
                                     {graceLoading ? 'Activating...' : 'Activate 30m Grace Period'}
                                 </Button>
