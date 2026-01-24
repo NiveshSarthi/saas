@@ -18,7 +18,9 @@ import {
   ChevronLeft,
   ChevronRight,
   FileText,
-  AlertTriangle
+  AlertTriangle,
+  Briefcase,
+  Layers
 } from 'lucide-react';
 import RowTimer from '@/components/tasks/RowTimer';
 import { Button } from '@/components/ui/button';
@@ -94,32 +96,39 @@ export default function Timesheet() {
   const weekStart = startOfWeek(selectedWeek, { weekStartsOn: 1 }); // Monday
   const weekEnd = endOfWeek(selectedWeek, { weekStartsOn: 1 }); // Sunday
 
-  // Get user's assigned tasks (FIXED LOGIC)
-  const { data: assignedTasks = [] } = useQuery({
-    queryKey: ['my-tasks', user?.email],
-    queryFn: () => base44.entities.Task.filter({
-      assignees: user?.email
-    }),
+  // Get all tasks (consistent with MyTasks logic)
+  const { data: allTasks = [] } = useQuery({
+    queryKey: ['my-tasks'],
+    queryFn: async () => {
+      // Generate recurring instances first (as done in MyTasks)
+      try {
+        await base44.functions.invoke('generateRecurringTaskInstances', {});
+      } catch (e) {
+        console.error('Failed to generate recurring instances', e);
+      }
+      return await base44.entities.Task.list('-updated_date', 1000);
+    },
     enabled: !!user?.email,
   });
 
-  // Also fetch tasks where user is the primary assignee (backward compatibility)
-  const { data: directTasks = [] } = useQuery({
-    queryKey: ['freelancer-tasks', user?.email],
-    queryFn: () => base44.entities.Task.filter({
-      assignedFreelancerId: user?.email
-    }),
-    enabled: !!user?.email,
-  });
-
-  // Combine and deduplicate tasks
+  // Filter tasks assigned to me or created by me
   const allMyTasks = useMemo(() => {
-    const taskMap = new Map();
-    [...assignedTasks, ...directTasks].forEach(task => {
-      taskMap.set(task.id, task);
+    if (!user) return [];
+    const userEmail = (user.email || '').toLowerCase();
+
+    return allTasks.filter(t => {
+      // Show if directly assigned
+      if ((t.assignee_email || '').toLowerCase() === userEmail) return true;
+      // Show if assignees array includes user
+      if (t.assignees && Array.isArray(t.assignees) && t.assignees.some(e => (e || '').toLowerCase() === userEmail)) return true;
+      // Show if user is primary assignee (backward compatibility)
+      if (t.assignedFreelancerId && t.assignedFreelancerId.toLowerCase() === userEmail) return true;
+      // Show if user created the task (or is reporter) and it's unassigned
+      const isCreator = (t.created_by || '').toLowerCase() === userEmail || (t.reporter_email || '').toLowerCase() === userEmail;
+      if (isCreator && !t.assignee_email && (!t.assignees || t.assignees.length === 0)) return true;
+      return false;
     });
-    return Array.from(taskMap.values());
-  }, [assignedTasks, directTasks]);
+  }, [allTasks, user]);
 
 
   // Get current week's timesheet
