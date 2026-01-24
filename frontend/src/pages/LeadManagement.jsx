@@ -151,18 +151,9 @@ export default function LeadManagement() {
   });
 
   const { data: users = [] } = useQuery({
-    queryKey: ['users-for-leads'],
-    queryFn: async () => {
-      const response = await base44.functions.invoke('getDashboardUsers');
-      return response.data?.data?.users || [];
-    },
+    queryKey: ['users-for-leads-list'],
+    queryFn: () => base44.entities.User.list(),
     enabled: !!user,
-    staleTime: 30 * 60 * 1000, // 30 minutes
-    gcTime: 60 * 60 * 1000, // 1 hour
-    retry: false,
-    refetchOnWindowFocus: false,
-    refetchOnMount: false,
-    refetchOnReconnect: false,
   });
 
   const { data: departments = [] } = useQuery({
