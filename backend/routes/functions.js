@@ -945,6 +945,16 @@ router.post('/invoke/setGracePeriod', async (req, res) => {
     }
 });
 
+router.post('/invoke/deleteGracePeriod', async (req, res) => {
+    try {
+        const { date } = req.body; // YYYY-MM-DD
+        await models.HRGracePeriod.deleteOne({ date });
+        res.json({ success: true });
+    } catch (e) {
+        res.status(500).json({ error: e.message });
+    }
+});
+
 router.post('/invoke/getMonthlyGracePeriods', async (req, res) => {
     try {
         const { month } = req.body; // YYYY-MM

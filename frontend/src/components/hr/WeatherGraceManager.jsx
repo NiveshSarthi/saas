@@ -50,6 +50,19 @@ export default function WeatherGraceManager({ user }) {
         }
     };
 
+    const handleDeactivateGrace = async () => {
+        try {
+            setGraceLoading(true);
+            await base44.functions.invoke('deleteGracePeriod', { date: today });
+            setGraceActive(false);
+            toast.success('Grace Period Deactivated');
+        } catch (e) {
+            toast.error('Failed to deactivate grace period');
+        } finally {
+            setGraceLoading(false);
+        }
+    };
+
     if (loading) {
         return <div className="p-8 text-center text-slate-500">Loading grace period status...</div>;
     }
@@ -80,6 +93,15 @@ export default function WeatherGraceManager({ user }) {
                                 <Badge variant="outline" className="bg-white text-slate-600 border-slate-200 mt-4">
                                     Applied by: {user?.full_name || 'Admin User'}
                                 </Badge>
+                                <Button
+                                    size="lg"
+                                    variant="destructive"
+                                    onClick={handleDeactivateGrace}
+                                    disabled={graceLoading}
+                                    className="w-full max-w-sm mx-auto mt-4"
+                                >
+                                    {graceLoading ? 'Deactivating...' : 'Deactivate Grace Period'}
+                                </Button>
                             </div>
                         ) : (
                             <div className="space-y-6">
