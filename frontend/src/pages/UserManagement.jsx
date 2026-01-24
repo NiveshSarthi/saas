@@ -422,6 +422,11 @@ export default function UserManagement() {
     return departments.find(d => d.id === deptId)?.name || 'No Department';
   };
 
+  // Helper function to check if user is active (handles both active and status fields)
+  const isUserActive = (user) => {
+    return user.active === true || user.status === 'active';
+  };
+
   const allUsers = [
     ...users.map(u => ({ ...u, id: u.id || u._id, type: 'user' })),
     ...invitations
@@ -448,8 +453,8 @@ export default function UserManagement() {
     // Role filter
     if (roleFilter !== 'all' && user.role_id !== roleFilter) return false;
     // Status filter
-    if (statusFilter === 'active' && user.status !== 'active' && user.active !== true) return false;
-    if (statusFilter === 'inactive' && user.status !== 'inactive' && user.active !== false) return false;
+    if (statusFilter === 'active' && !isUserActive(user)) return false;
+    if (statusFilter === 'inactive' && isUserActive(user)) return false;
     return true;
   });
 
@@ -512,7 +517,7 @@ export default function UserManagement() {
         u.full_name || 'No Name',
         u.email,
         getRoleName(u.role_id),
-        (u.status === 'active' || u.active === true) ? 'Active' : 'Inactive',
+        isUserActive(u) ? 'Active' : 'Inactive',
         u.project_ids?.length || 0,
         u.last_login || 'Never'
       ].join(','))
@@ -724,7 +729,7 @@ export default function UserManagement() {
                         <td className="px-4 py-3">
                           <div className="flex items-center gap-2">
                             <Switch
-                              checked={user.status === 'active' || (user.active === true)}
+                              checked={isUserActive(user)}
                               onCheckedChange={(checked) => {
                                 if (user.type === 'invitation') {
                                   toggleInvitationActiveMutation.mutate({ id: user.id, active: checked });
@@ -740,13 +745,13 @@ export default function UserManagement() {
                             />
                             <Badge className={cn(
                               "text-xs",
-                              (user.status === 'active' || user.active === true)
+                              isUserActive(user)
                                 ? "bg-emerald-100 text-emerald-700"
                                 : "bg-slate-100 text-slate-600"
                             )}>
                               {user.type === 'invitation'
                                 ? (user.status === 'active' ? 'Active' : (user.status === 'inactive' ? 'Revoked' : 'Invited'))
-                                : (user.status === 'active' || user.active === true ? 'Active' : 'Inactive')
+                                : (isUserActive(user) ? 'Active' : 'Inactive')
                               }
                             </Badge>
                           </div>
@@ -785,7 +790,7 @@ export default function UserManagement() {
                               )}
 
                               <DropdownMenuSeparator />
-                              {(user.status === 'active' || user.active === true) ? (
+                              {isUserActive(user) ? (
                                 <DropdownMenuItem
                                   onClick={() => {
                                     if (user.type === 'invitation') {
