@@ -1,4 +1,6 @@
 import React, { useState, useMemo } from 'react';
+import jsPDF from 'jspdf';
+import autoTable from 'jspdf-autotable';
 import { base44 } from '@/api/base44Client';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { format } from 'date-fns';
@@ -403,53 +405,60 @@ export default function SalaryPage() {
     onSuccess: () => toast.success('CSV exported successfully')
   });
 
-  const exportPDFMutation = useMutation({
-    mutationFn: async () => {
-      const employeeData = filteredSalaries.map(s => {
-        const calc = calculateEmployeeSalary(s.employee_email);
-        return {
-          employee_name: s.employee_name,
-          employee_email: s.employee_email,
-          month: s.month,
-          baseSalary: calc.baseSalary,
-          adjustments: calc.adjustments,
-          gross: calc.gross,
-          totalDeductions: calc.totalDeductions,
-          net: calc.net,
-          attendanceRate: calc.attendancePercentage,
-          presentDays: calc.effectivePresent,
-          totalDays: calc.totalDays
-        };
-      });
+  const handleExportPDF = () => {
+    const doc = new jsPDF('l', 'mm', 'a4'); // Landscape
 
-      const response = await base44.functions.invoke('exportSalaryPDF', {
-        month: selectedMonth,
-        employeeData
-      });
-      return response.data;
-    },
-    onSuccess: (data) => {
-      const byteCharacters = atob(data.pdf_base64);
-      const byteNumbers = new Array(byteCharacters.length);
-      for (let i = 0; i < byteCharacters.length; i++) {
-        byteNumbers[i] = byteCharacters.charCodeAt(i);
+    // Header
+    doc.setFontSize(22);
+    doc.setTextColor(40, 40, 40);
+    doc.text('Payroll Report', 14, 20);
+
+    doc.setFontSize(10);
+    doc.setTextColor(100);
+    doc.text(`Period: ${selectedMonth}`, 14, 28);
+    doc.text(`Generated: ${new Date().toLocaleDateString()}`, 14, 33);
+
+    const tableData = filteredSalaries.map(s => {
+      const calc = calculateEmployeeSalary(s.employee_email);
+      return [
+        s.employee_name,
+        // s.employee_email,
+        `${calc.paidDays}/${calc.totalDays}`,
+        `₹${calc.baseSalary.toLocaleString()}`,
+        `₹${calc.adjustments.toLocaleString()}`,
+        `₹${calc.gross.toLocaleString()}`,
+        `-₹${calc.totalDeductions.toLocaleString()}`,
+        `₹${calc.net.toLocaleString()}`,
+        s.status.toUpperCase()
+      ];
+    });
+
+    // Calculate Totals
+    const totalNet = filteredSalaries.reduce((sum, s) => sum + (s.net_salary || 0), 0);
+    doc.setFontSize(12);
+    doc.setTextColor(0, 0, 0);
+    doc.text(`Total Net Payroll: ₹${totalNet.toLocaleString()}`, 280, 20, { align: 'right' });
+
+    autoTable(doc, {
+      head: [['Employee', 'Paid/Total Days', 'Base', 'Adjustments', 'Gross', 'Deductions', 'Net Pay', 'Status']],
+      body: tableData,
+      startY: 40,
+      styles: { fontSize: 9, cellPadding: 3 },
+      headStyles: { fillColor: [79, 70, 229], textColor: 255, fontStyle: 'bold' },
+      alternateRowStyles: { fillColor: [249, 250, 251] },
+      columnStyles: {
+        0: { fontStyle: 'bold' },
+        6: { fontStyle: 'bold', halign: 'right' }, // Net Pay
+        2: { halign: 'right' },
+        3: { halign: 'right' },
+        4: { halign: 'right' },
+        5: { halign: 'right' }
       }
-      const byteArray = new Uint8Array(byteNumbers);
-      const blob = new Blob([byteArray], { type: 'application/pdf' });
-      const url = window.URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = data.filename;
-      document.body.appendChild(a);
-      a.click();
-      document.body.removeChild(a);
-      window.URL.revokeObjectURL(url);
-      toast.success('PDF exported successfully');
-    },
-    onError: (error) => {
-      toast.error('PDF export failed: ' + error.message);
-    }
-  });
+    });
+
+    doc.save(`payroll-report-${selectedMonth}.pdf`);
+    toast.success('PDF exported successfully');
+  };
 
   const applyRetroactiveIncentivesMutation = useMutation({
     mutationFn: async () => {
@@ -1116,8 +1125,7 @@ export default function SalaryPage() {
                   </div>
                   <Button
                     variant="outline"
-                    onClick={() => exportPDFMutation.mutate()}
-                    disabled={exportPDFMutation.isPending}
+                    onClick={handleExportPDF}
                     className="gap-2 bg-slate-50 border-slate-200 text-slate-600 hover:bg-slate-100 h-12 rounded-xl font-semibold hover:text-blue-600 transition-colors"
                   >
                     <FileText className="w-4 h-4" />
