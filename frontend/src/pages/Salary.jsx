@@ -67,6 +67,61 @@ export default function SalaryPage() {
   const [isCalculating, setIsCalculating] = useState(false);
   const [expandedRows, setExpandedRows] = useState({});
   const [viewMode, setViewMode] = useState('cards');
+  const [ticketDialogOpen, setTicketDialogOpen] = useState(false);
+  const [reviewDialogOpen, setReviewDialogOpen] = useState(false);
+  const [selectedPenalty, setSelectedPenalty] = useState(null);
+  const [ticketReason, setTicketReason] = useState('');
+
+  const approveRequestMutation = useMutation({
+    mutationFn: async (id) => {
+      return await base44.entities.SalaryAdjustment.update(id, {
+        status: 'approved',
+        approved_by: user?.email,
+        approved_at: new Date().toISOString()
+      });
+    },
+    onSuccess: () => {
+      toast.success('Request approved');
+      queryClient.invalidateQueries(['salary-adjustments-all']);
+    },
+    onError: (e) => toast.error(e.message)
+  });
+
+  const rejectRequestMutation = useMutation({
+    mutationFn: async (id) => {
+      return await base44.entities.SalaryAdjustment.update(id, {
+        status: 'rejected',
+        rejected_by: user?.email,
+        rejected_at: new Date().toISOString()
+      });
+    },
+    onSuccess: () => {
+      toast.success('Request rejected');
+      queryClient.invalidateQueries(['salary-adjustments-all']);
+    },
+    onError: (e) => toast.error(e.message)
+  });
+
+  const createTicketMutation = useMutation({
+    mutationFn: async ({ date, reason, employee_email }) => {
+      return await base44.entities.SalaryAdjustment.create({
+        employee_email,
+        month: selectedMonth,
+        date: date,
+        amount: 0,
+        adjustment_type: 'penalty_waiver',
+        reason: reason,
+        status: 'pending'
+      });
+    },
+    onSuccess: () => {
+      toast.success('Ticket raised successfully');
+      setTicketDialogOpen(false);
+      setTicketReason('');
+      queryClient.invalidateQueries(['salary-adjustments-all']);
+    },
+    onError: (e) => toast.error(e.message)
+  });
 
   const queryClient = useQueryClient();
 
@@ -468,17 +523,25 @@ export default function SalaryPage() {
         );
 
         if (!hasEntry) {
-          // Penalty Triggered
-          const dateStr = task.created_date; // "YYYY-MM-DD"
-          if (!penaltyDates.has(dateStr)) {
-            penaltyDates.add(dateStr);
-            // Deduct 1 day salary
-            timesheetPenaltyDeduction += dailySalary;
-            penaltyDetails.push({
-              date: dateStr,
-              reason: `Timesheet not submitted for task: ${task.title}`,
-              amount: dailySalary
-            });
+          // Check for Penalty Waiver (Ticket Approved)
+          const hasWaiver = employeeAdjustments.some(adj =>
+            adj.adjustment_type === 'penalty_waiver' &&
+            adj.date === task.created_date
+          );
+
+          if (!hasWaiver) {
+            // Penalty Triggered
+            const dateStr = task.created_date; // "YYYY-MM-DD"
+            if (!penaltyDates.has(dateStr)) {
+              penaltyDates.add(dateStr);
+              // Deduct 1 day salary
+              timesheetPenaltyDeduction += dailySalary;
+              penaltyDetails.push({
+                date: dateStr,
+                reason: `Timesheet not submitted for task: ${task.title}`,
+                amount: dailySalary
+              });
+            }
           }
         }
       }
@@ -676,6 +739,8 @@ export default function SalaryPage() {
     );
 
     const adjustments = employeeAdjustments.reduce((total, adj) => {
+      if (adj.adjustment_type === 'penalty_waiver') return total;
+
       if (['bonus', 'incentive', 'reimbursement', 'allowance'].includes(adj.adjustment_type)) {
         return total + (adj.amount || 0);
       } else {
@@ -988,6 +1053,17 @@ export default function SalaryPage() {
 
                   {/* Actions */}
                   <div className="flex gap-2 ml-auto">
+                    {/* Pending Requests Button */}
+                    {allAdjustments.filter(a => a.status === 'pending').length > 0 && (
+                      <Button
+                        variant="outline"
+                        onClick={() => { /* TODO: Open Review Dialog */ setReviewDialogOpen(true); }}
+                        className="gap-2 bg-rose-50 border-rose-200 text-rose-600 hover:bg-rose-100 h-12 rounded-xl font-semibold hover:text-rose-700 transition-colors animate-pulse"
+                      >
+                        <AlertCircle className="w-4 h-4" />
+                        Requests ({allAdjustments.filter(a => a.status === 'pending').length})
+                      </Button>
+                    )}
                     <Button
                       variant="outline"
                       onClick={async () => {
@@ -1404,7 +1480,25 @@ export default function SalaryPage() {
                                           <AlertCircle className="w-4 h-4 text-rose-500" />
                                           <span className="text-slate-500 text-sm">Timesheet Non-submission Penalty</span>
                                         </div>
-                                        <span className="font-bold text-rose-600">-₹{Math.round(calc.timesheetPenaltyDeduction).toLocaleString()}</span>
+                                        <div className="flex items-center gap-4">
+                                          <span className="font-bold text-rose-600">-₹{Math.round(calc.timesheetPenaltyDeduction).toLocaleString()}</span>
+                                          <Button
+                                            size="sm"
+                                            variant="ghost"
+                                            className="h-6 text-xs text-indigo-600 hover:text-indigo-800"
+                                            onClick={() => {
+                                              // Open Dialog to raise ticket
+                                              // We need to pass the date of penalty. 
+                                              // Since calc.timesheetPenaltyDeduction is aggregate, we should ideally show individual penalties or just pick the first one?
+                                              // To keep UI simple, let's assume one button raises tickets for ALL found penalties or list them?
+                                              // Actually, let's pass all penaltyDetails to the dialog and let user select or auto-create for all.
+                                              setSelectedPenalty({ details: calc.penaltyDetails, employee: salary });
+                                              setTicketDialogOpen(true);
+                                            }}
+                                          >
+                                            Raise Ticket
+                                          </Button>
+                                        </div>
                                       </div>
                                     )}
                                   </div>
@@ -1998,6 +2092,126 @@ function SalaryHistoryView({ employeeEmail }) {
           </CardContent>
         </Card>
       ))}
+      <TicketDialog
+        open={ticketDialogOpen}
+        onOpenChange={setTicketDialogOpen}
+        selectedPenalty={selectedPenalty}
+        ticketReason={ticketReason}
+        setTicketReason={setTicketReason}
+        onDateChange={(val) => setSelectedPenalty(prev => ({ ...prev, selectedDate: val }))}
+        onSubmit={() => {
+          if (!selectedPenalty?.selectedDate || !ticketReason) return toast.error('Please select date and provide reason');
+          createTicketMutation.mutate({
+            date: selectedPenalty.selectedDate,
+            reason: ticketReason,
+            employee_email: selectedPenalty.employee.employee_email
+          });
+        }}
+        isPending={createTicketMutation.isPending}
+      />
+
+      <ReviewRequestsDialog
+        open={reviewDialogOpen}
+        onOpenChange={setReviewDialogOpen}
+        requests={allAdjustments.filter(a => a.status === 'pending')}
+        onApprove={(id) => approveRequestMutation.mutate(id)}
+        onReject={(id) => rejectRequestMutation.mutate(id)}
+      />
     </div>
   );
+}
+
+function ReviewRequestsDialog({ open, onOpenChange, requests, onApprove, onReject }) {
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="max-w-2xl">
+        <DialogHeader>
+          <DialogTitle>Pending Adjustments & Tickets</DialogTitle>
+          <DialogDescription>Review and approve salary adjustments and penalty waivers.</DialogDescription>
+        </DialogHeader>
+        <div className="space-y-4 max-h-[60vh] overflow-y-auto">
+          {requests.length === 0 ? (
+            <div className="text-center py-8 text-slate-500">No pending requests.</div>
+          ) : (
+            requests.map(req => (
+              <div key={req.id} className="flex items-start justify-between p-4 bg-slate-50 rounded-lg border border-slate-200">
+                <div>
+                  <div className="flex items-center gap-2 mb-1">
+                    <Badge variant={req.adjustment_type === 'penalty_waiver' ? 'outline' : 'default'} className="uppercase text-[10px]">
+                      {req.adjustment_type.replace('_', ' ')}
+                    </Badge>
+                    <span className="font-bold text-slate-900">{req.employee_email}</span>
+                  </div>
+                  <p className="text-sm text-slate-600 mb-2">{req.reason || 'No reason provided'}</p>
+                  <div className="flex items-center gap-4 text-xs text-slate-500">
+                    <span className="flex items-center gap-1"><Calendar className="w-3 h-3" /> {req.date}</span>
+                    {req.amount !== 0 && <span className="flex items-center gap-1"><DollarSign className="w-3 h-3" /> ₹{req.amount}</span>}
+                  </div>
+                </div>
+                <div className="flex gap-2">
+                  <Button size="sm" variant="outline" className="text-rose-600 hover:bg-rose-50" onClick={() => onReject(req.id)}>Reject</Button>
+                  <Button size="sm" className="bg-emerald-600 hover:bg-emerald-700" onClick={() => onApprove(req.id)}>Approve</Button>
+                </div>
+              </div>
+            ))
+          )}
+        </div>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+// Separate component for Ticket Dialog to avoid clutter if preferred, but keeping inline for now
+function TicketDialog({ open, onOpenChange, selectedPenalty, ticketReason, setTicketReason, onSubmit, isPending, onDateChange }) {
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent>
+        <DialogHeader>
+          <DialogTitle>Raise Penalty Dispute Ticket</DialogTitle>
+          <DialogDescription>
+            Request a waiver for the timesheet non-submission penalty.
+          </DialogDescription>
+        </DialogHeader>
+        <div className="space-y-4 py-4">
+          <div className="space-y-2">
+            <label className="text-sm font-medium">Select Penalty</label>
+            {(selectedPenalty?.details?.length > 0) ? (
+              <Select onValueChange={(val) => onDateChange(val)}>
+                <SelectTrigger>
+                  <SelectValue placeholder="Select Date" />
+                </SelectTrigger>
+                <SelectContent>
+                  {selectedPenalty.details.map((p, i) => (
+                    <SelectItem key={i} value={p.date}>
+                      {p.date} - {p.reason}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            ) : (
+              <p className="text-sm text-slate-500">No penalties found to dispute.</p>
+            )}
+
+          </div>
+          <div className="space-y-2">
+            <label className="text-sm font-medium">Reason for Delay/Waiver</label>
+            <Textarea
+              placeholder="Explain why timesheet was not submitted on time..."
+              value={ticketReason}
+              onChange={e => setTicketReason(e.target.value)}
+            />
+          </div>
+        </div>
+        <DialogFooter>
+          <Button variant="outline" onClick={() => onOpenChange(false)}>Cancel</Button>
+          <Button
+            onClick={onSubmit}
+            disabled={isPending}
+          >
+            Submit Ticket
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  )
 }
