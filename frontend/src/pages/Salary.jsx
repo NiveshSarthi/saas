@@ -143,7 +143,7 @@ export default function SalaryPage() {
   }, []);
 
   React.useEffect(() => {
-    if (user && departments.length > 0) {
+    if (user && Array.isArray(departments) && departments.length > 0) {
       const hrDept = departments.find(d => d.name?.toLowerCase().includes('hr'));
       setIsHRMember(user.role === 'admin' || (user.department_id && hrDept && user.department_id === hrDept.id));
     }
@@ -248,6 +248,7 @@ export default function SalaryPage() {
   });
 
   const allUsers = React.useMemo(() => {
+    if (!Array.isArray(usersList)) return [];
     const excludedUsers = ['Nivesh Sarthi', 'Rahul Kushwaha', 'Satpal', 'Tech NS', 'Sachin'];
     return usersList
       .filter(u => u.active !== false && u.status !== 'inactive')
@@ -340,7 +341,8 @@ export default function SalaryPage() {
 
   const emailSlipMutation = useMutation({
     mutationFn: async (recordId) => {
-      const salary = salaries.find(s => s.id === recordId);
+      const salariesArr = Array.isArray(salaries) ? salaries : [];
+      const salary = salariesArr.find(s => s.id === recordId);
       await base44.functions.invoke('generateSalarySlip', {
         salary_record_id: recordId
       });
@@ -546,9 +548,18 @@ export default function SalaryPage() {
 
   // Enhanced salary calculation from attendance
   const calculateEmployeeSalary = React.useCallback((employeeEmail) => {
-    const policy = allPolicies.find(p => p.user_email === employeeEmail && p.is_active);
-    const salary = salaries.find(s => s.employee_email === employeeEmail);
-    const empAttendance = attendanceRecords.filter(a => a.user_email === employeeEmail);
+    // Safety check for all array dependencies
+    const policiesArr = Array.isArray(allPolicies) ? allPolicies : [];
+    const salariesArr = Array.isArray(salaries) ? salaries : [];
+    const attendanceArr = Array.isArray(attendanceRecords) ? attendanceRecords : [];
+    const gracePeriodsArr = Array.isArray(gracePeriods) ? gracePeriods : [];
+    const adjustmentsArr = Array.isArray(allAdjustments) ? allAdjustments : [];
+    const tasksArr = Array.isArray(allTasksForPenalty) ? allTasksForPenalty : [];
+    const timesheetsArr = Array.isArray(allTimesheetsForPenalty) ? allTimesheetsForPenalty : [];
+
+    const policy = policiesArr.find(p => p.user_email === employeeEmail && p.is_active);
+    const salary = salariesArr.find(s => s.employee_email === employeeEmail);
+    const empAttendance = attendanceArr.filter(a => a.user_email === employeeEmail);
 
     const [year, month] = selectedMonth.split('-');
     const totalDays = new Date(parseInt(year), parseInt(month), 0).getDate();
@@ -574,7 +585,7 @@ export default function SalaryPage() {
     const penaltyDetails = [];
 
     // Filter tasks for this employee
-    const employeeTasks = allTasksForPenalty.filter(t =>
+    const employeeTasks = tasksArr.filter(t =>
       (t.assignee_email === employeeEmail) ||
       (t.assignees && t.assignees.includes(employeeEmail))
     );
@@ -587,7 +598,7 @@ export default function SalaryPage() {
       // Only check if 24h has passed
       if (now > deadline) {
         // Check for timesheet entry for this task
-        const hasEntry = allTimesheetsForPenalty.some(sheet =>
+        const hasEntry = timesheetsArr.some(sheet =>
           sheet.freelancer_email === employeeEmail &&
           sheet.entries &&
           sheet.entries.some(entry => entry.task_id === task.id || (entry.task_title === task.title && entry.date === task.created_date))
@@ -628,7 +639,7 @@ export default function SalaryPage() {
       let adjustmentReason = '';
 
       // Check for Grace Period
-      const graceDay = gracePeriods.find(g => g.date === att.date);
+      const graceDay = gracePeriodsArr.find(g => g.date === att.date);
       const graceMinutes = graceDay ? (graceDay.minutes || 30) : 0;
       const effectiveExpectedCheckIn = (expectedCheckIn * 60) + graceMinutes;
 
@@ -809,7 +820,7 @@ export default function SalaryPage() {
     const yearlyCTC1 = monthlyCTC1 * 12;
 
     // Adjustments from SalaryAdjustment entity
-    const employeeAdjustments = allAdjustments.filter(adj =>
+    const employeeAdjustments = adjustmentsArr.filter(adj =>
       adj.employee_email === employeeEmail && adj.status === 'approved'
     );
 
