@@ -18,7 +18,9 @@ import {
   ChevronLeft,
   ChevronRight,
   FileText,
-  AlertTriangle
+  AlertTriangle,
+  Briefcase,
+  Layers
 } from 'lucide-react';
 import RowTimer from '@/components/tasks/RowTimer';
 import { Button } from '@/components/ui/button';
