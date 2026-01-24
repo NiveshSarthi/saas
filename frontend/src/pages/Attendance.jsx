@@ -1060,19 +1060,22 @@ export default function AttendancePage() {
       />
 
       <BulkMarkWeekoffDialog
-        open={weekoffDialogOpen}
-        onOpenChange={setWeekoffDialogOpen}
-        month={selectedMonth}
+        isOpen={weekoffDialogOpen}
+        onClose={() => setWeekoffDialogOpen(false)}
+        selectedMonth={selectedMonth}
+        allUsers={allUsers}
         onSuccess={() => {
           queryClient.invalidateQueries(['attendance']);
           setWeekoffDialogOpen(false);
+          toast.success('Weekoffs marked successfully');
         }}
       />
 
       <ClearMonthDataDialog
-        open={clearDataDialogOpen}
-        onOpenChange={setClearDataDialogOpen}
-        month={selectedMonth}
+        isOpen={clearDataDialogOpen}
+        onClose={() => setClearDataDialogOpen(false)}
+        selectedMonth={selectedMonth}
+        allUsers={allUsers}
         onSuccess={() => {
           queryClient.invalidateQueries(['attendance']);
           setClearDataDialogOpen(false);

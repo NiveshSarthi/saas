@@ -116,9 +116,6 @@ export default function TeamTasksView() {
   const { data: tasks = [], isLoading } = useQuery({
     queryKey: ['all-tasks-admin'],
     queryFn: async () => {
-      // Generate recurring instances
-      await base44.functions.invoke('generateRecurringTaskInstances', {});
-
       const allTasks = await base44.entities.Task.list('-updated_date', 1000);
 
       const today = format(new Date(), 'yyyy-MM-dd');
@@ -137,8 +134,20 @@ export default function TeamTasksView() {
         return true;
       });
     },
-    refetchInterval: 5000, // Poll every 5 seconds for real-time updates
+    refetchInterval: 60000, // Poll every 60 seconds instead of 5 to reduce server load
   });
+
+  // Call recurring task generation once on mount
+  React.useEffect(() => {
+    const syncTasks = async () => {
+      try {
+        await base44.functions.invoke('generateRecurringTaskInstances', {});
+      } catch (e) {
+        console.error('Failed to sync recurring tasks', e);
+      }
+    };
+    syncTasks();
+  }, []);
 
   // Fetch Sprints
   const { data: sprints = [] } = useQuery({

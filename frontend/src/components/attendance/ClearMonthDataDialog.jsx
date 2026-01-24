@@ -27,20 +27,14 @@ export default function ClearMonthDataDialog({ isOpen, onClose, allUsers = [], s
         user_email: userEmail,
         date: { $gte: startDate, $lte: endDate }
       });
-
-      for (const record of records) {
-        await base44.entities.Attendance.delete(record.id);
-      }
+      await Promise.all(records.map(record => base44.entities.Attendance.delete(record.id)));
 
       // Delete salary record if exists
       const salaryRecords = await base44.entities.SalaryRecord.filter({
         employee_email: userEmail,
         month: monthStr
       });
-
-      for (const record of salaryRecords) {
-        await base44.entities.SalaryRecord.delete(record.id);
-      }
+      await Promise.all(salaryRecords.map(record => base44.entities.SalaryRecord.delete(record.id)));
 
       return records.length;
     },
