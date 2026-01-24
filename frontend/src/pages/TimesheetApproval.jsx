@@ -17,7 +17,8 @@ import {
   Filter,
   Check,
   X,
-  FileText
+  FileText,
+  Download
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -47,6 +48,8 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog';
 import { toast } from 'sonner';
+import jsPDF from 'jspdf';
+import autoTable from 'jspdf-autotable';
 
 export default function TimesheetApproval() {
   const [user, setUser] = useState(null);
@@ -191,6 +194,97 @@ export default function TimesheetApproval() {
     return `${format(start, 'MMM d')} - ${format(end, 'MMM d, yyyy')}`;
   };
 
+  const handleExportPDF = () => {
+    if (timesheets.length === 0) {
+      toast.error('No timesheets to export');
+      return;
+    }
+
+    const doc = new jsPDF();
+
+    // Title
+    doc.setFontSize(18);
+    doc.setTextColor(79, 70, 229); // Indigo
+    doc.text('Timesheet Approval Report', 14, 20);
+
+    // Subtitle
+    doc.setFontSize(10);
+    doc.setTextColor(100, 100, 100);
+    doc.text(`Generated on ${format(new Date(), 'MMM d, yyyy HH:mm')}`, 14, 28);
+    doc.text(`Filter: ${statusFilter === 'all' ? 'All Status' : statusFilter.charAt(0).toUpperCase() + statusFilter.slice(1)}`, 14, 34);
+
+    let yPos = 45;
+
+    // Process each timesheet
+    timesheets.forEach((timesheet, index) => {
+      // Add new page if needed
+      if (yPos > 250) {
+        doc.addPage();
+        yPos = 20;
+      }
+
+      // Timesheet header
+      doc.setFontSize(12);
+      doc.setTextColor(30, 30, 30);
+      doc.text(`${index + 1}. ${timesheet.freelancer_name}`, 14, yPos);
+
+      doc.setFontSize(9);
+      doc.setTextColor(100, 100, 100);
+      doc.text(`Week: ${formatWeekRange(timesheet.week_start_date)}`, 14, yPos + 6);
+      doc.text(`Status: ${timesheet.status}`, 14, yPos + 12);
+      doc.text(`Total Hours: ${timesheet.total_hours}h`, 100, yPos + 12);
+
+      yPos += 20;
+
+      // Entries table
+      if (timesheet.entries && timesheet.entries.length > 0) {
+        const tableData = timesheet.entries.map(entry => [
+          format(new Date(entry.date), 'MMM d, yyyy'),
+          entry.task_title || 'N/A',
+          entry.project_name || 'N/A',
+          `${entry.hours}h`,
+          entry.description || '-'
+        ]);
+
+        autoTable(doc, {
+          startY: yPos,
+          head: [['Date', 'Task Name', 'Project', 'Hours Taken', 'Description']],
+          body: tableData,
+          theme: 'grid',
+          headStyles: {
+            fillColor: [79, 70, 229],
+            fontSize: 8,
+            fontStyle: 'bold'
+          },
+          styles: {
+            fontSize: 8,
+            cellPadding: 3
+          },
+          columnStyles: {
+            0: { cellWidth: 25 },
+            1: { cellWidth: 40 },
+            2: { cellWidth: 30 },
+            3: { cellWidth: 20, halign: 'center' },
+            4: { cellWidth: 'auto' }
+          },
+          margin: { left: 14, right: 14 }
+        });
+
+        yPos = doc.lastAutoTable.finalY + 15;
+      } else {
+        doc.setFontSize(9);
+        doc.setTextColor(150, 150, 150);
+        doc.text('No time entries', 14, yPos);
+        yPos += 15;
+      }
+    });
+
+    // Save PDF
+    const filename = `Timesheet_Report_${format(new Date(), 'yyyy-MM-dd')}.pdf`;
+    doc.save(filename);
+    toast.success('PDF exported successfully');
+  };
+
   if (!user) {
     return (
       <div className="min-h-screen bg-slate-50 flex items-center justify-center p-4">
@@ -274,8 +368,20 @@ export default function TimesheetApproval() {
                 </Select>
               </div>
 
-              <div className="ml-auto text-sm text-slate-500">
-                Showing {timesheets.length} result{timesheets.length !== 1 ? 's' : ''}
+              <div className="ml-auto flex items-center gap-3">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={handleExportPDF}
+                  disabled={timesheets.length === 0}
+                  className="border-indigo-200 text-indigo-700 hover:bg-indigo-50"
+                >
+                  <Download className="w-4 h-4 mr-2" />
+                  Export PDF
+                </Button>
+                <div className="text-sm text-slate-500">
+                  Showing {timesheets.length} result{timesheets.length !== 1 ? 's' : ''}
+                </div>
               </div>
             </div>
           </div>
