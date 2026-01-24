@@ -370,39 +370,91 @@ export default function SalaryPage() {
 
   const exportCSVMutation = useMutation({
     mutationFn: async () => {
+      // Fetch user details for Designation, DOJ, etc.
+      const usersList = await base44.entities.User.list();
+
       const headers = [
-        'Employee Name', 'Email', 'Month', 'Total Days', 'Present', 'Absent (Unpaid)',
-        'Week Off', 'Paid Leave', 'Half Days', 'Not Marked',
-        'Base Salary', 'Adjustments', 'Gross', 'Deductions', 'Net Salary', 'Status'
+        'Name', 'Designation', 'Department', 'DOJ', 'Total Working Days', 'Present',
+        'Weekoff days', 'Leave Days', 'Absent', 'Paid Days', 'Policy Gross',
+        'Absent Deduction', 'Basic', 'DA', 'HRA', 'TA', 'CEA', 'FI',
+        'Gross Salary', 'Salary Advanced (Minus)', 'Performance Allowance (Addition)',
+        'ESI', 'PF', 'Labour Welfare Fund', 'Employee Total Deduction', 'Net Salary In hand',
+        'Gratuity', 'ESI.1', 'PF.1', 'LWF', 'Total Employer Contribution',
+        'CTC (based on NetSalary)', 'Employer Contribution (CTC)', 'CTC1', 'CTC Final'
       ];
 
       const rows = filteredSalaries.map(s => {
         const calc = calculateEmployeeSalary(s.employee_email);
+        const userDetails = usersList.find(u => u.email === s.employee_email);
+        const departmentName = departments.find(d => d.id === userDetails?.department_id)?.name || 'N/A';
+
+        // Employer Contributions
+        const employerContribution = (calc.employerPF || 0) + (calc.employerESI || 0) + (calc.employerLWF || 0);
+
+        // CTC Calculations
+        // CTC based on Net? (Net + deductions + employer contrib?) Usually CTC = Gross + Employer Contrib + ExGratia
+        const ctcFinal = (calc.monthlyCTC2 || 0);
+
         return [
-          s.employee_name, s.employee_email, s.month,
-          calc.totalDays, calc.effectivePresent, calc.unpaidAbsent,
-          calc.weekoff, calc.paidLeave, calc.halfDay, calc.notMarked,
-          calc.baseSalary, calc.adjustments, calc.gross,
-          calc.totalDeductions, calc.net, s.status
+          s.employee_name,
+          userDetails?.designation || userDetails?.role || 'N/A', // Designation
+          departmentName,
+          userDetails?.joining_date ? format(new Date(userDetails.joining_date), 'yyyy-MM-dd') : 'N/A', // DOJ
+          calc.totalDays,
+          calc.effectivePresent,
+          calc.weekoff,
+          calc.paidLeave,
+          calc.absent, // Absent
+          calc.paidDays,
+          (calc.monthlyCTC1 || 0), // Policy Gross (Full Month Gross usually)
+          calc.absentDeduction, // Absent Deduction
+          calc.earnedBasic, // Basic
+          0, // DA (Assuming 0 as not separated in policy)
+          calc.earnedHra, // HRA
+          calc.earnedTa, // TA
+          calc.earnedCea, // CEA
+          calc.earnedFi, // FI
+          calc.gross, // Gross Salary (Earned)
+          (s.advance_recovery || 0), // Salary Advanced (Minus)
+          (calc.adjustments > 0 ? calc.adjustments : 0), // Performance Allowance (Addition) - assuming positive adjustments
+          calc.empESI, // ESI (Employee)
+          calc.empPF, // PF (Employee)
+          calc.lwf, // Labour Welfare Fund
+          calc.totalDeductions, // Employee Total Deduction
+          calc.net, // Net Salary In hand
+          calc.exGratia, // Gratuity
+          calc.employerESI, // ESI.1 (Employer)
+          calc.employerPF, // PF.1 (Employer)
+          calc.employerLWF, // LWF (Employer)
+          employerContribution, // Total Employer Contribution
+          (calc.net + calc.totalDeductions + employerContribution), // CTC (based on NetSalary) - Approx
+          employerContribution, // Employer Contribution (CTC)
+          (calc.monthlyCTC1 || 0), // CTC1
+          ctcFinal // CTC Final
         ];
       });
 
       const csvContent = [
         headers.join(','),
-        ...rows.map(row => row.map(cell => `"${cell}"`).join(','))
+        ...rows.map(row => row.map(cell => {
+          // Handle null/undefined and escape commas
+          const val = (cell === null || cell === undefined) ? '' : cell;
+          return `"${String(val).replace(/"/g, '""')}"`;
+        }).join(','))
       ].join('\n');
 
       const blob = new Blob([csvContent], { type: 'text/csv' });
       const url = window.URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = url;
-      a.download = `salary_${selectedMonth}.csv`;
+      a.download = `salary_detailed_${selectedMonth}.csv`;
       document.body.appendChild(a);
       a.click();
       document.body.removeChild(a);
       window.URL.revokeObjectURL(url);
     },
-    onSuccess: () => toast.success('CSV exported successfully')
+    onSuccess: () => toast.success('Detailed CSV exported successfully'),
+    onError: (e) => toast.error('Export failed: ' + e.message)
   });
 
   const handleExportPDF = () => {
@@ -757,7 +809,7 @@ export default function SalaryPage() {
       }
     }, 0);
 
-    const gross = baseSalary + adjustments + attendanceAdjustments;
+    const gross = baseSalary + adjustments + (attendanceAdjustments > 0 ? attendanceAdjustments : 0);
 
     // CTC 2: Including adjustments
     const monthlyCTC2 = monthlyCTC1 + adjustments;
@@ -776,8 +828,11 @@ export default function SalaryPage() {
     const latePenalty = late * (policy.late_penalty_per_minute || 0) * 10;
     const absentDeduction = unpaidAbsent > 0 ? Math.round((earnedBasic + earnedHra + earnedTa + earnedCea + earnedFi) / paidDays * unpaidAbsent) : 0;
 
+    // Attendance penalty (from daily adjustments e.g. late check-in bracket)
+    const attendancePenalty = attendanceAdjustments < 0 ? Math.abs(attendanceAdjustments) : 0;
+
     const totalDeductions = empPF + empESI + lwf + latePenalty + absentDeduction +
-      (salary?.advance_recovery || 0) + (salary?.other_deductions || 0) + timesheetPenaltyDeduction;
+      (salary?.advance_recovery || 0) + (salary?.other_deductions || 0) + timesheetPenaltyDeduction + attendancePenalty;
 
     const net = gross - totalDeductions;
 
@@ -791,7 +846,8 @@ export default function SalaryPage() {
       adjustments, gross, empPF, empESI, lwf, latePenalty, absentDeduction,
       totalDeductions, net, attendancePercentage, policy, hasPolicy: true,
       employeeAdjustments, monthlyCTC1, yearlyCTC1, monthlyCTC2, yearlyCTC2,
-      attendanceAdjustments, dailyDetails, timesheetPenaltyDeduction, penaltyDetails
+      attendanceAdjustments, dailyDetails, timesheetPenaltyDeduction, penaltyDetails,
+      employerPF, employerESI, employerLWF, exGratia, earnedBasic, earnedHra, earnedTa, earnedCea, earnedFi
     };
   }, [allPolicies, salaries, attendanceRecords, selectedMonth, allAdjustments]);
 
