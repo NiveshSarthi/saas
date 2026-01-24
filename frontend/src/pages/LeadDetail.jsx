@@ -111,11 +111,8 @@ export default function LeadDetail() {
   });
 
   const { data: users = [] } = useQuery({
-    queryKey: ['users-for-leads'],
-    queryFn: async () => {
-      const response = await base44.functions.invoke('getDashboardUsers');
-      return response.data?.users || [];
-    },
+    queryKey: ['users-for-leads-list'],
+    queryFn: () => base44.entities.User.list(),
   });
 
   const updateLeadMutation = useMutation({

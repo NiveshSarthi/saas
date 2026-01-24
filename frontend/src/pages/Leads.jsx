@@ -131,14 +131,9 @@ export default function Leads() {
   });
 
   const { data: users = [] } = useQuery({
-    queryKey: ['users-for-leads'],
-    queryFn: async () => {
-      const response = await base44.functions.invoke('getDashboardUsers');
-      return response.data?.data?.users || [];
-    },
+    queryKey: ['users-for-leads-list'],
+    queryFn: () => base44.entities.User.list(),
     enabled: !!user,
-    staleTime: 30 * 60 * 1000,
-    cacheTime: 60 * 60 * 1000,
   });
 
   const salesDeptIds = departments.filter(d => d.name?.toLowerCase().includes('sales')).map(d => d.id);
