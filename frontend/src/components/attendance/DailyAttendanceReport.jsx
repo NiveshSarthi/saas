@@ -107,7 +107,10 @@ export default function DailyAttendanceReport({
 
       doc.setFontSize(11);
       doc.setFont('helvetica', 'normal');
-      doc.text(format(selectedDate, 'EEEE, MMMM dd, yyyy'), 105, 22, { align: 'center' });
+      const dateToUse = selectedDate && !isNaN(new Date(selectedDate).getTime())
+        ? new Date(selectedDate)
+        : new Date();
+      doc.text(format(dateToUse, 'EEEE, MMMM dd, yyyy'), 105, 22, { align: 'center' });
 
       // Summary Metrics
       doc.setFontSize(10);
@@ -229,7 +232,7 @@ export default function DailyAttendanceReport({
       }
 
       // Save
-      const filename = `Daily_Attendance_${format(selectedDate, 'yyyy-MM-dd')}.pdf`;
+      const filename = `Daily_Attendance_${format(dateToUse, 'yyyy-MM-dd')}.pdf`;
       doc.save(filename);
       toast.success('PDF exported successfully');
     } catch (error) {
@@ -312,7 +315,9 @@ export default function DailyAttendanceReport({
         <div>
           <h2 className="text-2xl font-bold text-slate-900">Daily Attendance Report</h2>
           <p className="text-slate-600 mt-1">
-            {format(selectedDate, 'EEEE, MMMM dd, yyyy')} - Operational Focus
+            {selectedDate && !isNaN(new Date(selectedDate).getTime())
+              ? format(new Date(selectedDate), 'EEEE, MMMM dd, yyyy')
+              : format(new Date(), 'EEEE, MMMM dd, yyyy')} - Operational Focus
           </p>
         </div>
         <div className="flex gap-4">
