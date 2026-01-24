@@ -30,6 +30,11 @@ export default function BulkUploadDialog({ open, onOpenChange, selectedMonth }) 
       // Read file as text
       const fileText = await file.text();
 
+      const response = await base44.functions.invoke('uploadBulkAttendance', {
+        fileContent: fileText,
+        month: month
+      });
+
       const resData = response.data;
       return {
         ...(resData?.data || resData),
