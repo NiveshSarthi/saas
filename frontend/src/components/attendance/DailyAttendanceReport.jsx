@@ -128,7 +128,7 @@ export default function DailyAttendanceReport({
         ['Half Day', metrics.halfDay],
       ];
 
-      doc.autoTable({
+      autoTable(doc, {
         startY: 36,
         head: [['Metric', 'Count']],
         body: summaryData,
@@ -157,7 +157,7 @@ export default function DailyAttendanceReport({
         ['Missing Punches', metrics.missingPunches],
       ];
 
-      doc.autoTable({
+      autoTable(doc, {
         startY: yPos,
         head: [['Metric', 'Value']],
         body: perfData,
@@ -186,7 +186,7 @@ export default function DailyAttendanceReport({
           `${stats.percentage}%`
         ]);
 
-        doc.autoTable({
+        autoTable(doc, {
           startY: yPos,
           head: [['Department', 'Present', 'Total', 'Percentage']],
           body: deptData,
@@ -217,7 +217,7 @@ export default function DailyAttendanceReport({
           `+${late.delay} min`
         ]);
 
-        doc.autoTable({
+        autoTable(doc, {
           startY: yPos,
           head: [['#', 'Employee', 'Check-in', 'Delay']],
           body: lateData,
