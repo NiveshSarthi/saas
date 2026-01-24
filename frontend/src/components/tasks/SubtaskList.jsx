@@ -85,7 +85,8 @@ const statusConfig = {
 };
 
 export default function SubtaskList({ parentTaskId, projectId, subtasks = [], users = [], parentSprintId = null }) {
-  const { can } = usePermissions();
+  const { can, isAdmin } = usePermissions();
+  const canCreate = can('subtasks', 'create') || isAdmin();
   const [isAdding, setIsAdding] = useState(false);
   const [newTitle, setNewTitle] = useState('');
   const [newDescription, setNewDescription] = useState('');
@@ -548,8 +549,8 @@ export default function SubtaskList({ parentTaskId, projectId, subtasks = [], us
 
           <Dialog open={showTemplates} onOpenChange={setShowTemplates}>
             <DialogTrigger asChild>
-              <Button size="sm" variant="outline">
-                <FileText className="w-3 h-3 mr-1" />
+              <Button size="sm" variant="outline" className="h-8 shadow-sm">
+                <FileText className="w-3.5 h-3.5 mr-1.5 text-slate-500" />
                 Templates
               </Button>
             </DialogTrigger>
@@ -560,12 +561,12 @@ export default function SubtaskList({ parentTaskId, projectId, subtasks = [], us
               </DialogHeader>
               <div className="space-y-3">
                 {templates.map(template => (
-                  <div key={template.id} className="flex items-center justify-between p-3 border rounded">
+                  <div key={template.id} className="flex items-center justify-between p-3 border rounded-xl hover:bg-slate-50 transition-colors">
                     <div>
-                      <div className="font-medium">{template.name}</div>
+                      <div className="font-semibold text-slate-900">{template.name}</div>
                       <div className="text-xs text-slate-500">{template.subtasks?.length || 0} subtasks</div>
                     </div>
-                    <Button size="sm" onClick={() => applyTemplateMutation.mutate(template)}>
+                    <Button size="sm" onClick={() => applyTemplateMutation.mutate(template)} className="bg-indigo-50 text-indigo-600 hover:bg-indigo-100 border-none">
                       Apply
                     </Button>
                   </div>
@@ -573,7 +574,7 @@ export default function SubtaskList({ parentTaskId, projectId, subtasks = [], us
                 {subtasks.length > 0 && (
                   <Button
                     variant="outline"
-                    className="w-full"
+                    className="w-full border-dashed"
                     onClick={() => {
                       const name = prompt('Template name:');
                       if (name) saveTemplateMutation.mutate(name);
@@ -583,9 +584,26 @@ export default function SubtaskList({ parentTaskId, projectId, subtasks = [], us
                     Save Current as Template
                   </Button>
                 )}
+                {templates.length === 0 && (
+                  <div className="text-center py-8 text-slate-400">
+                    <FileText className="w-12 h-12 mx-auto mb-2 opacity-20" />
+                    <p>No templates saved yet</p>
+                  </div>
+                )}
               </div>
             </DialogContent>
           </Dialog>
+
+          {canCreate && !isAdding && (
+            <Button
+              size="sm"
+              onClick={() => setIsAdding(true)}
+              className="h-8 bg-indigo-600 hover:bg-indigo-700 text-white shadow-sm"
+            >
+              <Plus className="w-3.5 h-3.5 mr-1.5" />
+              Add Subtask
+            </Button>
+          )}
         </div>
       </div>
 
@@ -978,15 +996,17 @@ export default function SubtaskList({ parentTaskId, projectId, subtasks = [], us
             </Button>
           </div>
         </div>
-      ) : can('subtasks', 'create') ? (
+      ) : canCreate ? (
         <Button
           variant="outline"
           size="sm"
           onClick={() => setIsAdding(true)}
-          className="w-full border-dashed"
+          className="w-full border-dashed text-slate-500 hover:text-indigo-600 hover:border-indigo-200 hover:bg-indigo-50/30 transition-all py-6 h-auto"
         >
-          <Plus className="w-4 h-4 mr-2" />
-          Add Subtask
+          <div className="flex flex-col items-center gap-1">
+            <Plus className="w-5 h-5 mb-1 opacity-50" />
+            <span className="font-medium">Add another subtask</span>
+          </div>
         </Button>
       ) : null}
     </div>
