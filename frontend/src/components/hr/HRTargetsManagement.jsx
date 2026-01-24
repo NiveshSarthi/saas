@@ -88,33 +88,34 @@ export default function HRTargetsManagement({ user, attendanceStats = {}, users 
   });
 
   const queryClient = useQueryClient();
+  const isHRorAdmin = user?.role === 'admin' || user?.role_id === 'hr';
 
   // Fetch HR targets
   const { data: hrTargets = [], isLoading } = useQuery({
     queryKey: ['hr-targets'],
     queryFn: () => base44.entities.HRTarget.filter({ status: 'active' }),
-    enabled: user?.role === 'admin'
+    enabled: isHRorAdmin
   });
 
   // Fetch departments
   const { data: departments = [] } = useQuery({
     queryKey: ['departments'],
     queryFn: () => base44.entities.Department.list(),
-    enabled: user?.role === 'admin'
+    enabled: isHRorAdmin
   });
 
   // Fetch Candidates for Recruitment Tracking
   const { data: hiredCandidates = [] } = useQuery({
     queryKey: ['hired-candidates'],
     queryFn: () => base44.entities.Candidate.filter({ status: 'hired' }),
-    enabled: user?.role === 'admin'
+    enabled: isHRorAdmin
   });
 
   // Fetch Pending Timesheets for Compliance Tracking
   const { data: pendingTimesheets = [] } = useQuery({
     queryKey: ['pending-timesheets-stats'],
     queryFn: () => base44.entities.Timesheet.filter({ status: 'submitted' }),
-    enabled: user?.role === 'admin' // Or HR
+    enabled: isHRorAdmin
   });
 
 
@@ -307,12 +308,12 @@ export default function HRTargetsManagement({ user, attendanceStats = {}, users 
     };
   }, [hrTargets]);
 
-  if (user?.role !== 'admin') {
+  if (!isHRorAdmin) {
     return (
       <div className="flex flex-col items-center justify-center p-12 text-center bg-slate-50 rounded-xl border border-dashed">
         <AlertCircle className="w-12 h-12 text-slate-400 mb-4" />
         <h3 className="text-lg font-semibold text-slate-900">Restricted Access</h3>
-        <p className="text-slate-500 max-w-sm mt-2">Only administrators have permission to manage HR performance targets.</p>
+        <p className="text-slate-500 max-w-sm mt-2">Only administrators and HR managers have permission to manage HR performance targets.</p>
       </div>
     );
   }
