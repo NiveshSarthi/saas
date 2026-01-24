@@ -1306,7 +1306,7 @@ export default function UserManagement() {
                   <p className="text-sm text-slate-500">User can login when active</p>
                 </div>
                 <Switch
-                  checked={editingUser?.status === 'active' || editingUser?.active === true}
+                  checked={isUserActive(editingUser)}
                   onCheckedChange={(checked) => setEditingUser(u => ({ ...u, active: checked, status: checked ? 'active' : 'inactive' }))}
                 />
               </div>
