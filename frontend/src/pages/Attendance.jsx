@@ -907,7 +907,7 @@ export default function AttendancePage() {
                     </div>
 
                     <div className="lg:col-span-3">
-                      {reportType === 'daily' && <DailyAttendanceReport records={todayAllRecords} users={allUsers} departments={departments} />}
+                      {reportType === 'daily' && <DailyAttendanceReport records={todayAllRecords} allUsers={allUsers} selectedDate={selectedDate} departments={departments} />}
                       {reportType === 'monthly' && (
                         <div className="space-y-6">
                           <Button onClick={handleExportPDF} variant="outline" className="mb-4">

@@ -8,8 +8,9 @@ import {
 } from 'lucide-react';
 import { format } from 'date-fns';
 import { Progress } from '@/components/ui/progress';
-import { base44 } from '@/api/base44Client';
 import { toast } from 'sonner';
+import jsPDF from 'jspdf';
+import autoTable from 'jspdf-autotable';
 
 export default function DailyAttendanceReport({
   records = [],
@@ -94,31 +95,148 @@ export default function DailyAttendanceReport({
     };
   }, [records, allUsers, departments]);
 
-  const handleExportPDF = async () => {
+  const handleExportPDF = () => {
     try {
       toast.info('Generating PDF...');
-      const response = await base44.functions.invoke('exportDailyAttendanceReport', {
-        date: format(selectedDate, 'yyyy-MM-dd')
+      const doc = new jsPDF();
+
+      // Title
+      doc.setFontSize(18);
+      doc.setFont('helvetica', 'bold');
+      doc.text('Daily Attendance Report', 105, 15, { align: 'center' });
+
+      doc.setFontSize(11);
+      doc.setFont('helvetica', 'normal');
+      const dateToUse = selectedDate && !isNaN(new Date(selectedDate).getTime())
+        ? new Date(selectedDate)
+        : new Date();
+      doc.text(format(dateToUse, 'EEEE, MMMM dd, yyyy'), 105, 22, { align: 'center' });
+
+      // Summary Metrics
+      doc.setFontSize(10);
+      doc.setFont('helvetica', 'bold');
+      doc.text('Summary Metrics', 14, 32);
+
+      const summaryData = [
+        ['Total Employees', metrics.total],
+        ['Present', metrics.present],
+        ['Absent', metrics.absent],
+        ['On Leave', metrics.onLeave],
+        ['Late Arrivals', metrics.late],
+        ['Early Checkouts', metrics.earlyCheckout],
+        ['Work From Home', metrics.wfh],
+        ['Half Day', metrics.halfDay],
+      ];
+
+      autoTable(doc, {
+        startY: 36,
+        head: [['Metric', 'Count']],
+        body: summaryData,
+        theme: 'grid',
+        headStyles: { fillColor: [79, 70, 229], fontSize: 9 },
+        styles: { fontSize: 9 },
+        columnStyles: {
+          0: { cellWidth: 80 },
+          1: { cellWidth: 30, halign: 'center' }
+        }
       });
 
-      const { pdf_base64, filename } = response.data;
-      const byteCharacters = atob(pdf_base64);
-      const byteNumbers = new Array(byteCharacters.length);
-      for (let i = 0; i < byteCharacters.length; i++) {
-        byteNumbers[i] = byteCharacters.charCodeAt(i);
+      let yPos = doc.lastAutoTable.finalY + 10;
+
+      // Additional Metrics
+      doc.setFontSize(10);
+      doc.setFont('helvetica', 'bold');
+      doc.text('Performance Metrics', 14, yPos);
+      yPos += 4;
+
+      const perfData = [
+        ['Attendance Rate', `${metrics.attendanceRate}%`],
+        ['Punctuality Rate', `${metrics.punctualityRate}%`],
+        ['Avg Work Hours', `${metrics.avgHours}h`],
+        ['Overtime Hours', `${metrics.overtime}h`],
+        ['Missing Punches', metrics.missingPunches],
+      ];
+
+      autoTable(doc, {
+        startY: yPos,
+        head: [['Metric', 'Value']],
+        body: perfData,
+        theme: 'grid',
+        headStyles: { fillColor: [79, 70, 229], fontSize: 9 },
+        styles: { fontSize: 9 },
+        columnStyles: {
+          0: { cellWidth: 80 },
+          1: { cellWidth: 30, halign: 'center' }
+        }
+      });
+
+      yPos = doc.lastAutoTable.finalY + 10;
+
+      // Department-wise Breakdown
+      if (Object.keys(metrics.deptStats).length > 0) {
+        doc.setFontSize(10);
+        doc.setFont('helvetica', 'bold');
+        doc.text('Department-wise Attendance', 14, yPos);
+        yPos += 4;
+
+        const deptData = Object.entries(metrics.deptStats).map(([name, stats]) => [
+          name,
+          stats.present,
+          stats.total,
+          `${stats.percentage}%`
+        ]);
+
+        autoTable(doc, {
+          startY: yPos,
+          head: [['Department', 'Present', 'Total', 'Percentage']],
+          body: deptData,
+          theme: 'grid',
+          headStyles: { fillColor: [79, 70, 229], fontSize: 9 },
+          styles: { fontSize: 9 }
+        });
+
+        yPos = doc.lastAutoTable.finalY + 10;
       }
-      const byteArray = new Uint8Array(byteNumbers);
-      const blob = new Blob([byteArray], { type: 'application/pdf' });
-      const url = window.URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = filename;
-      document.body.appendChild(a);
-      a.click();
-      document.body.removeChild(a);
-      window.URL.revokeObjectURL(url);
+
+      // Late Arrivals
+      if (metrics.lateArrivals.length > 0) {
+        if (yPos > 250) {
+          doc.addPage();
+          yPos = 15;
+        }
+
+        doc.setFontSize(10);
+        doc.setFont('helvetica', 'bold');
+        doc.text('Late Arrivals (Top 10)', 14, yPos);
+        yPos += 4;
+
+        const lateData = metrics.lateArrivals.map((late, idx) => [
+          idx + 1,
+          late.name,
+          late.checkIn,
+          `+${late.delay} min`
+        ]);
+
+        autoTable(doc, {
+          startY: yPos,
+          head: [['#', 'Employee', 'Check-in', 'Delay']],
+          body: lateData,
+          theme: 'grid',
+          headStyles: { fillColor: [249, 115, 22], fontSize: 9 },
+          styles: { fontSize: 9 },
+          columnStyles: {
+            0: { cellWidth: 10, halign: 'center' },
+            3: { halign: 'center' }
+          }
+        });
+      }
+
+      // Save
+      const filename = `Daily_Attendance_${format(dateToUse, 'yyyy-MM-dd')}.pdf`;
+      doc.save(filename);
       toast.success('PDF exported successfully');
     } catch (error) {
+      console.error('PDF export error:', error);
       toast.error('Failed to export PDF: ' + error.message);
     }
   };
@@ -197,7 +315,9 @@ export default function DailyAttendanceReport({
         <div>
           <h2 className="text-2xl font-bold text-slate-900">Daily Attendance Report</h2>
           <p className="text-slate-600 mt-1">
-            {format(selectedDate, 'EEEE, MMMM dd, yyyy')} - Operational Focus
+            {selectedDate && !isNaN(new Date(selectedDate).getTime())
+              ? format(new Date(selectedDate), 'EEEE, MMMM dd, yyyy')
+              : format(new Date(), 'EEEE, MMMM dd, yyyy')} - Operational Focus
           </p>
         </div>
         <div className="flex gap-4">

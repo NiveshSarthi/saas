@@ -677,7 +677,7 @@ export default function SalaryPage() {
         }
 
         // Check-out rules (only if check-in was timely)
-        if (checkInTotalMinutes <= expectedCheckInMinutes && checkOutTime) {
+        if (checkInTotalMinutes <= effectiveExpectedCheckIn && checkOutTime) {
           const checkOutHour = checkOutTime.getHours();
           const checkOutMinute = checkOutTime.getMinutes();
           const checkOutTotalMinutes = checkOutHour * 60 + checkOutMinute;
