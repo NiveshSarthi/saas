@@ -424,11 +424,11 @@ export default function SalaryPage() {
         s.employee_name,
         // s.employee_email,
         `${calc.paidDays}/${calc.totalDays}`,
-        `₹${calc.baseSalary.toLocaleString()}`,
-        `₹${calc.adjustments.toLocaleString()}`,
-        `₹${calc.gross.toLocaleString()}`,
-        `-₹${calc.totalDeductions.toLocaleString()}`,
-        `₹${calc.net.toLocaleString()}`,
+        `Rs. ${calc.baseSalary.toLocaleString()}`,
+        `Rs. ${calc.adjustments.toLocaleString()}`,
+        `Rs. ${calc.gross.toLocaleString()}`,
+        `-Rs. ${calc.totalDeductions.toLocaleString()}`,
+        `Rs. ${calc.net.toLocaleString()}`,
         s.status.toUpperCase()
       ];
     });
@@ -437,7 +437,7 @@ export default function SalaryPage() {
     const totalNet = filteredSalaries.reduce((sum, s) => sum + (s.net_salary || 0), 0);
     doc.setFontSize(12);
     doc.setTextColor(0, 0, 0);
-    doc.text(`Total Net Payroll: ₹${totalNet.toLocaleString()}`, 280, 20, { align: 'right' });
+    doc.text(`Total Net Payroll: Rs. ${totalNet.toLocaleString()}`, 280, 20, { align: 'right' });
 
     autoTable(doc, {
       head: [['Employee', 'Paid/Total Days', 'Base', 'Adjustments', 'Gross', 'Deductions', 'Net Pay', 'Status']],
