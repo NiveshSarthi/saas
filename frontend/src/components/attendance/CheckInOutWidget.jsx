@@ -50,7 +50,7 @@ export default function CheckInOutWidget({ user, todayRecord, onUpdate }) {
     queryKey: ['attendance-settings'],
     queryFn: async () => {
       const res = await base44.entities.AttendanceSettings.list();
-      return res[0];
+      return res[0] || null;
     }
   });
 
