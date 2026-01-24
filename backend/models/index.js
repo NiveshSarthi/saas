@@ -614,6 +614,30 @@ export const SalesKPISettings = mongoose.model('SalesKPISettings', salesKPISetti
 export const HRTarget = mongoose.model('HRTarget', hrTargetSchema);
 export const DailySalesPerformance = mongoose.model('DailySalesPerformance', dailySalesPerformanceSchema);
 
+const officePurchaseRequestSchema = new mongoose.Schema({
+    item_name: { type: String, required: true },
+    category: {
+        type: String,
+        enum: ['Stationery', 'Confectionery', 'Maintenance', 'Other'],
+        required: true
+    },
+    quantity: { type: Number, required: true },
+    estimated_unit_price: { type: Number, required: true },
+    total_amount: { type: Number, required: true },
+    status: {
+        type: String,
+        enum: ['pending', 'approved', 'rejected', 'linked_to_petty_cash', 'received'],
+        default: 'pending'
+    },
+    requester_email: { type: String, required: true },
+    approved_by: String,
+    notes: String,
+    created_at: { type: Date, default: Date.now },
+    updated_at: { type: Date, default: Date.now }
+});
+
+export const OfficePurchaseRequest = mongoose.model('OfficePurchaseRequest', officePurchaseRequestSchema);
+
 const timesheetSchema = new mongoose.Schema({
     freelancer_email: String,
     freelancer_name: String,
