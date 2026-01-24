@@ -503,6 +503,199 @@ router.post('/invoke/exportSalaryPDF', async (req, res) => {
     }
 });
 router.post('/invoke/cleanupDuplicateAttendance', mockSuccess);
+
+router.post('/invoke/generateBulkAttendanceTemplate', async (req, res) => {
+    try {
+        const { month } = req.body;
+        if (!month) return res.status(400).json({ error: 'Month is required' });
+
+        const [year, monthNum] = month.split('-');
+        const lastDay = new Date(year, monthNum, 0).getDate();
+
+        // Fetch all active users
+        const users = await models.User.find({ is_active: { $ne: false } });
+
+        // Build headers
+        let csv = 'Employee Name,Email';
+        for (let d = 1; d <= lastDay; d++) {
+            const dayStr = d.toString().padStart(2, '0');
+            csv += `,Day ${dayStr} Status,Day ${dayStr} In,Day ${dayStr} Out`;
+        }
+        csv += '\n';
+
+        // Build rows
+        users.forEach(user => {
+            csv += `"${user.full_name || ''}","${user.email}"`;
+            for (let d = 1; d <= lastDay; d++) {
+                csv += ',,,'; // Empty status, in, out
+            }
+            csv += '\n';
+        });
+
+        res.json({
+            success: true,
+            data: {
+                csv_content: csv,
+                filename: `bulk_attendance_template_${month}.csv`
+            }
+        });
+    } catch (error) {
+        res.status(500).json({ error: error.message });
+    }
+});
+
+router.post('/invoke/uploadBulkAttendance', async (req, res) => {
+    try {
+        const { fileContent, month } = req.body;
+        if (!fileContent || !month) return res.status(400).json({ error: 'File content and month are required' });
+
+        // Split by lines and handle potentially different line endings
+        const lines = fileContent.split(/\r?\n/).filter(line => line.trim() !== '');
+        if (lines.length < 2) return res.status(400).json({ error: 'File is empty or missing data' });
+
+        // Simple CSV parser that handles quotes
+        const parseCSVLine = (text) => {
+            const result = [];
+            let cell = '';
+            let inQuotes = false;
+            for (let i = 0; i < text.length; i++) {
+                const char = text[i];
+                if (char === '"') {
+                    inQuotes = !inQuotes;
+                } else if (char === ',' && !inQuotes) {
+                    result.push(cell.trim());
+                    cell = '';
+                } else {
+                    cell += char;
+                }
+            }
+            result.push(cell.trim());
+            return result;
+        };
+
+        const headers = parseCSVLine(lines[0]);
+        const dataLines = lines.slice(1);
+
+        const [year, monthNum] = month.split('-');
+        const lastDay = new Date(year, monthNum, 0).getDate();
+
+        // Fetch settings if needed for late detection
+        const settings = await models.AttendanceSettings.findOne({});
+        const workStartTime = settings?.work_start_time || '09:00';
+        const lateThreshold = settings?.late_threshold_minutes || 15;
+
+        let successCount = 0;
+        let errorCount = 0;
+        const errors = [];
+
+        for (const line of dataLines) {
+            const parts = parseCSVLine(line);
+            if (parts.length < 2) continue;
+
+            const employeeName = parts[0];
+            const employeeEmail = parts[1];
+
+            if (!employeeEmail) continue;
+
+            // Triplets: Status, In, Out
+            for (let d = 1; d <= lastDay; d++) {
+                const dayIdx = 2 + (d - 1) * 3;
+                if (dayIdx + 2 >= parts.length) break;
+
+                const statusInput = parts[dayIdx]?.toLowerCase();
+                const checkInInput = parts[dayIdx + 1];
+                const checkOutInput = parts[dayIdx + 2];
+
+                // Skip if everything is empty for this day
+                if (!statusInput && !checkInInput && !checkOutInput) continue;
+
+                const dayStr = d.toString().padStart(2, '0');
+                const dateStr = `${year}-${monthNum}-${dayStr}`;
+
+                try {
+                    // Map status codes
+                    let status = 'present';
+                    if (statusInput === 'p' || statusInput === 'present') status = 'present';
+                    else if (statusInput === 'a' || statusInput === 'absent') status = 'absent';
+                    else if (statusInput === 'l' || statusInput === 'leave') status = 'leave';
+                    else if (statusInput === 'hd' || statusInput === 'half day') status = 'half_day';
+                    else if (statusInput === 'w' || statusInput === 'wo' || statusInput === 'weekoff') status = 'weekoff';
+                    else if (statusInput === 'h' || statusInput === 'holiday') status = 'holiday';
+                    else if (statusInput === 'wfh' || statusInput === 'work from home') status = 'work_from_home';
+                    else if (statusInput) status = statusInput;
+
+                    // Parse times
+                    let checkIn = null;
+                    let checkOut = null;
+                    let isLate = false;
+
+                    if (checkInInput && checkInInput !== '-') {
+                        const [h, m] = checkInInput.split(':');
+                        if (h !== undefined) {
+                            checkIn = new Date(`${dateStr}T${h.padStart(2, '0')}:${(m || '00').padStart(2, '0')}:00`);
+
+                            // Simple late check
+                            if (workStartTime) {
+                                const [wh, wm] = workStartTime.split(':');
+                                const workStartTotal = parseInt(wh) * 60 + parseInt(wm) + (lateThreshold || 0);
+                                const checkInTotal = parseInt(h) * 60 + parseInt(m || 0);
+                                if (checkInTotal > workStartTotal) isLate = true;
+                            }
+                        }
+                    }
+                    if (checkOutInput && checkOutInput !== '-') {
+                        const [h, m] = checkOutInput.split(':');
+                        if (h !== undefined) {
+                            checkOut = new Date(`${dateStr}T${h.padStart(2, '0')}:${(m || '00').padStart(2, '0')}:00`);
+                        }
+                    }
+
+                    // Calculate hours
+                    let total_hours = 0;
+                    if (checkIn && checkOut && !isNaN(checkIn) && !isNaN(checkOut)) {
+                        total_hours = (checkOut - checkIn) / (1000 * 60 * 60);
+                    }
+
+                    const attendanceData = {
+                        user_email: employeeEmail,
+                        user_name: employeeName,
+                        date: dateStr,
+                        status: status,
+                        check_in: checkIn,
+                        check_out: checkOut,
+                        total_hours: total_hours > 0 ? total_hours : 0,
+                        is_late: isLate,
+                        source: 'bulk_upload',
+                        marked_by: 'admin'
+                    };
+
+                    // Upsert
+                    await models.Attendance.findOneAndUpdate(
+                        { user_email: employeeEmail, date: dateStr },
+                        attendanceData,
+                        { upsert: true, new: true }
+                    );
+                    successCount++;
+                } catch (err) {
+                    errorCount++;
+                    errors.push({ employeeName, date: dateStr, error: err.message });
+                }
+            }
+        }
+
+        res.json({
+            success: true,
+            data: {
+                message: `Bulk upload processed. ${successCount} records saved.`,
+                successCount,
+                errorCount,
+                errors: errors.slice(0, 50) // Limit error return
+            }
+        });
+    } catch (error) {
+        res.status(500).json({ error: error.message });
+    }
+});
 router.post('/invoke/syncWorkDayLedger', mockSuccess);
 
 // User Management
