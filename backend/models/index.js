@@ -644,6 +644,16 @@ export const SalesKPISettings = mongoose.model('SalesKPISettings', salesKPISetti
 export const HRTarget = mongoose.model('HRTarget', hrTargetSchema);
 export const DailySalesPerformance = mongoose.model('DailySalesPerformance', dailySalesPerformanceSchema);
 
+const hrGracePeriodSchema = new mongoose.Schema({
+    date: { type: String, required: true, unique: true }, // YYYY-MM-DD
+    minutes: { type: Number, default: 30 },
+    reason: String,
+    created_by: String,
+    created_at: { type: Date, default: Date.now }
+});
+
+export const HRGracePeriod = mongoose.model('HRGracePeriod', hrGracePeriodSchema);
+
 const officePurchaseRequestSchema = new mongoose.Schema({
     item_name: { type: String, required: true },
     category: {

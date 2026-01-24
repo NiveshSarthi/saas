@@ -49,6 +49,7 @@ import Salary from './Salary';
 import PettyCashReimbursement from './PettyCashReimbursement';
 import HRTargetsManagement from '@/components/hr/HRTargetsManagement';
 import OfficeNeedsManager from '@/components/hr/OfficeNeedsManager';
+import WeatherGraceManager from '@/components/hr/WeatherGraceManager';
 
 export default function HRDashboard() {
   const [user, setUser] = useState(null);
@@ -214,6 +215,10 @@ export default function HRDashboard() {
             <TabsTrigger value="overview" className="data-[state=active]:bg-white data-[state=active]:text-indigo-600 data-[state=active]:shadow-sm py-3 rounded-lg flex flex-col items-center gap-1.5 transition-all">
               <LayoutDashboard className="w-5 h-5" />
               <span className="text-xs font-semibold">Overview</span>
+            </TabsTrigger>
+            <TabsTrigger value="weather" className="data-[state=active]:bg-white data-[state=active]:text-indigo-600 data-[state=active]:shadow-sm py-3 rounded-lg flex flex-col items-center gap-1.5 transition-all">
+              <CloudRain className="w-5 h-5" />
+              <span className="text-xs font-semibold">Weather</span>
             </TabsTrigger>
             <TabsTrigger value="targets" className="data-[state=active]:bg-white data-[state=active]:text-indigo-600 data-[state=active]:shadow-sm py-3 rounded-lg flex flex-col items-center gap-1.5 transition-all">
               <BarChart3 className="w-5 h-5" />
@@ -548,6 +553,11 @@ export default function HRDashboard() {
               </div>
             </TabsContent>
           </Tabs>
+        </TabsContent>
+
+        {/* Weather Tab */}
+        <TabsContent value="weather" className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
+          <WeatherGraceManager user={user} />
         </TabsContent>
 
         {/* Targets Tab */}
