@@ -699,7 +699,40 @@ router.post('/invoke/uploadBulkAttendance', async (req, res) => {
 router.post('/invoke/syncWorkDayLedger', mockSuccess);
 
 // User Management
-router.post('/invoke/bulkActivateUsers', mockSuccess);
+router.post('/invoke/bulkActivateUsers', async (req, res) => {
+    try {
+        const User = models.User;
+
+        // Get all inactive users
+        const inactiveUsers = await User.find({
+            $or: [
+                { active: false },
+                { status: 'inactive' },
+                { active: { $exists: false } },
+                { status: { $exists: false } }
+            ]
+        });
+
+        // Update all inactive users to active
+        const updatePromises = inactiveUsers.map(user =>
+            User.findByIdAndUpdate(user._id, {
+                active: true,
+                status: 'active'
+            })
+        );
+
+        await Promise.all(updatePromises);
+
+        res.json({
+            success: true,
+            message: `${inactiveUsers.length} users activated successfully`,
+            count: inactiveUsers.length
+        });
+    } catch (error) {
+        console.error('Bulk activate error:', error);
+        res.status(500).json({ error: error.message });
+    }
+});
 router.post('/invoke/updateUserName', mockSuccess);
 
 
