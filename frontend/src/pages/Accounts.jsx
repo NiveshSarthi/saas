@@ -14,7 +14,8 @@ import {
   DollarSign,
   TrendingDown,
   ChevronRight,
-  LayoutDashboard
+  LayoutDashboard,
+  Wallet
 } from 'lucide-react';
 import { Card, CardContent } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
@@ -27,7 +28,7 @@ import InvoiceManagement from '@/components/accounts/InvoiceManagement';
 import ExpenseManagement from '@/components/accounts/ExpenseManagement';
 import FinancialReports from '@/components/accounts/FinancialReports';
 
-export default function AccountsPage({ defaultTab = 'dashboard' }) {
+export default function AccountsPage({ defaultTab = 'dashboard', onNavigate }) {
   const [user, setUser] = useState(null);
   const [activeTab, setActiveTab] = useState(defaultTab);
 
@@ -56,12 +57,28 @@ export default function AccountsPage({ defaultTab = 'dashboard' }) {
     enabled: !!user,
   });
 
+  const { data: pettyCashDrawers = [] } = useQuery({
+    queryKey: ['petty-cash-drawers'],
+    queryFn: () => base44.entities.PettyCashDrawer.list(),
+    enabled: !!user,
+  });
+
+  const { data: pettyCashTransactions = [] } = useQuery({
+    queryKey: ['petty-cash-transactions-summary'],
+    queryFn: () => base44.entities.PettyCashReimbursement.list(),
+    enabled: !!user,
+  });
+
   const summary = React.useMemo(() => {
     const revenue = Array.isArray(invoices) ? invoices.reduce((sum, inv) => sum + (inv.total || 0), 0) : 0;
     const expenses = Array.isArray(bills) ? bills.reduce((sum, b) => sum + (b.total || 0), 0) : 0;
     const pendingAr = Array.isArray(invoices) ? invoices.filter(i => i.status !== 'paid' && i.status !== 'cancelled').reduce((sum, i) => sum + (i.total || 0), 0) : 0;
-    return { revenue, expenses, cash: revenue - expenses, pendingAr };
-  }, [invoices, bills]);
+
+    const pettyCashLiquidity = Array.isArray(pettyCashDrawers) ? pettyCashDrawers.reduce((sum, d) => sum + (d.balance || 0), 0) : 0;
+    const pettyCashDisbursed = Array.isArray(pettyCashTransactions) ? pettyCashTransactions.filter(t => t.status === 'paid').reduce((sum, t) => sum + (t.amount || 0), 0) : 0;
+
+    return { revenue, expenses, cash: revenue - expenses, pendingAr, pettyCashLiquidity, pettyCashDisbursed };
+  }, [invoices, bills, pettyCashDrawers, pettyCashTransactions]);
 
   return (
     <div className="min-h-screen bg-[#F8FAFC] p-4 sm:p-6 lg:p-10 space-y-10">
@@ -85,6 +102,10 @@ export default function AccountsPage({ defaultTab = 'dashboard' }) {
           <div className="bg-white p-4 rounded-xl shadow-sm border border-slate-200 flex flex-col justify-center">
             <span className="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-1">Open Receivables</span>
             <span className="text-xl font-bold text-rose-500">₹{(summary.pendingAr / 100000).toFixed(2)}L</span>
+          </div>
+          <div className="bg-white p-4 rounded-xl shadow-sm border border-slate-200 flex flex-col justify-center group cursor-pointer hover:border-indigo-300 transition-colors" onClick={() => onNavigate?.('petty_cash')}>
+            <span className="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-1">Petty Cash Liquidity</span>
+            <span className="text-xl font-bold text-amber-600">₹{summary.pettyCashLiquidity?.toLocaleString()}</span>
           </div>
         </div>
       </div>
@@ -182,6 +203,27 @@ export default function AccountsPage({ defaultTab = 'dashboard' }) {
                 </div>
               </CardContent>
               <div className="absolute bottom-0 left-0 w-full h-1 bg-amber-400" />
+            </Card>
+
+            {/* Petty Cash Operations Card */}
+            <Card className="bg-white rounded-2xl border border-slate-100 shadow-xl shadow-slate-200/50 overflow-hidden group transform transition-all hover:-translate-y-1 relative cursor-pointer" onClick={() => onNavigate?.('petty_cash')}>
+              <CardContent className="p-6 space-y-4">
+                <div className="flex justify-between items-start">
+                  <div className="p-2 bg-indigo-50 rounded-lg group-hover:bg-indigo-600 transition-colors border border-indigo-100">
+                    <Wallet className="w-5 h-5 text-indigo-500 group-hover:text-white transition-colors" />
+                  </div>
+                  <Badge className="bg-indigo-50 text-indigo-600 border-indigo-100 rounded-full font-bold text-[10px] tracking-wide px-2 py-1">OPERATIONAL</Badge>
+                </div>
+                <div>
+                  <p className="text-xs font-semibold uppercase tracking-wide text-slate-400 mb-1">Petty Cash Status</p>
+                  <h3 className="text-3xl font-bold text-slate-900 tracking-tight">₹{summary.pettyCashLiquidity?.toLocaleString()}</h3>
+                  <div className="flex items-center justify-between mt-2">
+                    <p className="text-[10px] text-slate-400 font-bold uppercase tracking-widest">Available Balance</p>
+                    <p className="text-[10px] text-rose-500 font-bold uppercase tracking-widest">Disbursed: ₹{summary.pettyCashDisbursed?.toLocaleString()}</p>
+                  </div>
+                </div>
+              </CardContent>
+              <div className="absolute bottom-0 left-0 w-full h-1 bg-indigo-600" />
             </Card>
           </div>
 
