@@ -25,7 +25,8 @@ import {
   DollarSign,
   PieChart,
   CreditCard,
-  BadgeDollarSign
+  BadgeDollarSign,
+  Trophy
 } from 'lucide-react';
 
 const MODULE_CONFIG = {
