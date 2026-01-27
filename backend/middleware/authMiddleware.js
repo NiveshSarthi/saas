@@ -63,7 +63,8 @@ export const isAdmin = (req) => {
         req.role?.name === 'Admin' ||
         req.role?.name === 'Super Admin' ||
         req.user?.role_id === 'admin' ||
-        req.user?.role_id === 'super_admin';
+        req.user?.role_id === 'super_admin' ||
+        req.user?.department_id === 'dept_hr';
 };
 
 /**

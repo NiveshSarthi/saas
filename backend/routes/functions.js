@@ -1,8 +1,40 @@
 import express from 'express';
 import { calculateMonthlySalary } from '../controllers/salaryController.js';
 import * as aiController from '../controllers/aiController.js';
+import * as recruitmentController from '../controllers/recruitmentController.js';
 import * as models from '../models/index.js';
 import crypto from 'crypto';
+import multer from 'multer';
+import fs from 'fs';
+import path from 'path';
+import { fileURLToPath } from 'url';
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+
+// Ensure uploads directory exists
+const uploadDir = path.join(__dirname, '../uploads/resumes');
+if (!fs.existsSync(uploadDir)) {
+    fs.mkdirSync(uploadDir, { recursive: true });
+}
+
+// Memory storage for parsing (no persistence)
+const memoryUpload = multer({ storage: multer.memoryStorage() });
+
+// Disk storage for permanent resume files
+const diskStorage = multer.diskStorage({
+    destination: function (req, file, cb) {
+        cb(null, uploadDir);
+    },
+    filename: function (req, file, cb) {
+        // Sanitize filename to prevent issues
+        const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9);
+        const ext = path.extname(file.originalname);
+        const name = path.basename(file.originalname, ext).replace(/[^a-zA-Z0-9]/g, '_');
+        cb(null, name + '-' + uniqueSuffix + ext);
+    }
+});
+const diskUpload = multer({ storage: diskStorage });
 
 const router = express.Router();
 
@@ -14,6 +46,8 @@ const getAppSecretProof = (accessToken) => {
     if (!appSecret) return null;
     return crypto.createHmac('sha256', appSecret).update(accessToken).digest('hex');
 };
+
+const upload = memoryUpload; // Alias for backward compatibility
 
 // Helper to perform Round Robin Lead Assignment
 const autoAssignLead = async (leadId) => {
@@ -98,6 +132,12 @@ router.post('/invoke/calculateMonthlySalary', calculateMonthlySalary);
 
 // Invoke AI Task Assistant
 router.post('/invoke/aiTaskAssistant', aiController.aiTaskAssistant);
+
+// Parse Resume
+router.post('/invoke/parseResume', upload.single('resume'), recruitmentController.parseResume);
+
+// Upload Resume (Persistent)
+router.post('/invoke/uploadResume', diskUpload.single('resume'), recruitmentController.uploadResumeHandler);
 
 // Generic Success Mock
 const mockSuccess = (req, res) => res.json({ success: true, data: {} });
