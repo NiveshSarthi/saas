@@ -71,6 +71,7 @@ import AdvancedFilterPanel from '@/components/filters/AdvancedFilterPanel';
 import FilterChips from '@/components/filters/FilterChips';
 import WhatsAppImportDialog from '@/components/leads/WhatsAppImportDialog';
 import { LEAD_FILTERS } from '@/components/filters/filterConfigs';
+import { usePermissions } from '@/components/rbac/PermissionsContext';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -140,6 +141,8 @@ export default function LeadManagement() {
     queryKey: ['current-user'],
     queryFn: () => base44.auth.me(),
   });
+
+  const { can, canAny } = usePermissions();
 
   const { data: leads = [] } = useQuery({
     queryKey: ['leads-management'],
@@ -881,8 +884,8 @@ export default function LeadManagement() {
             )}
           </div>
 
-          {/* Bulk Actions Bar - Admin Only */}
-          {selectedLeads.length > 0 && user?.role === 'admin' && (
+          {/* Bulk Actions Bar */}
+          {selectedLeads.length > 0 && (
             <div className="flex items-center justify-between bg-indigo-50 px-4 py-2 rounded-lg">
               <span className="text-sm font-medium text-indigo-900">
                 {selectedLeads.length} selected
@@ -891,31 +894,37 @@ export default function LeadManagement() {
                 <Button size="sm" variant="outline" onClick={() => handleBulkAction('mark_contacted')}>
                   Mark Contacted
                 </Button>
-                <Button
-                  size="sm"
-                  onClick={() => setShowAssignDialog(true)}
-                  className="bg-indigo-600 hover:bg-indigo-700 text-white"
-                >
-                  <Users className="w-4 h-4 mr-1" />
-                  Assign
-                </Button>
-                <Button
-                  size="sm"
-                  variant="outline"
-                  onClick={() => bulkUnassignMutation.mutate(selectedLeads)}
-                  disabled={bulkUnassignMutation.isPending}
-                >
-                  <XCircle className="w-4 h-4 mr-1" />
-                  Unassign
-                </Button>
-                <Button
-                  size="sm"
-                  variant="destructive"
-                  onClick={() => setDeleteDialogOpen(true)}
-                >
-                  <Trash2 className="w-4 h-4 mr-1" />
-                  Delete
-                </Button>
+                {(user?.role === 'admin' || can('leads', 'assign')) && (
+                  <>
+                    <Button
+                      size="sm"
+                      onClick={() => setShowAssignDialog(true)}
+                      className="bg-indigo-600 hover:bg-indigo-700 text-white"
+                    >
+                      <Users className="w-4 h-4 mr-1" />
+                      Assign
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={() => bulkUnassignMutation.mutate(selectedLeads)}
+                      disabled={bulkUnassignMutation.isPending}
+                    >
+                      <XCircle className="w-4 h-4 mr-1" />
+                      Unassign
+                    </Button>
+                  </>
+                )}
+                {(user?.role === 'admin' || can('leads', 'delete')) && (
+                  <Button
+                    size="sm"
+                    variant="destructive"
+                    onClick={() => setDeleteDialogOpen(true)}
+                  >
+                    <Trash2 className="w-4 h-4 mr-1" />
+                    Delete
+                  </Button>
+                )}
                 <Button size="sm" variant="outline" onClick={() => setSelectedLeads([])}>
                   Clear
                 </Button>
@@ -942,7 +951,7 @@ export default function LeadManagement() {
                 <Table className="min-w-max">
                   <TableHeader className="sticky top-0 bg-white z-20 shadow-sm border-b">
                     <TableRow>
-                      {user?.role === 'admin' && (
+                      {(user?.role === 'admin' || canAny('leads', ['assign', 'delete', 'update'])) && (
                         <TableHead className="w-12 min-w-[3rem]">
                           <Checkbox
                             checked={selectedLeads.length === sortedLeads.length && sortedLeads.length > 0}
@@ -1052,7 +1061,7 @@ export default function LeadManagement() {
                             overdueLeads.some(l => l.id === lead.id) && "bg-red-50"
                           )}
                         >
-                          {user?.role === 'admin' && (
+                          {(user?.role === 'admin' || canAny('leads', ['assign', 'delete', 'update'])) && (
                             <TableCell onClick={(e) => e.stopPropagation()}>
                               <Checkbox
                                 checked={selectedLeads.includes(lead.id)}

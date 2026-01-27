@@ -65,10 +65,15 @@ export default function CheckInOutWidget({ user, todayRecord, onUpdate }) {
   // Helpers
   const getIPAddress = async () => {
     try {
-      const res = await fetch('https://api.ipify.org?format=json');
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 3000); // 3s timeout
+
+      const res = await fetch('https://api.ipify.org?format=json', { signal: controller.signal });
+      clearTimeout(timeoutId);
       const data = await res.json();
       return data.ip;
     } catch (e) {
+      console.warn('CheckIn Process: IP Fetch failed/timed out', e);
       return '0.0.0.0';
     }
   };
@@ -139,7 +144,6 @@ export default function CheckInOutWidget({ user, todayRecord, onUpdate }) {
     return () => clearInterval(timer);
   }, []);
 
-
   const getLocation = (useHighAccuracy = true) => {
     return new Promise((resolve) => {
       console.log('CheckIn Process: Starting getLocation', { useHighAccuracy });
@@ -151,9 +155,6 @@ export default function CheckInOutWidget({ user, todayRecord, onUpdate }) {
         resolve(null);
         return;
       }
-
-      setGettingLocation(true);
-      setLocationPermissionDenied(false);
 
       const options = {
         timeout: useHighAccuracy ? 10000 : 5000, // Increased timeout slightly
@@ -224,69 +225,86 @@ export default function CheckInOutWidget({ user, todayRecord, onUpdate }) {
     });
   };
 
-
   const checkInMutation = useMutation({
     mutationFn: async () => {
+      console.log('CheckIn Process: Mutation Started');
+      toast.info('Starting Check-in Process...');
       const now = new Date();
 
-      if (settings && !isWorkDay(now, settings)) {
-        throw new Error('Today is a week-off or holiday. Attendance not required.');
-      }
+      try {
+        console.log('CheckIn Process: Settings & Record', { settings, todayRecord, isWorkDay: settings ? isWorkDay(now, settings) : 'N/A' });
 
-      if (todayRecord && todayRecord.check_in && settings && !settings.allow_multiple_checkins) {
-        throw new Error('You have already checked in today');
-      }
-
-      const today = format(now, 'yyyy-MM-dd');
-
-      let location = null;
-      let ip = null;
-
-      // STRICT LOCATION ENFORCEMENT
-      location = await getLocation();
-
-      // If geofencing enabled and no location -> BLOCK
-      if (settings?.enable_geofencing && !location) {
-        throw new Error("Location access is MANDATORY for attendance geofencing. Please ensure GPS is active.");
-      }
-
-      ip = await getIPAddress();
-
-      if (settings && settings.enable_geofencing && location) {
-        const distance = calculateDistance(
-          location.latitude,
-          location.longitude,
-          settings.office_latitude,
-          settings.office_longitude
-        );
-
-        if (distance > settings.geofence_radius_meters) {
-          throw new Error(`You are ${Math.round(distance)}m away. Must be within ${settings.geofence_radius_meters}m.`);
+        if (settings && !isWorkDay(now, settings)) {
+          throw new Error('Today is a week-off or holiday. Attendance not required.');
         }
-      }
 
-      const isLate = isLateCheckIn(now, settings);
+        if (todayRecord && todayRecord.check_in && settings && !settings.allow_multiple_checkins) {
+          throw new Error('You have already checked in today');
+        }
 
-      const attendanceData = {
-        user_email: user.email,
-        user_name: user.full_name || user.email,
-        department_id: user.department_id,
-        role_id: user.role_id,
-        date: today,
-        check_in: now.toISOString(),
-        status: 'checked_in',
-        source: 'web',
-        ip_address: ip,
-        location: location,
-        device_info: getDeviceInfo(),
-        is_late: isLate,
-        marked_by: user.email
-      };
+        const today = format(now, 'yyyy-MM-dd');
 
-      if (todayRecord) {
-        await base44.entities.Attendance.update(todayRecord.id, attendanceData);
-      } else {
-        await base44.entities.Attendance.create(attendanceData);
+        let location = null;
+        let ip = null;
+
+        // STRICT LOCATION ENFORCEMENT
+        location = await getLocation();
+
+        // If geofencing enabled and no location -> BLOCK
+        if (settings?.enable_geofencing && !location) {
+          throw new Error("Location access is MANDATORY for attendance geofencing. Please ensure GPS is active.");
+        }
+
+        console.log('CheckIn Process: Fetching IP...');
+        toast.info('Fetching IP Address...');
+        ip = await getIPAddress();
+        console.log('CheckIn Process: IP fetched', ip);
+
+        if (settings && settings.enable_geofencing && location) {
+          const distance = calculateDistance(
+            location.latitude,
+            location.longitude,
+            settings.office_latitude,
+            settings.office_longitude
+          );
+
+          if (distance > settings.geofence_radius_meters) {
+            throw new Error(`You are ${Math.round(distance)}m away. Must be within ${settings.geofence_radius_meters}m.`);
+          }
+        }
+
+        const isLate = isLateCheckIn(now, settings);
+
+        const attendanceData = {
+          user_email: user.email,
+          user_name: user.full_name || user.email,
+          department_id: user.department_id,
+          role_id: user.role_id,
+          date: today,
+          check_in: now.toISOString(),
+          status: 'checked_in',
+          source: 'web',
+          ip_address: ip,
+          location: location,
+          device_info: getDeviceInfo(),
+          is_late: isLate,
+          marked_by: user.email
+        };
+
+        console.log('CheckIn Process: Saving to Database...', attendanceData);
+        toast.info('Saving attendance...');
+
+        let dbResponse;
+        if (todayRecord) {
+          dbResponse = await base44.entities.Attendance.update(todayRecord.id, attendanceData);
+        } else {
+          dbResponse = await base44.entities.Attendance.create(attendanceData);
+        }
+        console.log('CheckIn Process: Database Save Success', dbResponse);
+        toast.success('Attendance Saved!');
+      } catch (err) {
+        console.error('CheckIn Process: Mutation Error Detected', err);
+        throw err;
       }
     },
     onSuccess: () => {
@@ -464,7 +482,11 @@ export default function CheckInOutWidget({ user, todayRecord, onUpdate }) {
             {!locationPermissionDenied && (
               <Button
                 size="lg"
-                onClick={() => checkInMutation.mutate()}
+                onClick={() => {
+                  console.log('CheckIn Process: Button Clicked');
+                  toast.info("Button Clicked - Initiating...");
+                  checkInMutation.mutate();
+                }}
                 disabled={!canCheckIn || checkInMutation.isPending || gettingLocation}
                 className={cn(
                   "flex-1 h-12 sm:h-14 rounded-xl font-bold text-base sm:text-lg shadow-lg transition-all",

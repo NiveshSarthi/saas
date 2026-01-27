@@ -49,6 +49,11 @@ export default function MarketingDailyLogger({ user }) {
       comments: existingLog[0]?.engagement_metrics?.comments || 0,
       shares: existingLog[0]?.engagement_metrics?.shares || 0,
     },
+    production_workflow: {
+      planning_completed: existingLog[0]?.production_workflow?.planning_completed || 0,
+      shoots_completed: existingLog[0]?.production_workflow?.shoots_completed || 0,
+      edits_completed: existingLog[0]?.production_workflow?.edits_completed || 0,
+    },
     notes: existingLog[0]?.notes || ''
   });
 
@@ -88,8 +93,51 @@ export default function MarketingDailyLogger({ user }) {
         <DialogHeader>
           <DialogTitle>Daily Performance Log - {format(new Date(), 'MMM d, yyyy')}</DialogTitle>
         </DialogHeader>
-        
+
         <div className="space-y-6 py-4">
+          {/* Production Workflow */}
+          <div>
+            <h3 className="font-semibold text-sm mb-3 text-slate-700">Production Workflow Actuals</h3>
+            <div className="grid grid-cols-3 gap-4">
+              <div className="space-y-2">
+                <Label className="text-xs">Planning Completed</Label>
+                <Input
+                  type="number"
+                  min="0"
+                  value={formData.production_workflow.planning_completed}
+                  onChange={(e) => setFormData({
+                    ...formData,
+                    production_workflow: { ...formData.production_workflow, planning_completed: parseInt(e.target.value) || 0 }
+                  })}
+                />
+              </div>
+              <div className="space-y-2">
+                <Label className="text-xs">Shoots Completed</Label>
+                <Input
+                  type="number"
+                  min="0"
+                  value={formData.production_workflow.shoots_completed}
+                  onChange={(e) => setFormData({
+                    ...formData,
+                    production_workflow: { ...formData.production_workflow, shoots_completed: parseInt(e.target.value) || 0 }
+                  })}
+                />
+              </div>
+              <div className="space-y-2">
+                <Label className="text-xs">Edits Completed</Label>
+                <Input
+                  type="number"
+                  min="0"
+                  value={formData.production_workflow.edits_completed}
+                  onChange={(e) => setFormData({
+                    ...formData,
+                    production_workflow: { ...formData.production_workflow, edits_completed: parseInt(e.target.value) || 0 }
+                  })}
+                />
+              </div>
+            </div>
+          </div>
+
           {/* Content Output */}
           <div>
             <h3 className="font-semibold text-sm mb-3 text-indigo-700">Content Output</h3>

@@ -1,7 +1,7 @@
 import React, { useState, useMemo } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { base44 } from '@/api/base44Client';
-import { format, startOfDay, endOfDay, startOfWeek, endOfWeek, startOfMonth, endOfMonth, parseISO, isWithinInterval } from 'date-fns';
+import { format, startOfDay, endOfDay, startOfWeek, endOfWeek, startOfMonth, endOfMonth, startOfQuarter, endOfQuarter, startOfYear, endOfYear, parseISO, isWithinInterval } from 'date-fns';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -24,7 +24,7 @@ import {
   TableRow,
 } from '@/components/ui/table';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import { 
+import {
   Download, Trophy, TrendingUp, TrendingDown, FileSpreadsheet, FileText,
   Video, FileImage, BookOpen, FileText as FlyerIcon, Instagram, Facebook, Linkedin
 } from 'lucide-react';
@@ -33,7 +33,7 @@ import { toast } from 'sonner';
 
 export default function MarketingKPIDashboard({ users = [], departments = [] }) {
   const today = new Date();
-  
+
   const [dateRangeType, setDateRangeType] = useState('month');
   const [customStartDate, setCustomStartDate] = useState(format(startOfMonth(today), 'yyyy-MM-dd'));
   const [customEndDate, setCustomEndDate] = useState(format(endOfMonth(today), 'yyyy-MM-dd'));
@@ -47,10 +47,14 @@ export default function MarketingKPIDashboard({ users = [], departments = [] }) 
         return { start: startOfWeek(today, { weekStartsOn: 1 }), end: endOfWeek(today, { weekStartsOn: 1 }) };
       case 'month':
         return { start: startOfMonth(today), end: endOfMonth(today) };
+      case 'quarter':
+        return { start: startOfQuarter(today), end: endOfQuarter(today) };
+      case 'year':
+        return { start: startOfYear(today), end: endOfYear(today) };
       case 'custom':
-        return { 
-          start: startOfDay(parseISO(customStartDate)), 
-          end: endOfDay(parseISO(customEndDate)) 
+        return {
+          start: startOfDay(parseISO(customStartDate)),
+          end: endOfDay(parseISO(customEndDate))
         };
       default:
         return { start: startOfMonth(today), end: endOfMonth(today) };
@@ -107,7 +111,7 @@ export default function MarketingKPIDashboard({ users = [], departments = [] }) 
       if (currentSettings) {
         const isWeekly = dateRangeType === 'week';
         const targets = currentSettings[isWeekly ? 'content_targets' : 'content_targets'];
-        
+
         const egcTarget = isWeekly ? targets?.egc_weekly : targets?.egc_monthly;
         const awarenessTarget = isWeekly ? targets?.awareness_weekly : targets?.awareness_monthly;
         const educationalTarget = isWeekly ? targets?.educational_weekly : targets?.educational_monthly;
@@ -120,7 +124,7 @@ export default function MarketingKPIDashboard({ users = [], departments = [] }) 
           flyersTarget ? (flyers / flyersTarget) * 100 : 0,
         ].filter(p => p > 0);
 
-        performancePercentage = contentPerf.length > 0 
+        performancePercentage = contentPerf.length > 0
           ? contentPerf.reduce((sum, p) => sum + p, 0) / contentPerf.length
           : 0;
       }
@@ -145,6 +149,49 @@ export default function MarketingKPIDashboard({ users = [], departments = [] }) 
   const sortedMetrics = [...userMetrics].sort((a, b) => b.performancePercentage - a.performancePercentage);
   const bestPerformer = sortedMetrics.length > 0 ? sortedMetrics[0] : null;
 
+  // Calculate Production Goals vs Actuals
+  const productionStats = useMemo(() => {
+    // 1. Calculate Actuals from all filtered logs
+    const actuals = {
+      planning: 0,
+      shoot: 0,
+      editing: 0
+    };
+
+    // Filter logs for the selected date range
+    const relevantLogs = performanceLogs.filter(log => {
+      const logDate = parseISO(log.date);
+      return isWithinInterval(logDate, dateRange);
+    });
+
+    relevantLogs.forEach(log => {
+      actuals.planning += (log.production_workflow?.planning_completed || 0);
+      actuals.shoot += (log.production_workflow?.shoots_completed || 0);
+      actuals.editing += (log.production_workflow?.edits_completed || 0);
+    });
+
+    // 2. Get Goals based on timeframe
+    let goals = { planning: 0, shoot: 0, editing: 0 };
+    if (currentSettings?.production_goals) {
+      const timeframeKey =
+        dateRangeType === 'week' ? 'weekly' :
+          dateRangeType === 'month' ? 'monthly' :
+            dateRangeType === 'quarter' ? 'quarterly' :
+              dateRangeType === 'year' ? 'yearly' : 'monthly'; // Default to monthly if custom or unknown
+
+      goals.planning = currentSettings.production_goals.planning?.[timeframeKey] || 0;
+      goals.shoot = currentSettings.production_goals.shoot?.[timeframeKey] || 0;
+      goals.editing = currentSettings.production_goals.editing?.[timeframeKey] || 0;
+    }
+
+    // 3. Calculate Progress
+    return {
+      planning: { actual: actuals.planning, goal: goals.planning, percent: goals.planning ? Math.min((actuals.planning / goals.planning) * 100, 100) : 0 },
+      shoot: { actual: actuals.shoot, goal: goals.shoot, percent: goals.shoot ? Math.min((actuals.shoot / goals.shoot) * 100, 100) : 0 },
+      editing: { actual: actuals.editing, goal: goals.editing, percent: goals.editing ? Math.min((actuals.editing / goals.editing) * 100, 100) : 0 },
+    };
+  }, [performanceLogs, dateRange, currentSettings, dateRangeType]);
+
   // Summary stats
   const totalEGC = sortedMetrics.reduce((sum, m) => sum + m.egc, 0);
   const totalAwareness = sortedMetrics.reduce((sum, m) => sum + m.awareness, 0);
@@ -160,7 +207,7 @@ export default function MarketingKPIDashboard({ users = [], departments = [] }) 
     doc.text('Marketing KPI Report', 14, 20);
     doc.setFontSize(10);
     doc.text(`Period: ${format(dateRange.start, 'MMM d, yyyy')} - ${format(dateRange.end, 'MMM d, yyyy')}`, 14, 30);
-    
+
     let y = 45;
     sortedMetrics.forEach((metric, index) => {
       if (y > 270) { doc.addPage(); y = 20; }
@@ -232,6 +279,8 @@ export default function MarketingKPIDashboard({ users = [], departments = [] }) 
                   <SelectItem value="today">Today</SelectItem>
                   <SelectItem value="week">This Week</SelectItem>
                   <SelectItem value="month">This Month</SelectItem>
+                  <SelectItem value="quarter">This Quarter</SelectItem>
+                  <SelectItem value="year">This Year</SelectItem>
                   <SelectItem value="custom">Custom Range</SelectItem>
                 </SelectContent>
               </Select>
@@ -282,6 +331,66 @@ export default function MarketingKPIDashboard({ users = [], departments = [] }) 
           </div>
         </CardContent>
       </Card>
+
+      {/* Production Goals Progress */}
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+        <Card className="border-l-4 border-l-blue-500">
+          <CardHeader className="pb-2">
+            <CardTitle className="text-sm font-medium text-slate-500">Planning</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="flex justify-between items-end mb-2">
+              <span className="text-2xl font-bold text-slate-800">{productionStats.planning.actual}</span>
+              <span className="text-sm text-slate-500">Goal: {productionStats.planning.goal}</span>
+            </div>
+            <div className="h-2 bg-slate-100 rounded-full overflow-hidden">
+              <div
+                className="h-full bg-blue-500 rounded-full transition-all duration-500"
+                style={{ width: `${productionStats.planning.percent}%` }}
+              />
+            </div>
+            <p className="text-xs text-right mt-1 text-slate-400">{Math.round(productionStats.planning.percent)}%</p>
+          </CardContent>
+        </Card>
+
+        <Card className="border-l-4 border-l-amber-500">
+          <CardHeader className="pb-2">
+            <CardTitle className="text-sm font-medium text-slate-500">Shooting</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="flex justify-between items-end mb-2">
+              <span className="text-2xl font-bold text-slate-800">{productionStats.shoot.actual}</span>
+              <span className="text-sm text-slate-500">Goal: {productionStats.shoot.goal}</span>
+            </div>
+            <div className="h-2 bg-slate-100 rounded-full overflow-hidden">
+              <div
+                className="h-full bg-amber-500 rounded-full transition-all duration-500"
+                style={{ width: `${productionStats.shoot.percent}%` }}
+              />
+            </div>
+            <p className="text-xs text-right mt-1 text-slate-400">{Math.round(productionStats.shoot.percent)}%</p>
+          </CardContent>
+        </Card>
+
+        <Card className="border-l-4 border-l-emerald-500">
+          <CardHeader className="pb-2">
+            <CardTitle className="text-sm font-medium text-slate-500">Editing</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="flex justify-between items-end mb-2">
+              <span className="text-2xl font-bold text-slate-800">{productionStats.editing.actual}</span>
+              <span className="text-sm text-slate-500">Goal: {productionStats.editing.goal}</span>
+            </div>
+            <div className="h-2 bg-slate-100 rounded-full overflow-hidden">
+              <div
+                className="h-full bg-emerald-500 rounded-full transition-all duration-500"
+                style={{ width: `${productionStats.editing.percent}%` }}
+              />
+            </div>
+            <p className="text-xs text-right mt-1 text-slate-400">{Math.round(productionStats.editing.percent)}%</p>
+          </CardContent>
+        </Card>
+      </div>
 
       {/* Summary Cards */}
       <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-7 gap-4">
@@ -337,25 +446,27 @@ export default function MarketingKPIDashboard({ users = [], departments = [] }) 
       </div>
 
       {/* Best Performer */}
-      {bestPerformer && bestPerformer.performancePercentage > 0 && (
-        <Card className="border-2 border-amber-400 bg-gradient-to-r from-amber-50 to-yellow-50">
-          <CardContent className="pt-6">
-            <div className="flex items-center gap-4">
-              <Trophy className="w-12 h-12 text-amber-500" />
-              <div className="flex-1">
-                <h3 className="text-lg font-bold text-slate-900">Best Performer</h3>
-                <p className="text-2xl font-bold text-amber-600 mt-1">
-                  {bestPerformer.user.full_name || bestPerformer.user.email}
-                </p>
+      {
+        bestPerformer && bestPerformer.performancePercentage > 0 && (
+          <Card className="border-2 border-amber-400 bg-gradient-to-r from-amber-50 to-yellow-50">
+            <CardContent className="pt-6">
+              <div className="flex items-center gap-4">
+                <Trophy className="w-12 h-12 text-amber-500" />
+                <div className="flex-1">
+                  <h3 className="text-lg font-bold text-slate-900">Best Performer</h3>
+                  <p className="text-2xl font-bold text-amber-600 mt-1">
+                    {bestPerformer.user.full_name || bestPerformer.user.email}
+                  </p>
+                </div>
+                <div className="text-right">
+                  <div className="text-4xl font-bold text-amber-600">{bestPerformer.performancePercentage}%</div>
+                  <p className="text-sm text-slate-600 mt-1">Target Achievement</p>
+                </div>
               </div>
-              <div className="text-right">
-                <div className="text-4xl font-bold text-amber-600">{bestPerformer.performancePercentage}%</div>
-                <p className="text-sm text-slate-600 mt-1">Target Achievement</p>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-      )}
+            </CardContent>
+          </Card>
+        )
+      }
 
       {/* Performance Table */}
       <Card>
@@ -382,10 +493,10 @@ export default function MarketingKPIDashboard({ users = [], departments = [] }) 
               <TableBody>
                 {sortedMetrics.map((metric, index) => {
                   const isBest = index === 0;
-                  const performanceColor = 
+                  const performanceColor =
                     metric.performancePercentage >= 100 ? 'text-emerald-600' :
-                    metric.performancePercentage >= 75 ? 'text-blue-600' :
-                    metric.performancePercentage >= 50 ? 'text-amber-600' : 'text-red-600';
+                      metric.performancePercentage >= 75 ? 'text-blue-600' :
+                        metric.performancePercentage >= 50 ? 'text-amber-600' : 'text-red-600';
 
                   return (
                     <TableRow key={metric.user.email} className={isBest ? 'bg-amber-50/50' : ''}>
@@ -442,6 +553,6 @@ export default function MarketingKPIDashboard({ users = [], departments = [] }) 
           </ScrollArea>
         </CardContent>
       </Card>
-    </div>
+    </div >
   );
 }

@@ -11,7 +11,7 @@ export const MODULES = [
   'finance_dashboard', 'receivables', 'payables', 'cash_flow',
   'financial_reports', 'marketing_expenses', 'salary_management',
   'timesheet_approval', 'freelancer_reports',
-  'marketing_category', 'video_workflow', 'admin'  // Added admin module
+  'marketing_category', 'video_workflow', 'leads', 'admin'  // Added admin module
 ];
 
 
