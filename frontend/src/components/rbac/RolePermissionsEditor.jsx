@@ -120,7 +120,7 @@ export default function RolePermissionsEditor({ permissions, onChange, readonly 
       <div className="divide-y divide-slate-100">
         {MODULES.map(module => {
           const config = MODULE_CONFIG[module];
-          const Icon = config.icon;
+          const Icon = config?.icon;
           const isFullyEnabled = isModuleFullyEnabled(module);
           const isPartiallyEnabled = isModulePartiallyEnabled(module);
 
@@ -143,8 +143,8 @@ export default function RolePermissionsEditor({ permissions, onChange, readonly 
                   onCheckedChange={(checked) => handleModuleToggle(module, checked)}
                   disabled={readonly}
                 />
-                <Icon className="w-4 h-4 text-slate-500" />
-                <span className="text-sm font-medium text-slate-700">{config.label}</span>
+                {Icon && <Icon className="w-4 h-4 text-slate-500" />}
+                <span className="text-sm font-medium text-slate-700">{config?.label || module}</span>
               </div>
               {ACTIONS.map(action => (
                 <div key={action} className="px-3 py-3 flex items-center justify-center">
