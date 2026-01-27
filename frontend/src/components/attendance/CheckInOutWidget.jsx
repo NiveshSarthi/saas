@@ -65,10 +65,15 @@ export default function CheckInOutWidget({ user, todayRecord, onUpdate }) {
   // Helpers
   const getIPAddress = async () => {
     try {
-      const res = await fetch('https://api.ipify.org?format=json');
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 3000); // 3s timeout
+
+      const res = await fetch('https://api.ipify.org?format=json', { signal: controller.signal });
+      clearTimeout(timeoutId);
       const data = await res.json();
       return data.ip;
     } catch (e) {
+      console.warn('CheckIn Process: IP Fetch failed/timed out', e);
       return '0.0.0.0';
     }
   };
@@ -259,7 +264,10 @@ export default function CheckInOutWidget({ user, todayRecord, onUpdate }) {
           throw new Error("Location access is MANDATORY for attendance geofencing. Please ensure GPS is active.");
         }
 
+        console.log('CheckIn Process: Fetching IP...');
+        toast.info('Fetching IP Address...');
         ip = await getIPAddress();
+        console.log('CheckIn Process: IP fetched', ip);
 
         if (settings && settings.enable_geofencing && location) {
           const distance = calculateDistance(
@@ -292,264 +300,259 @@ export default function CheckInOutWidget({ user, todayRecord, onUpdate }) {
           marked_by: user.email
         };
 
+        console.log('CheckIn Process: Saving to Database...', attendanceData);
+        toast.info('Saving attendance...');
+
+        let dbResponse;
         if (todayRecord) {
-          await base44.entities.Attendance.update(todayRecord.id, attendanceData);
-        } else {
-          await base44.entities.Attendance.create(attendanceData);
-        }
+        },
+        onSuccess: () => {
+          queryClient.invalidateQueries({ queryKey: ['today-attendance', user?.email] });
+          queryClient.invalidateQueries({ queryKey: ['attendance-today', user?.email] });
+          toast.success('Successfully checked in');
+          if (onUpdate) onUpdate();
+        },
+          onError: (error) => {
+            toast.error(error.message || 'Check in failed');
+          }
+      });
+
+  const checkOutMutation = useMutation({
+    mutationFn: async () => {
+      const now = new Date();
+      const ip = await getIPAddress();
+      let location = await getLocation();
+
+      if (settings?.enable_geofencing && !location) {
+        throw new Error("Location access is MANDATORY for checkout geofencing. Please ensure GPS is active.");
       }
-    } catch(err) {
-      console.error('CheckIn Process: Mutation Error Detected', err);
-      throw err; // Re-throw to be caught by onError
-    }
-  },
+
+      const checkInTime = new Date(todayRecord.check_in);
+      const diffMs = now.getTime() - checkInTime.getTime();
+      const hours = diffMs / (1000 * 60 * 60);
+
+      const updateData = {
+        check_out: now.toISOString(),
+        status: 'completed',
+        total_hours: hours,
+        checkout_location: location,
+        checkout_ip: ip
+      };
+
+      await base44.entities.Attendance.update(todayRecord.id, updateData);
+    },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['today-attendance', user?.email] });
       queryClient.invalidateQueries({ queryKey: ['attendance-today', user?.email] });
-      toast.success('Successfully checked in');
+      toast.success('Checked out successfully');
       if (onUpdate) onUpdate();
     },
     onError: (error) => {
-      toast.error(error.message || 'Check in failed');
+      toast.error(error.message || 'Check out failed');
     }
   });
 
-const checkOutMutation = useMutation({
-  mutationFn: async () => {
-    const now = new Date();
-    const ip = await getIPAddress();
-    let location = await getLocation();
+  const handleStartVisitClick = async () => {
+    try {
+      const loc = await getLocation();
 
-    if (settings?.enable_geofencing && !location) {
-      throw new Error("Location access is MANDATORY for checkout geofencing. Please ensure GPS is active.");
+      if (!loc && settings?.enable_geofencing) {
+        toast.error("Location is required to start a site visit.");
+        return;
+      }
+
+      setCurrentLocation(loc);
+      setVisitDialogOpen(true);
+    } catch (e) {
+      toast.error("Location access needed for Gate Pass");
     }
+  };
 
-    const checkInTime = new Date(todayRecord.check_in);
-    const diffMs = now.getTime() - checkInTime.getTime();
-    const hours = diffMs / (1000 * 60 * 60);
+  return (
+    <div className="space-y-6">
+      {/* Active Visit Card */}
+      {activeVisit && <ActiveVisitCard visit={activeVisit} currentLocation={currentLocation} />}
 
-    const updateData = {
-      check_out: now.toISOString(),
-      status: 'completed',
-      total_hours: hours,
-      checkout_location: location,
-      checkout_ip: ip
-    };
+      <Card className="border-0 shadow-lg bg-gradient-to-r from-indigo-600 to-purple-700 text-white overflow-hidden relative">
+        <div className="absolute inset-0 bg-[url('data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iNjAiIGhlaWdodD0iNjAiIHhtbG5zPSJodHRwOi8vd3d3LnczLm9yZy8yMDAwL3N2ZyI+PGRlZnM+PHBhdHRlcm4gaWQ9ImdyaWQiIHdpZHRoPSI2MCIgaGVpZ2h0PSI2MCIgcGF0dGVyblVuaXRzPSJ1c2VyU3BhY2VPblVzZSI+PHBhdGggZD0iTSAxMCAwIEwgMCAwIDAgMTAiIGZpbGw9Im5vbmUiIHN0cm9rZT0id2hpdGUiIHN0cm9rZS1vcGFjaXR5PSIwLjEiIHN0cm9rZS13aWR0aD0iMSIvPjwvcGF0dGVybj48L2RlZnM+PHJlY3Qgd2lkdGg9IjEwMCUiIGhlaWdodD0iMTAwJSIgZmlsbD0idXJsKCNncmlkKSIvPjwvc3ZnPg==')] opacity-10"></div>
 
-    await base44.entities.Attendance.update(todayRecord.id, updateData);
-  },
-  onSuccess: () => {
-    queryClient.invalidateQueries({ queryKey: ['today-attendance', user?.email] });
-    queryClient.invalidateQueries({ queryKey: ['attendance-today', user?.email] });
-    toast.success('Checked out successfully');
-    if (onUpdate) onUpdate();
-  },
-  onError: (error) => {
-    toast.error(error.message || 'Check out failed');
-  }
-});
+        <div className="relative p-6 flex flex-col items-center justify-between gap-6 md:gap-8">
 
-const handleStartVisitClick = async () => {
-  try {
-    const loc = await getLocation();
-
-    if (!loc && settings?.enable_geofencing) {
-      toast.error("Location is required to start a site visit.");
-      return;
-    }
-
-    setCurrentLocation(loc);
-    setVisitDialogOpen(true);
-  } catch (e) {
-    toast.error("Location access needed for Gate Pass");
-  }
-};
-
-return (
-  <div className="space-y-6">
-    {/* Active Visit Card */}
-    {activeVisit && <ActiveVisitCard visit={activeVisit} currentLocation={currentLocation} />}
-
-    <Card className="border-0 shadow-lg bg-gradient-to-r from-indigo-600 to-purple-700 text-white overflow-hidden relative">
-      <div className="absolute inset-0 bg-[url('data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iNjAiIGhlaWdodD0iNjAiIHhtbG5zPSJodHRwOi8vd3d3LnczLm9yZy8yMDAwL3N2ZyI+PGRlZnM+PHBhdHRlcm4gaWQ9ImdyaWQiIHdpZHRoPSI2MCIgaGVpZ2h0PSI2MCIgcGF0dGVyblVuaXRzPSJ1c2VyU3BhY2VPblVzZSI+PHBhdGggZD0iTSAxMCAwIEwgMCAwIDAgMTAiIGZpbGw9Im5vbmUiIHN0cm9rZT0id2hpdGUiIHN0cm9rZS1vcGFjaXR5PSIwLjEiIHN0cm9rZS13aWR0aD0iMSIvPjwvcGF0dGVybj48L2RlZnM+PHJlY3Qgd2lkdGg9IjEwMCUiIGhlaWdodD0iMTAwJSIgZmlsbD0idXJsKCNncmlkKSIvPjwvc3ZnPg==')] opacity-10"></div>
-
-      <div className="relative p-6 flex flex-col items-center justify-between gap-6 md:gap-8">
-
-        {/* Top: Clock & Date */}
-        <div className="flex flex-col sm:flex-row items-center gap-6 w-full justify-center sm:justify-start">
-          <div className="p-4 bg-white/10 backdrop-blur-md rounded-2xl border border-white/20 shadow-xl flex-shrink-0">
-            <Clock className="w-10 h-10 text-white" />
-          </div>
-          <div className="text-center sm:text-left">
-            <div className="text-sm font-medium text-indigo-100">
-              {format(currentTime, 'EEEE, MMMM d, yyyy')}
+          {/* Top: Clock & Date */}
+          <div className="flex flex-col sm:flex-row items-center gap-6 w-full justify-center sm:justify-start">
+            <div className="p-4 bg-white/10 backdrop-blur-md rounded-2xl border border-white/20 shadow-xl flex-shrink-0">
+              <Clock className="w-10 h-10 text-white" />
             </div>
-            <div className="text-4xl sm:text-5xl font-bold tracking-tight whitespace-nowrap">
-              {format(currentTime, 'hh:mm:ss')}
-              <span className="text-xl sm:text-2xl font-medium ml-2 text-indigo-200">{format(currentTime, 'a')}</span>
-            </div>
-            <div className="flex items-center justify-center sm:justify-start gap-2 mt-2">
-              <Badge className={cn("bg-white/20 hover:bg-white/30 text-white border-0", !todayRecord && "animate-pulse")}>
-                {todayRecord ? (todayRecord.status === 'checked_in' ? 'Running' : 'Completed') : 'Not Started'}
-              </Badge>
-              {todayRecord?.location && (
-                <span className="text-xs text-indigo-200 flex items-center gap-1">
-                  <MapPin className="w-3 h-3" /> Location Active
-                </span>
-              )}
+            <div className="text-center sm:text-left">
+              <div className="text-sm font-medium text-indigo-100">
+                {format(currentTime, 'EEEE, MMMM d, yyyy')}
+              </div>
+              <div className="text-4xl sm:text-5xl font-bold tracking-tight whitespace-nowrap">
+                {format(currentTime, 'hh:mm:ss')}
+                <span className="text-xl sm:text-2xl font-medium ml-2 text-indigo-200">{format(currentTime, 'a')}</span>
+              </div>
+              <div className="flex items-center justify-center sm:justify-start gap-2 mt-2">
+                <Badge className={cn("bg-white/20 hover:bg-white/30 text-white border-0", !todayRecord && "animate-pulse")}>
+                  {todayRecord ? (todayRecord.status === 'checked_in' ? 'Running' : 'Completed') : 'Not Started'}
+                </Badge>
+                {todayRecord?.location && (
+                  <span className="text-xs text-indigo-200 flex items-center gap-1">
+                    <MapPin className="w-3 h-3" /> Location Active
+                  </span>
+                )}
+              </div>
             </div>
           </div>
-        </div>
 
-        {/* Location Error Alert */}
-        {locationPermissionDenied && (
-          <div className="w-full bg-red-500/20 border border-red-500/50 rounded-xl p-4 flex items-center gap-3 animate-in fade-in slide-in-from-top-4">
-            <AlertCircle className="w-6 h-6 text-red-200" />
-            <div className="flex-1">
-              <p className="font-bold text-red-100">Location Access Required</p>
-              <p className="text-sm text-red-200/80">
-                Please enable location services in your browser settings to mark attendance.
-              </p>
-            </div>
-            <Button
-              size="sm"
-              onClick={() => getLocation()}
-              className="bg-white text-red-600 hover:bg-red-50"
-            >
-              Retry Location
-            </Button>
-          </div>
-        )}
-
-        {/* Middle: Stats (Only if checked in) */}
-        {todayRecord && (
-          <div className="flex flex-wrap items-center justify-around gap-4 w-full bg-indigo-800/20 p-4 rounded-xl border border-white/5">
-            <div className="text-center flex-1 min-w-[80px]">
-              <p className="text-xs text-indigo-200 uppercase font-semibold mb-1">Check In</p>
-              <p className="text-lg sm:text-xl font-bold">
-                {(() => {
-                  if (!todayRecord.check_in) return '-';
-                  const d = new Date(todayRecord.check_in);
-                  return !isNaN(d.getTime()) ? format(d, 'hh:mm a') : 'Invalid Time';
-                })()}
-              </p>
-            </div>
-            <div className="w-px h-8 bg-white/20"></div>
-            <div className="text-center flex-1 min-w-[80px]">
-              <p className="text-xs text-indigo-200 uppercase font-semibold mb-1">Check Out</p>
-              <p className="text-lg sm:text-xl font-bold">
-                {(() => {
-                  if (!todayRecord.check_out) return '-';
-                  const d = new Date(todayRecord.check_out);
-                  return !isNaN(d.getTime()) ? format(d, 'hh:mm a') : '-';
-                })()}
-              </p>
-            </div>
-            <div className="w-px h-8 bg-white/20"></div>
-            <div className="text-center flex-1 min-w-[80px]">
-              <p className="text-xs text-indigo-200 uppercase font-semibold mb-1">Duration</p>
-              <p className="text-lg sm:text-xl font-bold">
-                {(() => {
-                  const hours = todayRecord.total_hours || 0;
-                  const h = Math.floor(hours);
-                  const m = Math.round((hours - h) * 60);
-                  if (h === 0 && m === 0) return '0h';
-                  return `${h}h ${m}m`;
-                })()}
-              </p>
-            </div>
-          </div>
-        )}
-
-        {/* Bottom: Actions */}
-        <div className="flex flex-col sm:flex-row items-stretch gap-4 w-full">
-          {user?.role_id === 'admin' && ( // Debug helpers only for admin if needed, hidden for now
-            null
-          )}
-
-          {isWeekOff && (
-            <div className="sm:hidden w-full mb-2">
-              <Badge variant="outline" className="w-full justify-center text-amber-300 border-amber-300/50 bg-amber-900/20 py-1">
-                Holiday / Week Off
-              </Badge>
+          {/* Location Error Alert */}
+          {locationPermissionDenied && (
+            <div className="w-full bg-red-500/20 border border-red-500/50 rounded-xl p-4 flex items-center gap-3 animate-in fade-in slide-in-from-top-4">
+              <AlertCircle className="w-6 h-6 text-red-200" />
+              <div className="flex-1">
+                <p className="font-bold text-red-100">Location Access Required</p>
+                <p className="text-sm text-red-200/80">
+                  Please enable location services in your browser settings to mark attendance.
+                </p>
+              </div>
+              <Button
+                size="sm"
+                onClick={() => getLocation()}
+                className="bg-white text-red-600 hover:bg-red-50"
+              >
+                Retry Location
+              </Button>
             </div>
           )}
 
-          {!locationPermissionDenied && (
+          {/* Middle: Stats (Only if checked in) */}
+          {todayRecord && (
+            <div className="flex flex-wrap items-center justify-around gap-4 w-full bg-indigo-800/20 p-4 rounded-xl border border-white/5">
+              <div className="text-center flex-1 min-w-[80px]">
+                <p className="text-xs text-indigo-200 uppercase font-semibold mb-1">Check In</p>
+                <p className="text-lg sm:text-xl font-bold">
+                  {(() => {
+                    if (!todayRecord.check_in) return '-';
+                    const d = new Date(todayRecord.check_in);
+                    return !isNaN(d.getTime()) ? format(d, 'hh:mm a') : 'Invalid Time';
+                  })()}
+                </p>
+              </div>
+              <div className="w-px h-8 bg-white/20"></div>
+              <div className="text-center flex-1 min-w-[80px]">
+                <p className="text-xs text-indigo-200 uppercase font-semibold mb-1">Check Out</p>
+                <p className="text-lg sm:text-xl font-bold">
+                  {(() => {
+                    if (!todayRecord.check_out) return '-';
+                    const d = new Date(todayRecord.check_out);
+                    return !isNaN(d.getTime()) ? format(d, 'hh:mm a') : '-';
+                  })()}
+                </p>
+              </div>
+              <div className="w-px h-8 bg-white/20"></div>
+              <div className="text-center flex-1 min-w-[80px]">
+                <p className="text-xs text-indigo-200 uppercase font-semibold mb-1">Duration</p>
+                <p className="text-lg sm:text-xl font-bold">
+                  {(() => {
+                    const hours = todayRecord.total_hours || 0;
+                    const h = Math.floor(hours);
+                    const m = Math.round((hours - h) * 60);
+                    if (h === 0 && m === 0) return '0h';
+                    return `${h}h ${m}m`;
+                  })()}
+                </p>
+              </div>
+            </div>
+          )}
+
+          {/* Bottom: Actions */}
+          <div className="flex flex-col sm:flex-row items-stretch gap-4 w-full">
+            {user?.role_id === 'admin' && ( // Debug helpers only for admin if needed, hidden for now
+              null
+            )}
+
+            {isWeekOff && (
+              <div className="sm:hidden w-full mb-2">
+                <Badge variant="outline" className="w-full justify-center text-amber-300 border-amber-300/50 bg-amber-900/20 py-1">
+                  Holiday / Week Off
+                </Badge>
+              </div>
+            )}
+
+            {!locationPermissionDenied && (
+              <Button
+                size="lg"
+                onClick={() => {
+                  console.log('CheckIn Process: Button Clicked');
+                  toast.info("Button Clicked - Initiating...");
+                  checkInMutation.mutate();
+                }}
+                disabled={!canCheckIn || checkInMutation.isPending || gettingLocation}
+                className={cn(
+                  "flex-1 h-12 sm:h-14 rounded-xl font-bold text-base sm:text-lg shadow-lg transition-all",
+                  canCheckIn
+                    ? "bg-white text-indigo-600 hover:bg-indigo-50"
+                    : "bg-indigo-900/50 text-indigo-400 cursor-not-allowed"
+                )}
+              >
+                <LogIn className="w-5 h-5 mr-2 sm:mr-3" />
+                {gettingLocation ? 'Locating...' : (todayRecord?.check_out && !canCheckIn ? 'Completed' : 'Check In')}
+              </Button>
+            )}
+
+            {locationPermissionDenied && (
+              <Button
+                size="lg"
+                onClick={() => getLocation()} // Retry
+                className="flex-1 h-12 sm:h-14 rounded-xl font-bold text-base sm:text-lg shadow-lg transition-all bg-red-600 hover:bg-red-700 text-white animate-pulse"
+              >
+                <MapPin className="w-5 h-5 mr-2 sm:mr-3" />
+                Enable Location
+              </Button>
+            )}
+
+            {/* Site Visit Button (Only if Checked In AND Sales AND No Active Visit) */}
+            {todayRecord?.status === 'checked_in' && !todayRecord.check_out && isSalesUser && !activeVisit && (
+              <Button
+                size="lg"
+                onClick={handleStartVisitClick}
+                disabled={locationPermissionDenied} // Disable if location denied
+                className={cn(
+                  "flex-1 h-12 sm:h-14 rounded-xl font-bold text-base sm:text-lg shadow-lg transition-all text-white",
+                  locationPermissionDenied
+                    ? "bg-slate-600 cursor-not-allowed"
+                    : "bg-emerald-600 hover:bg-emerald-700"
+                )}
+              >
+                <MapPin className="w-5 h-5 mr-2 sm:mr-3" />
+                Start Visit
+              </Button>
+            )}
+
             <Button
               size="lg"
-              onClick={() => {
-                console.log('CheckIn Process: Button Clicked');
-                toast.info("Button Clicked - Initiating...");
-                checkInMutation.mutate();
-              }}
-              disabled={!canCheckIn || checkInMutation.isPending || gettingLocation}
+              onClick={() => checkOutMutation.mutate()}
+              disabled={!canCheckOut || checkOutMutation.isPending}
               className={cn(
                 "flex-1 h-12 sm:h-14 rounded-xl font-bold text-base sm:text-lg shadow-lg transition-all",
-                canCheckIn
-                  ? "bg-white text-indigo-600 hover:bg-indigo-50"
-                  : "bg-indigo-900/50 text-indigo-400 cursor-not-allowed"
+                canCheckOut
+                  ? "bg-orange-500 hover:bg-orange-600 text-white border-2 border-transparent"
+                  : "bg-indigo-900/50 text-indigo-400 border-2 border-transparent cursor-not-allowed"
               )}
             >
-              <LogIn className="w-5 h-5 mr-2 sm:mr-3" />
-              {gettingLocation ? 'Locating...' : (todayRecord?.check_out && !canCheckIn ? 'Completed' : 'Check In')}
+              <LogOut className="w-5 h-5 mr-2 sm:mr-3" />
+              Check Out
             </Button>
-          )}
+          </div>
 
-          {locationPermissionDenied && (
-            <Button
-              size="lg"
-              onClick={() => getLocation()} // Retry
-              className="flex-1 h-12 sm:h-14 rounded-xl font-bold text-base sm:text-lg shadow-lg transition-all bg-red-600 hover:bg-red-700 text-white animate-pulse"
-            >
-              <MapPin className="w-5 h-5 mr-2 sm:mr-3" />
-              Enable Location
-            </Button>
-          )}
-
-          {/* Site Visit Button (Only if Checked In AND Sales AND No Active Visit) */}
-          {todayRecord?.status === 'checked_in' && !todayRecord.check_out && isSalesUser && !activeVisit && (
-            <Button
-              size="lg"
-              onClick={handleStartVisitClick}
-              disabled={locationPermissionDenied} // Disable if location denied
-              className={cn(
-                "flex-1 h-12 sm:h-14 rounded-xl font-bold text-base sm:text-lg shadow-lg transition-all text-white",
-                locationPermissionDenied
-                  ? "bg-slate-600 cursor-not-allowed"
-                  : "bg-emerald-600 hover:bg-emerald-700"
-              )}
-            >
-              <MapPin className="w-5 h-5 mr-2 sm:mr-3" />
-              Start Visit
-            </Button>
-          )}
-
-          <Button
-            size="lg"
-            onClick={() => checkOutMutation.mutate()}
-            disabled={!canCheckOut || checkOutMutation.isPending}
-            className={cn(
-              "flex-1 h-12 sm:h-14 rounded-xl font-bold text-base sm:text-lg shadow-lg transition-all",
-              canCheckOut
-                ? "bg-orange-500 hover:bg-orange-600 text-white border-2 border-transparent"
-                : "bg-indigo-900/50 text-indigo-400 border-2 border-transparent cursor-not-allowed"
-            )}
-          >
-            <LogOut className="w-5 h-5 mr-2 sm:mr-3" />
-            Check Out
-          </Button>
         </div>
+      </Card>
 
-      </div>
-    </Card>
-
-    <SalesVisitDialog
-      open={visitDialogOpen}
-      onOpenChange={setVisitDialogOpen}
-      user={user}
-      currentLocation={currentLocation}
-    />
-  </div>
-);
+      <SalesVisitDialog
+        open={visitDialogOpen}
+        onOpenChange={setVisitDialogOpen}
+        user={user}
+        currentLocation={currentLocation}
+      />
+    </div>
+  );
 }
