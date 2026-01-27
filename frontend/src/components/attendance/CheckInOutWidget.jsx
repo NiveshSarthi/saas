@@ -144,95 +144,86 @@ export default function CheckInOutWidget({ user, todayRecord, onUpdate }) {
     return () => clearInterval(timer);
   }, []);
 
+  const getLocation = (useHighAccuracy = true) => {
+    return new Promise((resolve) => {
+      console.log('CheckIn Process: Starting getLocation', { useHighAccuracy });
+      toast.info('Requesting location access...');
 
-  // Helper to wrap navigator.geolocation in a promise
-  const fetchPosition = (options) => {
-    return new Promise((resolve, reject) => {
-      navigator.geolocation.getCurrentPosition(resolve, reject, options);
-    });
-  };
+      if (!navigator.geolocation) {
+        console.error('CheckIn Process: Geolocation not supported');
+        toast.error('Location services not supported by your browser');
+        resolve(null);
+        return;
+      }
 
-  // Helper to add timeout to a promise
-  const withTimeout = (promise, ms) => {
-    return new Promise((resolve, reject) => {
-      const timer = setTimeout(() => {
-        reject(new Error('Location request timed out'));
-      }, ms);
-
-      promise
-        .then((res) => {
-          clearTimeout(timer);
-          resolve(res);
-        })
-        .catch((err) => {
-          clearTimeout(timer);
-          reject(err);
-        });
-    });
-  };
-
-  const getLocation = async () => {
-    console.log('CheckIn Process: getLocation handling started');
-    toast.info('Requesting location...');
-    setGettingLocation(true);
-    setLocationPermissionDenied(false);
-
-    if (!navigator.geolocation) {
-      toast.error('Location services not supported');
-      setGettingLocation(false);
-      return null;
-    }
-
-    try {
-      // Try High Accuracy First (5s timeout)
-      console.log('CheckIn Process: Trying High Accuracy');
-      const pos = await withTimeout(
-        fetchPosition({ enableHighAccuracy: true, timeout: 5000, maximumAge: 0 }),
-        6000 // 6s safety timeout wrapper
-      );
-
-      console.log('CheckIn Process: High Accuracy Success', pos);
-      return {
-        latitude: pos.coords.latitude,
-        longitude: pos.coords.longitude,
-        accuracy: pos.coords.accuracy
+      const options = {
+        timeout: useHighAccuracy ? 10000 : 5000, // Increased timeout slightly
+        enableHighAccuracy: useHighAccuracy,
+        maximumAge: 0 // Force fresh location
       };
 
-    } catch (err) {
-      console.warn('CheckIn Process: High Accuracy Failed/Timed out', err);
-      toast.info('High accuracy failed, trying standard location...');
+      const successCallback = (position) => {
+        console.log('CheckIn Process: Location success', position);
+        setGettingLocation(false);
+        resolve({
+          latitude: position.coords.latitude,
+          longitude: position.coords.longitude,
+          accuracy: position.coords.accuracy
+        });
+      };
 
-      // Try Low Accuracy Fallback (5s timeout)
-      try {
-        console.log('CheckIn Process: Trying Low Accuracy');
-        const pos = await withTimeout(
-          fetchPosition({ enableHighAccuracy: false, timeout: 5000, maximumAge: 0 }),
-          6000
-        );
+      const errorCallback = async (error) => {
+        console.warn('CheckIn Process: Location error', error.code, error.message);
 
-        console.log('CheckIn Process: Low Accuracy Success', pos);
-        return {
-          latitude: pos.coords.latitude,
-          longitude: pos.coords.longitude,
-          accuracy: pos.coords.accuracy
-        };
-      } catch (finalErr) {
-        console.error('CheckIn Process: All location attempts failed', finalErr);
-
-        if (finalErr.code === 1) { // Permission Denied
+        if (error.code === 1) { // Permission Denied
+          setGettingLocation(false);
           setLocationPermissionDenied(true);
-          toast.error('Location permission denied.');
+          toast.error('Location access denied. Please enable it in browser settings.');
+          resolve(null);
+        } else if (useHighAccuracy) {
+          // Fallback to standard accuracy
+          console.log('CheckIn Process: High accuracy failed, retrying with low accuracy...');
+          toast.loading('High accuracy failed, trying standard location...');
+          const standardLocation = await getLocation(false);
+          resolve(standardLocation);
         } else {
-          toast.error('Could not determine location. Please ensure GPS is on.');
+          setGettingLocation(false);
+          toast.error(`Location failed: ${error.message}`);
+          resolve(null);
         }
-        return null;
-      }
-    } finally {
-      console.log('CheckIn Process: getLocation cleanup');
-      setGettingLocation(false);
-    }
-  };
+      };
 
+      // Safety timeout in case the browser's geolocation API hangs (happens on some Windows devices)
+      const safetyTimeout = setTimeout(() => {
+        console.error('CheckIn Process: Safety timeout triggered');
+        if (useHighAccuracy) {
+          // Try fallback
+          // We can't easily cancel the pending geolocation request, but we can resolve this promise
+          // The errorCallback might still fire later but we've already resolved.
+          // Ideally we just treat it as a fail or fallback here.
+          console.log('CheckIn Process: Triggering fallback due to timeout');
+          // We'll let the fallback logic handle it by simulating an error or just recursively calling
+          getLocation(false).then(resolve);
+        } else {
+          setGettingLocation(false);
+          toast.error('Location request timed out. Please check your GPS.');
+          resolve(null);
+        }
+      }, 12000); // 12 seconds total timeout (slightly longer than options.timeout)
+
+      navigator.geolocation.getCurrentPosition(
+        (pos) => {
+          clearTimeout(safetyTimeout);
+          successCallback(pos);
+        },
+        (err) => {
+          clearTimeout(safetyTimeout);
+          errorCallback(err);
+        },
+        options
+      );
+    });
+  };
 
   const checkInMutation = useMutation({
     mutationFn: async () => {
@@ -303,6 +294,7 @@ export default function CheckInOutWidget({ user, todayRecord, onUpdate }) {
         console.log('CheckIn Process: Saving to Database...', attendanceData);
         toast.info('Saving attendance...');
 
+        let dbResponse;
         if (todayRecord) {
           dbResponse = await base44.entities.Attendance.update(todayRecord.id, attendanceData);
         } else {
