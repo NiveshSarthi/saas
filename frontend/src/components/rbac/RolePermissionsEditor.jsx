@@ -50,7 +50,8 @@ const MODULE_CONFIG = {
   cash_flow: { label: 'Cash Flow Forecast', icon: DollarSign },
   financial_reports: { label: 'Financial Reports', icon: PieChart },
   marketing_expenses: { label: 'Marketing Expenses', icon: CreditCard },
-  salary_management: { label: 'Salary Management', icon: BadgeDollarSign }
+  salary_management: { label: 'Salary Management', icon: BadgeDollarSign },
+  leads: { label: 'Leads', icon: Trophy }
 };
 
 const ACTION_CONFIG = {
