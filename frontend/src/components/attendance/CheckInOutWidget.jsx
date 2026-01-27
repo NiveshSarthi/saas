@@ -142,8 +142,12 @@ export default function CheckInOutWidget({ user, todayRecord, onUpdate }) {
 
   const getLocation = (useHighAccuracy = true) => {
     return new Promise((resolve) => {
+      console.log('CheckIn Process: Starting getLocation', { useHighAccuracy });
+      toast.info('Requesting location access...');
+
       if (!navigator.geolocation) {
-        toast.error('Location services not available');
+        console.error('CheckIn Process: Geolocation not supported');
+        toast.error('Location services not supported by your browser');
         resolve(null);
         return;
       }
@@ -152,36 +156,68 @@ export default function CheckInOutWidget({ user, todayRecord, onUpdate }) {
       setLocationPermissionDenied(false);
 
       const options = {
-        timeout: useHighAccuracy ? 8000 : 5000,
+        timeout: useHighAccuracy ? 10000 : 5000, // Increased timeout slightly
         enableHighAccuracy: useHighAccuracy,
-        maximumAge: 30000 // Use cached location if it's fresh (30s)
+        maximumAge: 0 // Force fresh location
       };
 
-      navigator.geolocation.getCurrentPosition(
-        (position) => {
+      const successCallback = (position) => {
+        console.log('CheckIn Process: Location success', position);
+        setGettingLocation(false);
+        resolve({
+          latitude: position.coords.latitude,
+          longitude: position.coords.longitude,
+          accuracy: position.coords.accuracy
+        });
+      };
+
+      const errorCallback = async (error) => {
+        console.warn('CheckIn Process: Location error', error.code, error.message);
+
+        if (error.code === 1) { // Permission Denied
           setGettingLocation(false);
-          resolve({
-            latitude: position.coords.latitude,
-            longitude: position.coords.longitude,
-            accuracy: position.coords.accuracy
-          });
+          setLocationPermissionDenied(true);
+          toast.error('Location access denied. Please enable it in browser settings.');
+          resolve(null);
+        } else if (useHighAccuracy) {
+          // Fallback to standard accuracy
+          console.log('CheckIn Process: High accuracy failed, retrying with low accuracy...');
+          toast.loading('High accuracy failed, trying standard location...');
+          const standardLocation = await getLocation(false);
+          resolve(standardLocation);
+        } else {
+          setGettingLocation(false);
+          toast.error(`Location failed: ${error.message}`);
+          resolve(null);
+        }
+      };
+
+      // Safety timeout in case the browser's geolocation API hangs (happens on some Windows devices)
+      const safetyTimeout = setTimeout(() => {
+        console.error('CheckIn Process: Safety timeout triggered');
+        if (useHighAccuracy) {
+          // Try fallback
+          // We can't easily cancel the pending geolocation request, but we can resolve this promise
+          // The errorCallback might still fire later but we've already resolved.
+          // Ideally we just treat it as a fail or fallback here.
+          console.log('CheckIn Process: Triggering fallback due to timeout');
+          // We'll let the fallback logic handle it by simulating an error or just recursively calling
+          getLocation(false).then(resolve);
+        } else {
+          setGettingLocation(false);
+          toast.error('Location request timed out. Please check your GPS.');
+          resolve(null);
+        }
+      }, 12000); // 12 seconds total timeout (slightly longer than options.timeout)
+
+      navigator.geolocation.getCurrentPosition(
+        (pos) => {
+          clearTimeout(safetyTimeout);
+          successCallback(pos);
         },
-        async (error) => {
-          if (error.code === 1) { // Permission Denied
-            setGettingLocation(false);
-            setLocationPermissionDenied(true);
-            toast.error('Location access is required for attendance.');
-            resolve(null);
-          } else if (useHighAccuracy) {
-            // Fallback to standard accuracy if high accuracy fails/times out
-            console.warn('High accuracy location failed, trying standard accuracy...');
-            const standardLocation = await getLocation(false);
-            resolve(standardLocation);
-          } else {
-            setGettingLocation(false);
-            console.warn('Location detection failed:', error.message);
-            resolve(null);
-          }
+        (err) => {
+          clearTimeout(safetyTimeout);
+          errorCallback(err);
         },
         options
       );
