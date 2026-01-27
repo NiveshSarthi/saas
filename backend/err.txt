@@ -1,0 +1,75 @@
+node : 
+node:events:502
+At line:1 char:1
++ node server.js 
+2>&1 | Out-File 
+-FilePath err.txt 
+-Encoding ascii
++ ~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo   
+           : NotSpe  
+  cified: (node:ev   
+ ents:502:String)    
+ [], RemoteExcep    
+tion
+    + FullyQualified 
+   ErrorId : Native  
+  CommandError
+ 
+      throw er; // 
+Unhandled 'error' 
+event
+      ^
+
+Error: listen 
+EADDRINUSE: address 
+already in use 
+:::3000
+    at Server.setupLi
+stenHandle [as 
+_listen2] 
+(node:net:1908:16)
+    at 
+listenInCluster 
+(node:net:1965:12)
+    at Server.listen 
+(node:net:2067:7)
+    at 
+Function.listen (C:\U
+sers\840-G5\saasnew\s
+aas\backend\node_modu
+les\express\lib\appli
+cation.js:635:24)
+    at file:///C:/Use
+rs/840-G5/saasnew/saa
+s/backend/server.js:1
+73:5
+    at ModuleJob.run 
+(node:internal/module
+s/esm/module_job:325:
+25)
+    at async 
+ModuleLoader.import (
+node:internal/modules
+/esm/loader:606:24)
+    at async asyncRun
+EntryPointWithESMLoad
+er (node:internal/mod
+ules/run_main:117:5)
+Emitted 'error' 
+event on Server 
+instance at:
+    at emitErrorNT 
+(node:net:1944:8)
+    at process.proces
+sTicksAndRejections (
+node:internal/process
+/task_queues:82:21) {
+  code: 'EADDRINUSE',
+  errno: -4091,
+  syscall: 'listen',
+  address: '::',
+  port: 3000
+}
+
+Node.js v20.19.6

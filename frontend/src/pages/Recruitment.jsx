@@ -19,7 +19,8 @@ import {
   Filter,
   UserPlus,
   Clock,
-  Edit
+  Edit,
+  Loader2
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -65,6 +66,7 @@ export default function Recruitment() {
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState('all');
   const [uploading, setUploading] = useState(false);
+  const [parsingResume, setParsingResume] = useState(false);
   const queryClient = useQueryClient();
 
   const [candidateForm, setCandidateForm] = useState({
@@ -135,9 +137,27 @@ export default function Recruitment() {
       // Handle file upload if resume is provided
       let resumeUrl = null;
       if (candidateData.resume) {
-        // In a real implementation, you'd upload the file to a storage service
-        // For now, we'll just store the filename
-        resumeUrl = candidateData.resume.name;
+        try {
+          const formData = new FormData();
+          formData.append('resume', candidateData.resume);
+          const API_BASE = import.meta.env.VITE_BACKEND_URL || 'http://localhost:3000';
+
+          const uploadRes = await fetch(`${API_BASE}/functions/v1/invoke/uploadResume`, {
+            method: 'POST',
+            body: formData
+          });
+
+          const uploadData = await uploadRes.json();
+          if (uploadData.success && uploadData.url) {
+            // Ensure URL is absolute for viewing
+            resumeUrl = `${API_BASE}${uploadData.url}`;
+          } else {
+            console.error('Upload failed:', uploadData);
+          }
+        } catch (uploadErr) {
+          console.error('Resume upload error:', uploadErr);
+          toast.error('Failed to upload resume file');
+        }
       }
 
       const data = {
@@ -331,10 +351,55 @@ export default function Recruitment() {
     return <Badge className={config.color}>{config.label}</Badge>;
   };
 
-  const handleFileUpload = (event) => {
-    const file = event.target.files[0];
-    if (file) {
-      setCandidateForm(prev => ({ ...prev, resume: file }));
+  const handleFileUpload = async (event) => {
+    try {
+      const file = event.target.files[0];
+      if (file) {
+        setCandidateForm(prev => ({ ...prev, resume: file }));
+        setParsingResume(true);
+        const toastId = toast.loading('Parsing resume...');
+
+        try {
+          const formData = new FormData();
+          formData.append('resume', file);
+
+          const API_BASE = import.meta.env.VITE_BACKEND_URL || 'http://localhost:3000';
+          const response = await fetch(`${API_BASE}/functions/v1/invoke/parseResume`, {
+            method: 'POST',
+            body: formData
+          });
+
+          const result = await response.json();
+
+          if (result.success && result.data) {
+            const data = result.data;
+            setCandidateForm(prev => ({
+              ...prev,
+              full_name: data.full_name || prev.full_name,
+              email: data.email || prev.email,
+              phone: data.phone || prev.phone,
+              current_position: data.current_position || prev.current_position,
+              current_company: data.current_company || prev.current_company,
+              experience_years: data.experience_years || prev.experience_years,
+              skills: data.skills || prev.skills,
+              education: data.education || prev.education,
+              location: data.location || prev.location,
+              expected_salary: data.expected_salary || prev.expected_salary,
+              current_salary: data.current_salary || prev.current_salary
+            }));
+            toast.success('Information extracted from resume!', { id: toastId });
+          } else {
+            toast.error(result.error || 'Failed to parse resume', { id: toastId });
+          }
+        } catch (error) {
+          console.error('Resume Parse Error:', error);
+          toast.error('Error parsing resume', { id: toastId });
+        } finally {
+          setParsingResume(false);
+        }
+      }
+    } catch (e) {
+      console.error('File upload error:', e);
     }
   };
 
@@ -696,6 +761,26 @@ export default function Recruitment() {
             }
           }}>
             <div className="space-y-4">
+              <div className="relative mb-4">
+                <Label htmlFor="resume">Resume/CV (Upload to Auto-fill)</Label>
+                <div className="relative mt-1">
+                  <Input
+                    id="resume"
+                    type="file"
+                    accept=".pdf,.doc,.docx"
+                    onChange={handleFileUpload}
+                    disabled={parsingResume}
+                    className={parsingResume ? "pr-10" : ""}
+                  />
+                  {parsingResume && (
+                    <div className="absolute right-3 top-1/2 -translate-y-1/2">
+                      <Loader2 className="w-4 h-4 animate-spin text-blue-600" />
+                    </div>
+                  )}
+                </div>
+              </div>
+
+
               <div className="grid grid-cols-2 gap-4">
                 <div>
                   <Label htmlFor="full_name">Full Name *</Label>
@@ -807,7 +892,7 @@ export default function Recruitment() {
                 />
               </div>
 
-              <div className="grid grid-cols-3 gap-4">
+              <div className="grid grid-cols-2 gap-4">
                 <div>
                   <Label htmlFor="source">Source</Label>
                   <Select
@@ -840,15 +925,6 @@ export default function Recruitment() {
                       <SelectItem value="high">High</SelectItem>
                     </SelectContent>
                   </Select>
-                </div>
-                <div>
-                  <Label htmlFor="resume">Resume/CV</Label>
-                  <Input
-                    id="resume"
-                    type="file"
-                    accept=".pdf,.doc,.docx"
-                    onChange={handleFileUpload}
-                  />
                 </div>
               </div>
 
@@ -1118,6 +1194,6 @@ export default function Recruitment() {
           )}
         </DialogContent>
       </Dialog>
-    </div>
+    </div >
   );
 }

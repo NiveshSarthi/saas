@@ -90,15 +90,22 @@ export default function UserManagement() {
   const [newPassword, setNewPassword] = useState('');
 
   const queryClient = useQueryClient();
-  const { can, isAdmin } = usePermissions();
+  const { can, isAdmin, user: permissionsUser } = usePermissions();
+
+  const isHRDept = currentUser?.department_name?.toLowerCase().includes('hr') ||
+    currentUser?.department_id === 'dept_hr';
+  const isAdminDept = currentUser?.department_name?.toLowerCase().includes('admin') ||
+    currentUser?.department_id === 'dept_hr';
 
   // Permission checks
-  const canCreateUsers = can('users', 'create') || isAdmin();
-  const canManagePassword = can('users', 'manage_password') || isAdmin();
+  const canCreateUsers = can('users', 'create') || isAdmin() || isHRDept || isAdminDept;
+  const canManagePassword = can('users', 'manage_password') || isAdmin() || isHRDept || isAdminDept;
+  const hasAccess = can('users', 'read') || isAdmin() || isHRDept || isAdminDept;
 
   const { data: users = [], isLoading } = useQuery({
     queryKey: ['users'],
     queryFn: () => base44.entities.User.list('-created_date', 2000),
+    enabled: !!hasAccess
   });
 
   const { data: roles = [] } = useQuery({
@@ -549,488 +556,1041 @@ export default function UserManagement() {
     );
   }
 
-  return (
-    <ProtectedRoute module="users" action="read">
-      <div className="p-3 sm:p-4 md:p-6 lg:p-8 space-y-4 sm:space-y-6 overflow-x-hidden w-full">
-        {/* Header */}
-        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 sm:gap-4">
-          <div className="min-w-0">
-            <h1 className="text-xl sm:text-2xl font-bold text-slate-900">User Management</h1>
-            <p className="text-xs sm:text-sm text-slate-500">{allUsers.length} members</p>
-          </div>
-          <div className="flex gap-2 flex-wrap w-full sm:w-auto">
-            <Button
-              variant="outline"
-              onClick={() => activateAllMutation.mutate()}
-              disabled={activateAllMutation.isPending}
-            >
-              <Power className="w-4 h-4 mr-2" />
-              Activate All Inactive
-            </Button>
-            {canCreateUsers && (
-              <>
-                <Button
-                  variant="outline"
-                  onClick={() => setShowAddMemberDialog(true)}
-                  className="border-emerald-600 text-emerald-600 hover:bg-emerald-50"
-                >
-                  <Plus className="w-4 h-4 mr-2" />
-                  Add Member
-                </Button>
-                <Button
-                  onClick={() => setShowInviteDialog(true)}
-                  className="bg-indigo-600 hover:bg-indigo-700"
-                >
-                  <UserPlus className="w-4 h-4 mr-2" />
-                  Invite User
-                </Button>
-              </>
-            )}
-          </div>
+  if (!hasAccess && !isLoading) {
+    return (
+      <div className="flex flex-col items-center justify-center min-h-[60vh] text-center p-6 space-y-6">
+        <div className="w-20 h-20 rounded-full bg-red-100 flex items-center justify-center">
+          <Shield className="w-10 h-10 text-red-600" />
         </div>
+        <div className="max-w-md">
+          <h1 className="text-2xl font-bold text-slate-900 mb-2">Access Denied</h1>
+          <p className="text-slate-500 mb-6">
+            You don't have permission to access User Management.
+            This page is restricted to HR and Administration departments.
+          </p>
+          <Link to={createPageUrl('Dashboard')}>
+            <Button variant="default">Go to Dashboard</Button>
+          </Link>
+        </div>
+      </div>
+    );
+  }
 
-        <Tabs defaultValue="users">
-          <TabsList>
-            <TabsTrigger value="users">All Members ({allUsers.length})</TabsTrigger>
-            <TabsTrigger value="invitations">
-              Pending Invitations ({pendingInvitations.length})
-            </TabsTrigger>
-          </TabsList>
+  return (
+    <div className="p-3 sm:p-4 md:p-6 lg:p-8 space-y-4 sm:space-y-6 overflow-x-hidden w-full">
+      {/* Header */}
+      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 sm:gap-4">
+        <div className="min-w-0">
+          <h1 className="text-xl sm:text-2xl font-bold text-slate-900">User Management</h1>
+          <p className="text-xs sm:text-sm text-slate-500">{allUsers.length} members</p>
+        </div>
+        <div className="flex gap-2 flex-wrap w-full sm:w-auto">
+          <Button
+            variant="outline"
+            onClick={() => activateAllMutation.mutate()}
+            disabled={activateAllMutation.isPending}
+          >
+            <Power className="w-4 h-4 mr-2" />
+            Activate All Inactive
+          </Button>
+          {canCreateUsers && (
+            <>
+              <Button
+                variant="outline"
+                onClick={() => setShowAddMemberDialog(true)}
+                className="border-emerald-600 text-emerald-600 hover:bg-emerald-50"
+              >
+                <Plus className="w-4 h-4 mr-2" />
+                Add Member
+              </Button>
+              <Button
+                onClick={() => setShowInviteDialog(true)}
+                className="bg-indigo-600 hover:bg-indigo-700"
+              >
+                <UserPlus className="w-4 h-4 mr-2" />
+                Invite User
+              </Button>
+            </>
+          )}
+        </div>
+      </div>
 
-          <TabsContent value="users" className="mt-4">
-            {/* Filters & Search */}
-            <div className="flex flex-col sm:flex-row gap-3 mb-4">
-              <div className="relative flex-1 max-w-md">
-                <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
-                <Input
-                  placeholder="Search users..."
-                  value={search}
-                  onChange={(e) => setSearch(e.target.value)}
-                  className="pl-9"
-                />
-              </div>
-              <Select value={roleFilter} onValueChange={setRoleFilter}>
-                <SelectTrigger className="w-[160px]">
-                  <Shield className="w-4 h-4 mr-2 text-slate-400" />
-                  <SelectValue placeholder="All Roles" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">All Roles</SelectItem>
-                  {roles.map(role => (
-                    <SelectItem key={role.id || role._id} value={role.id || role._id}>{role.name}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-              <Select value={statusFilter} onValueChange={setStatusFilter}>
-                <SelectTrigger className="w-[140px]">
-                  <Filter className="w-4 h-4 mr-2 text-slate-400" />
-                  <SelectValue placeholder="All Status" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">All Status</SelectItem>
-                  <SelectItem value="active">Active</SelectItem>
-                  <SelectItem value="inactive">Inactive</SelectItem>
-                </SelectContent>
-              </Select>
-              <Button variant="outline" onClick={exportUsers}>
-                <Download className="w-4 h-4 mr-2" />
-                Export
+      <Tabs defaultValue="users">
+        <TabsList>
+          <TabsTrigger value="users">All Members ({allUsers.length})</TabsTrigger>
+          <TabsTrigger value="invitations">
+            Pending Invitations ({pendingInvitations.length})
+          </TabsTrigger>
+        </TabsList>
+
+        <TabsContent value="users" className="mt-4">
+          {/* Filters & Search */}
+          <div className="flex flex-col sm:flex-row gap-3 mb-4">
+            <div className="relative flex-1 max-w-md">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+              <Input
+                placeholder="Search users..."
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                className="pl-9"
+              />
+            </div>
+            <Select value={roleFilter} onValueChange={setRoleFilter}>
+              <SelectTrigger className="w-[160px]">
+                <Shield className="w-4 h-4 mr-2 text-slate-400" />
+                <SelectValue placeholder="All Roles" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All Roles</SelectItem>
+                {roles.map(role => (
+                  <SelectItem key={role.id || role._id} value={role.id || role._id}>{role.name}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            <Select value={statusFilter} onValueChange={setStatusFilter}>
+              <SelectTrigger className="w-[140px]">
+                <Filter className="w-4 h-4 mr-2 text-slate-400" />
+                <SelectValue placeholder="All Status" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All Status</SelectItem>
+                <SelectItem value="active">Active</SelectItem>
+                <SelectItem value="inactive">Inactive</SelectItem>
+              </SelectContent>
+            </Select>
+            <Button variant="outline" onClick={exportUsers}>
+              <Download className="w-4 h-4 mr-2" />
+              Export
+            </Button>
+          </div>
+
+          {/* Bulk Actions */}
+          {selectedUsers.length > 0 && (
+            <div className="flex items-center gap-3 mb-4 p-3 bg-indigo-50 rounded-lg border border-indigo-200">
+              <span className="text-sm font-medium text-indigo-700">
+                {selectedUsers.length} selected
+              </span>
+              <Button size="sm" variant="outline" onClick={handleBulkActivate}>
+                <Power className="w-3 h-3 mr-1" />
+                Activate
+              </Button>
+              <Button size="sm" variant="outline" className="text-red-600" onClick={handleBulkDeactivate}>
+                <PowerOff className="w-3 h-3 mr-1" />
+                Deactivate
+              </Button>
+              <Button
+                size="sm"
+                variant="outline"
+                className="text-red-600 hover:bg-red-50 border-red-300"
+                onClick={() => setBulkDeleteDialogOpen(true)}
+              >
+                <Trash2 className="w-3 h-3 mr-1" />
+                Delete
+              </Button>
+              <Button size="sm" variant="ghost" onClick={() => setSelectedUsers([])}>
+                Clear
               </Button>
             </div>
+          )}
 
-            {/* Bulk Actions */}
-            {selectedUsers.length > 0 && (
-              <div className="flex items-center gap-3 mb-4 p-3 bg-indigo-50 rounded-lg border border-indigo-200">
-                <span className="text-sm font-medium text-indigo-700">
-                  {selectedUsers.length} selected
-                </span>
-                <Button size="sm" variant="outline" onClick={handleBulkActivate}>
-                  <Power className="w-3 h-3 mr-1" />
-                  Activate
-                </Button>
-                <Button size="sm" variant="outline" className="text-red-600" onClick={handleBulkDeactivate}>
-                  <PowerOff className="w-3 h-3 mr-1" />
-                  Deactivate
-                </Button>
-                <Button
-                  size="sm"
-                  variant="outline"
-                  className="text-red-600 hover:bg-red-50 border-red-300"
-                  onClick={() => setBulkDeleteDialogOpen(true)}
-                >
-                  <Trash2 className="w-3 h-3 mr-1" />
-                  Delete
-                </Button>
-                <Button size="sm" variant="ghost" onClick={() => setSelectedUsers([])}>
-                  Clear
-                </Button>
-              </div>
-            )}
-
-            {/* Users Table */}
-            <div className="bg-white rounded-lg sm:rounded-xl border border-slate-200 overflow-hidden">
-              <div className="overflow-x-auto scrollbar-thin -webkit-overflow-scrolling-touch">
-                <table className="w-full min-w-[900px]">
-                  <thead className="bg-slate-50">
-                    <tr>
-                      <th className="px-4 py-3 text-left">
+          {/* Users Table */}
+          <div className="bg-white rounded-lg sm:rounded-xl border border-slate-200 overflow-hidden">
+            <div className="overflow-x-auto scrollbar-thin -webkit-overflow-scrolling-touch">
+              <table className="w-full min-w-[900px]">
+                <thead className="bg-slate-50">
+                  <tr>
+                    <th className="px-4 py-3 text-left">
+                      <Checkbox
+                        checked={selectedUsers.length === filteredUsers.length && filteredUsers.length > 0}
+                        onCheckedChange={handleSelectAll}
+                      />
+                    </th>
+                    <th className="px-4 py-3 text-left text-xs font-semibold text-slate-600 uppercase">User</th>
+                    <th className="px-4 py-3 text-left text-xs font-semibold text-slate-600 uppercase">Role</th>
+                    <th className="px-4 py-3 text-left text-xs font-semibold text-slate-600 uppercase">Department</th>
+                    <th className="px-4 py-3 text-left text-xs font-semibold text-slate-600 uppercase">Job Title</th>
+                    <th className="px-4 py-3 text-left text-xs font-semibold text-slate-600 uppercase">Reports To</th>
+                    <th className="px-4 py-3 text-left text-xs font-semibold text-slate-600 uppercase">Status</th>
+                    <th className="px-4 py-3 text-left text-xs font-semibold text-slate-600 uppercase">Projects</th>
+                    <th className="px-4 py-3 text-left text-xs font-semibold text-slate-600 uppercase">Last Login</th>
+                    <th className="px-4 py-3 text-right text-xs font-semibold text-slate-600 uppercase">Actions</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-100">
+                  {filteredUsers.map(user => (
+                    <tr key={user.id || user._id} className={cn("hover:bg-slate-50", selectedUsers.includes(user.id || user._id) && "bg-indigo-50")}>
+                      <td className="px-4 py-3">
                         <Checkbox
-                          checked={selectedUsers.length === filteredUsers.length && filteredUsers.length > 0}
-                          onCheckedChange={handleSelectAll}
+                          checked={selectedUsers.includes(user.id)}
+                          onCheckedChange={(checked) => handleSelectUser(user.id, checked)}
                         />
-                      </th>
-                      <th className="px-4 py-3 text-left text-xs font-semibold text-slate-600 uppercase">User</th>
-                      <th className="px-4 py-3 text-left text-xs font-semibold text-slate-600 uppercase">Role</th>
-                      <th className="px-4 py-3 text-left text-xs font-semibold text-slate-600 uppercase">Department</th>
-                      <th className="px-4 py-3 text-left text-xs font-semibold text-slate-600 uppercase">Job Title</th>
-                      <th className="px-4 py-3 text-left text-xs font-semibold text-slate-600 uppercase">Reports To</th>
-                      <th className="px-4 py-3 text-left text-xs font-semibold text-slate-600 uppercase">Status</th>
-                      <th className="px-4 py-3 text-left text-xs font-semibold text-slate-600 uppercase">Projects</th>
-                      <th className="px-4 py-3 text-left text-xs font-semibold text-slate-600 uppercase">Last Login</th>
-                      <th className="px-4 py-3 text-right text-xs font-semibold text-slate-600 uppercase">Actions</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-slate-100">
-                    {filteredUsers.map(user => (
-                      <tr key={user.id || user._id} className={cn("hover:bg-slate-50", selectedUsers.includes(user.id || user._id) && "bg-indigo-50")}>
-                        <td className="px-4 py-3">
-                          <Checkbox
-                            checked={selectedUsers.includes(user.id)}
-                            onCheckedChange={(checked) => handleSelectUser(user.id, checked)}
-                          />
-                        </td>
-                        <td className="px-4 py-3">
-                          <div className="flex items-center gap-3">
-                            <Avatar className="w-9 h-9">
-                              <AvatarFallback className="bg-indigo-100 text-indigo-600 text-sm">
-                                {user.full_name?.[0] || user.email?.[0]?.toUpperCase()}
-                              </AvatarFallback>
-                            </Avatar>
-                            <div>
-                              <p className="font-medium text-slate-900">{getUserDisplayName(user)}</p>
-                              <p className="text-xs text-slate-500">{user.email}</p>
-                            </div>
+                      </td>
+                      <td className="px-4 py-3">
+                        <div className="flex items-center gap-3">
+                          <Avatar className="w-9 h-9">
+                            <AvatarFallback className="bg-indigo-100 text-indigo-600 text-sm">
+                              {user.full_name?.[0] || user.email?.[0]?.toUpperCase()}
+                            </AvatarFallback>
+                          </Avatar>
+                          <div>
+                            <p className="font-medium text-slate-900">{getUserDisplayName(user)}</p>
+                            <p className="text-xs text-slate-500">{user.email}</p>
                           </div>
-                        </td>
-                        <td className="px-4 py-3">
-                          <Badge variant="outline" className="flex items-center gap-1 w-fit">
-                            <Shield className="w-3 h-3" />
-                            {getRoleName(user.role_id)}
-                          </Badge>
-                        </td>
-                        <td className="px-4 py-3">
-                          <span className="text-sm text-slate-600">
-                            {getDepartmentName(user.department_id)}
-                          </span>
-                        </td>
-                        <td className="px-4 py-3">
-                          <span className="text-sm text-slate-600">
-                            {user.job_title || '-'}
-                          </span>
-                        </td>
-                        <td className="px-4 py-3">
-                          <span className="text-sm text-slate-600">
-                            {user.reports_to ? (allUsers.find(u => u.email?.toLowerCase() === user.reports_to?.toLowerCase())?.full_name || user.reports_to) : '-'}
-                          </span>
-                        </td>
-                        <td className="px-4 py-3">
-                          <div className="flex items-center gap-2">
-                            <Switch
-                              checked={isUserActive(user)}
-                              onCheckedChange={(checked) => {
-                                if (user.type === 'invitation') {
-                                  toggleInvitationActiveMutation.mutate({ id: user.id, active: checked });
-                                } else {
-                                  toggleUserActiveMutation.mutate({
-                                    userId: user.id,
-                                    active: checked,
-                                    user
-                                  });
-                                }
-                              }}
-                              disabled={user.id === currentUser?.id}
-                            />
-                            <Badge className={cn(
-                              "text-xs",
-                              isUserActive(user)
-                                ? "bg-emerald-100 text-emerald-700"
-                                : "bg-slate-100 text-slate-600"
-                            )}>
-                              {user.type === 'invitation'
-                                ? (user.status === 'active' ? 'Active' : (user.status === 'inactive' ? 'Revoked' : 'Invited'))
-                                : (isUserActive(user) ? 'Active' : 'Inactive')
+                        </div>
+                      </td>
+                      <td className="px-4 py-3">
+                        <Badge variant="outline" className="flex items-center gap-1 w-fit">
+                          <Shield className="w-3 h-3" />
+                          {getRoleName(user.role_id)}
+                        </Badge>
+                      </td>
+                      <td className="px-4 py-3">
+                        <span className="text-sm text-slate-600">
+                          {getDepartmentName(user.department_id)}
+                        </span>
+                      </td>
+                      <td className="px-4 py-3">
+                        <span className="text-sm text-slate-600">
+                          {user.job_title || '-'}
+                        </span>
+                      </td>
+                      <td className="px-4 py-3">
+                        <span className="text-sm text-slate-600">
+                          {user.reports_to ? (allUsers.find(u => u.email?.toLowerCase() === user.reports_to?.toLowerCase())?.full_name || user.reports_to) : '-'}
+                        </span>
+                      </td>
+                      <td className="px-4 py-3">
+                        <div className="flex items-center gap-2">
+                          <Switch
+                            checked={isUserActive(user)}
+                            onCheckedChange={(checked) => {
+                              if (user.type === 'invitation') {
+                                toggleInvitationActiveMutation.mutate({ id: user.id, active: checked });
+                              } else {
+                                toggleUserActiveMutation.mutate({
+                                  userId: user.id,
+                                  active: checked,
+                                  user
+                                });
                               }
-                            </Badge>
-                          </div>
-                        </td>
-                        <td className="px-4 py-3">
-                          <span className="text-sm text-slate-600">
-                            {user.project_ids?.length || 0} projects
-                          </span>
-                        </td>
-                        <td className="px-4 py-3">
-                          <span className="text-sm text-slate-500">
-                            {user.last_login
-                              ? format(new Date(user.last_login), 'MMM d, yyyy')
-                              : 'Never'
+                            }}
+                            disabled={user.id === currentUser?.id}
+                          />
+                          <Badge className={cn(
+                            "text-xs",
+                            isUserActive(user)
+                              ? "bg-emerald-100 text-emerald-700"
+                              : "bg-slate-100 text-slate-600"
+                          )}>
+                            {user.type === 'invitation'
+                              ? (user.status === 'active' ? 'Active' : (user.status === 'inactive' ? 'Revoked' : 'Invited'))
+                              : (isUserActive(user) ? 'Active' : 'Inactive')
                             }
-                          </span>
-                        </td>
-                        <td className="px-4 py-3 text-right">
-                          <DropdownMenu>
-                            <DropdownMenuTrigger asChild>
-                              <Button variant="ghost" size="icon" className="w-8 h-8">
-                                <MoreHorizontal className="w-4 h-4" />
-                              </Button>
-                            </DropdownMenuTrigger>
-                            <DropdownMenuContent align="end">
-                              <DropdownMenuItem onClick={() => setEditingUser({ ...user, reports_to: user.reports_to || '' })}>
-                                <Edit className="w-4 h-4 mr-2" />
-                                Edit Member
+                          </Badge>
+                        </div>
+                      </td>
+                      <td className="px-4 py-3">
+                        <span className="text-sm text-slate-600">
+                          {user.project_ids?.length || 0} projects
+                        </span>
+                      </td>
+                      <td className="px-4 py-3">
+                        <span className="text-sm text-slate-500">
+                          {user.last_login
+                            ? format(new Date(user.last_login), 'MMM d, yyyy')
+                            : 'Never'
+                          }
+                        </span>
+                      </td>
+                      <td className="px-4 py-3 text-right">
+                        <DropdownMenu>
+                          <DropdownMenuTrigger asChild>
+                            <Button variant="ghost" size="icon" className="w-8 h-8">
+                              <MoreHorizontal className="w-4 h-4" />
+                            </Button>
+                          </DropdownMenuTrigger>
+                          <DropdownMenuContent align="end">
+                            <DropdownMenuItem onClick={() => setEditingUser({ ...user, reports_to: user.reports_to || '' })}>
+                              <Edit className="w-4 h-4 mr-2" />
+                              Edit Member
+                            </DropdownMenuItem>
+
+                            {user.type === 'invitation' && user.status === 'invited' && (
+                              <DropdownMenuItem onClick={() => resendInvitationMutation.mutate(user)}>
+                                <Send className="w-4 h-4 mr-2" />
+                                Resend Invite
                               </DropdownMenuItem>
+                            )}
 
-                              {user.type === 'invitation' && user.status === 'invited' && (
-                                <DropdownMenuItem onClick={() => resendInvitationMutation.mutate(user)}>
-                                  <Send className="w-4 h-4 mr-2" />
-                                  Resend Invite
-                                </DropdownMenuItem>
-                              )}
-
-                              <DropdownMenuSeparator />
-                              {isUserActive(user) ? (
-                                <DropdownMenuItem
-                                  onClick={() => {
-                                    if (user.type === 'invitation') {
-                                      toggleInvitationActiveMutation.mutate({ id: user.id, active: false });
-                                    } else {
-                                      toggleUserActiveMutation.mutate({
-                                        userId: user.id,
-                                        active: false,
-                                        user
-                                      });
-                                    }
-                                  }}
-                                  disabled={user.id === currentUser?.id}
-                                  className="text-red-600"
-                                >
-                                  <PowerOff className="w-4 h-4 mr-2" />
-                                  Deactivate
-                                </DropdownMenuItem>
-                              ) : (
-                                <DropdownMenuItem
-                                  onClick={() => {
-                                    if (user.type === 'invitation') {
-                                      toggleInvitationActiveMutation.mutate({ id: user.id, active: true });
-                                    } else {
-                                      toggleUserActiveMutation.mutate({
-                                        userId: user.id,
-                                        active: true,
-                                        user
-                                      });
-                                    }
-                                  }}
-                                  className="text-emerald-600"
-                                >
-                                  <Power className="w-4 h-4 mr-2" />
-                                  Activate
-                                </DropdownMenuItem>
-                              )}
-
-                              <DropdownMenuSeparator />
+                            <DropdownMenuSeparator />
+                            {isUserActive(user) ? (
                               <DropdownMenuItem
                                 onClick={() => {
-                                  setUserToDelete(user);
-                                  setDeleteDialogOpen(true);
+                                  if (user.type === 'invitation') {
+                                    toggleInvitationActiveMutation.mutate({ id: user.id, active: false });
+                                  } else {
+                                    toggleUserActiveMutation.mutate({
+                                      userId: user.id,
+                                      active: false,
+                                      user
+                                    });
+                                  }
                                 }}
                                 disabled={user.id === currentUser?.id}
                                 className="text-red-600"
                               >
-                                <Trash2 className="w-4 h-4 mr-2" />
-                                Delete User
+                                <PowerOff className="w-4 h-4 mr-2" />
+                                Deactivate
                               </DropdownMenuItem>
-                            </DropdownMenuContent>
-                          </DropdownMenu>
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            </div>
-          </TabsContent>
+                            ) : (
+                              <DropdownMenuItem
+                                onClick={() => {
+                                  if (user.type === 'invitation') {
+                                    toggleInvitationActiveMutation.mutate({ id: user.id, active: true });
+                                  } else {
+                                    toggleUserActiveMutation.mutate({
+                                      userId: user.id,
+                                      active: true,
+                                      user
+                                    });
+                                  }
+                                }}
+                                className="text-emerald-600"
+                              >
+                                <Power className="w-4 h-4 mr-2" />
+                                Activate
+                              </DropdownMenuItem>
+                            )}
 
-          <TabsContent value="invitations" className="mt-4">
-            <div className="bg-white rounded-xl border border-slate-200 overflow-hidden">
-              {pendingInvitations.length === 0 ? (
-                <div className="text-center py-12 text-slate-500">
-                  <Mail className="w-12 h-12 mx-auto mb-4 text-slate-300" />
-                  <p>No pending invitations</p>
-                </div>
-              ) : (
-                <table className="w-full">
-                  <thead className="bg-slate-50">
-                    <tr>
-                      <th className="px-4 py-3 text-left text-xs font-semibold text-slate-600 uppercase">Email</th>
-                      <th className="px-4 py-3 text-left text-xs font-semibold text-slate-600 uppercase">Role</th>
-                      <th className="px-4 py-3 text-left text-xs font-semibold text-slate-600 uppercase">Invited By</th>
-                      <th className="px-4 py-3 text-left text-xs font-semibold text-slate-600 uppercase">Expires</th>
-                      <th className="px-4 py-3 text-right text-xs font-semibold text-slate-600 uppercase">Actions</th>
+                            <DropdownMenuSeparator />
+                            <DropdownMenuItem
+                              onClick={() => {
+                                setUserToDelete(user);
+                                setDeleteDialogOpen(true);
+                              }}
+                              disabled={user.id === currentUser?.id}
+                              className="text-red-600"
+                            >
+                              <Trash2 className="w-4 h-4 mr-2" />
+                              Delete User
+                            </DropdownMenuItem>
+                          </DropdownMenuContent>
+                        </DropdownMenu>
+                      </td>
                     </tr>
-                  </thead>
-                  <tbody className="divide-y divide-slate-100">
-                    {pendingInvitations.map(invitation => (
-                      <tr key={invitation.id} className="hover:bg-slate-50">
-                        <td className="px-4 py-3">
-                          <div className="flex items-center gap-2">
-                            <Mail className="w-4 h-4 text-slate-400" />
-                            <span className="font-medium text-slate-900">{invitation.email}</span>
-                          </div>
-                        </td>
-                        <td className="px-4 py-3">
-                          <Badge variant="outline">
-                            {getRoleName(invitation.role_id)}
-                          </Badge>
-                        </td>
-                        <td className="px-4 py-3 text-sm text-slate-600">
-                          {invitation.invited_by}
-                        </td>
-                        <td className="px-4 py-3">
-                          <div className="flex items-center gap-1 text-sm text-slate-500">
-                            <Clock className="w-3 h-3" />
-                            {invitation.expires_at
-                              ? format(new Date(invitation.expires_at), 'MMM d, yyyy')
-                              : 'No expiry'
-                            }
-                          </div>
-                        </td>
-                        <td className="px-4 py-3 text-right">
-                          <div className="flex justify-end gap-2">
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              onClick={() => resendInvitationMutation.mutate(invitation)}
-                            >
-                              <Send className="w-4 h-4 mr-1" />
-                              Resend
-                            </Button>
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              className="text-red-600 hover:text-red-700"
-                              onClick={() => revokeInvitationMutation.mutate(invitation.id)}
-                            >
-                              <XCircle className="w-4 h-4 mr-1" />
-                              Revoke
-                            </Button>
-                          </div>
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              )}
+                  ))}
+                </tbody>
+              </table>
             </div>
-          </TabsContent>
-        </Tabs>
+          </div>
+        </TabsContent>
 
-        {/* Invite User Dialog */}
-        <Dialog open={showInviteDialog} onOpenChange={setShowInviteDialog}>
-          <DialogContent className="max-w-[calc(100vw-2rem)] sm:max-w-md max-h-[90vh] overflow-y-auto scrollbar-thin">
-            <DialogHeader>
-              <DialogTitle>Invite User</DialogTitle>
-            </DialogHeader>
+        <TabsContent value="invitations" className="mt-4">
+          <div className="bg-white rounded-xl border border-slate-200 overflow-hidden">
+            {pendingInvitations.length === 0 ? (
+              <div className="text-center py-12 text-slate-500">
+                <Mail className="w-12 h-12 mx-auto mb-4 text-slate-300" />
+                <p>No pending invitations</p>
+              </div>
+            ) : (
+              <table className="w-full">
+                <thead className="bg-slate-50">
+                  <tr>
+                    <th className="px-4 py-3 text-left text-xs font-semibold text-slate-600 uppercase">Email</th>
+                    <th className="px-4 py-3 text-left text-xs font-semibold text-slate-600 uppercase">Role</th>
+                    <th className="px-4 py-3 text-left text-xs font-semibold text-slate-600 uppercase">Invited By</th>
+                    <th className="px-4 py-3 text-left text-xs font-semibold text-slate-600 uppercase">Expires</th>
+                    <th className="px-4 py-3 text-right text-xs font-semibold text-slate-600 uppercase">Actions</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-100">
+                  {pendingInvitations.map(invitation => (
+                    <tr key={invitation.id} className="hover:bg-slate-50">
+                      <td className="px-4 py-3">
+                        <div className="flex items-center gap-2">
+                          <Mail className="w-4 h-4 text-slate-400" />
+                          <span className="font-medium text-slate-900">{invitation.email}</span>
+                        </div>
+                      </td>
+                      <td className="px-4 py-3">
+                        <Badge variant="outline">
+                          {getRoleName(invitation.role_id)}
+                        </Badge>
+                      </td>
+                      <td className="px-4 py-3 text-sm text-slate-600">
+                        {invitation.invited_by}
+                      </td>
+                      <td className="px-4 py-3">
+                        <div className="flex items-center gap-1 text-sm text-slate-500">
+                          <Clock className="w-3 h-3" />
+                          {invitation.expires_at
+                            ? format(new Date(invitation.expires_at), 'MMM d, yyyy')
+                            : 'No expiry'
+                          }
+                        </div>
+                      </td>
+                      <td className="px-4 py-3 text-right">
+                        <div className="flex justify-end gap-2">
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => resendInvitationMutation.mutate(invitation)}
+                          >
+                            <Send className="w-4 h-4 mr-1" />
+                            Resend
+                          </Button>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            className="text-red-600 hover:text-red-700"
+                            onClick={() => revokeInvitationMutation.mutate(invitation.id)}
+                          >
+                            <XCircle className="w-4 h-4 mr-1" />
+                            Revoke
+                          </Button>
+                        </div>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            )}
+          </div>
+        </TabsContent>
+      </Tabs>
 
-            <div className="space-y-4 py-4">
+      {/* Invite User Dialog */}
+      <Dialog open={showInviteDialog} onOpenChange={setShowInviteDialog}>
+        <DialogContent className="max-w-[calc(100vw-2rem)] sm:max-w-md max-h-[90vh] overflow-y-auto scrollbar-thin">
+          <DialogHeader>
+            <DialogTitle>Invite User</DialogTitle>
+          </DialogHeader>
+
+          <div className="space-y-4 py-4">
+            <div className="space-y-2">
+              <Label>Email Address *</Label>
+              <Input
+                type="email"
+                value={inviteData.email}
+                onChange={(e) => setInviteData(p => ({ ...p, email: e.target.value }))}
+                placeholder="user@example.com"
+              />
+            </div>
+
+            <div className="space-y-2">
+              <Label>Department (Optional)</Label>
+              <Select
+                value={inviteData.department_id}
+                onValueChange={(v) => setInviteData(p => ({ ...p, department_id: v }))}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Select a department" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="none">No Department</SelectItem>
+                  {departments.map(dept => (
+                    <SelectItem key={dept.id} value={dept.id}>{dept.name}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div className="space-y-2">
+              <Label>Role *</Label>
+              <Select
+                value={inviteData.role_id}
+                onValueChange={(v) => setInviteData(p => ({ ...p, role_id: v }))}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Select a role" />
+                </SelectTrigger>
+                <SelectContent>
+                  {roles.length === 0 ? (
+                    <>
+                      <SelectItem value="admin">Admin</SelectItem>
+                      <SelectItem value="user">User</SelectItem>
+                    </>
+                  ) : (
+                    roles.map(role => (
+                      <SelectItem key={role.id} value={role.id}>
+                        {role.name}
+                      </SelectItem>
+                    ))
+                  )}
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div className="grid grid-cols-2 gap-4">
               <div className="space-y-2">
-                <Label>Email Address *</Label>
+                <Label>User Category</Label>
+                <Select
+                  value={inviteData.user_category}
+                  onValueChange={(v) => setInviteData(p => ({ ...p, user_category: v }))}
+                >
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="internal">Internal Team</SelectItem>
+                    <SelectItem value="realtor">Realtor</SelectItem>
+                    <SelectItem value="cp">Channel Partner (CP)</SelectItem>
+                    <SelectItem value="acp">Associate CP (ACP)</SelectItem>
+                    <SelectItem value="rm">Relationship Manager (RM)</SelectItem>
+                    <SelectItem value="external">External Team</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <div className="space-y-2">
+                <Label>Territory (Optional)</Label>
                 <Input
-                  type="email"
-                  value={inviteData.email}
-                  onChange={(e) => setInviteData(p => ({ ...p, email: e.target.value }))}
-                  placeholder="user@example.com"
+                  value={inviteData.territory || ''}
+                  onChange={(e) => setInviteData(p => ({ ...p, territory: e.target.value }))}
+                  placeholder="e.g. North Zone"
                 />
               </div>
+            </div>
 
-              <div className="space-y-2">
-                <Label>Department (Optional)</Label>
-                <Select
-                  value={inviteData.department_id}
-                  onValueChange={(v) => setInviteData(p => ({ ...p, department_id: v }))}
-                >
-                  <SelectTrigger>
-                    <SelectValue placeholder="Select a department" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="none">No Department</SelectItem>
-                    {departments.map(dept => (
-                      <SelectItem key={dept.id} value={dept.id}>{dept.name}</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+            <div className="space-y-2">
+              <Label>Reports To (Optional)</Label>
+              <Select
+                value={inviteData.reports_to || 'none'}
+                onValueChange={(v) => setInviteData(p => ({ ...p, reports_to: v === 'none' ? '' : v }))}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Select manager" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="none">No Manager</SelectItem>
+                  {allUsers.map(u => (
+                    <SelectItem key={u.id} value={u.email}>
+                      {getUserDisplayName(u)}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div className="space-y-2">
+              <Label>Assign to Projects (Optional)</Label>
+              <div className="border rounded-lg p-3 max-h-40 overflow-y-auto space-y-2">
+                {projects.length === 0 ? (
+                  <p className="text-sm text-slate-500">No projects available</p>
+                ) : (
+                  projects.map(project => (
+                    <div key={project.id} className="flex items-center gap-2">
+                      <Checkbox
+                        id={`project-${project.id}`}
+                        checked={inviteData.project_ids.includes(project.id)}
+                        onCheckedChange={(checked) => {
+                          if (checked) {
+                            setInviteData(p => ({ ...p, project_ids: [...p.project_ids, project.id] }));
+                          } else {
+                            setInviteData(p => ({ ...p, project_ids: p.project_ids.filter(id => id !== project.id) }));
+                          }
+                        }}
+                      />
+                      <Label
+                        htmlFor={`project-${project.id}`}
+                        className="text-sm font-normal cursor-pointer flex items-center gap-2"
+                      >
+                        <div
+                          className="w-2 h-2 rounded-full"
+                          style={{ backgroundColor: project.color || '#6366F1' }}
+                        />
+                        {project.name}
+                      </Label>
+                    </div>
+                  ))
+                )}
               </div>
+              {inviteData.project_ids.length > 0 && (
+                <p className="text-xs text-slate-500">{inviteData.project_ids.length} project(s) selected</p>
+              )}
+            </div>
+          </div>
 
-              <div className="space-y-2">
-                <Label>Role *</Label>
-                <Select
-                  value={inviteData.role_id}
-                  onValueChange={(v) => setInviteData(p => ({ ...p, role_id: v }))}
-                >
-                  <SelectTrigger>
-                    <SelectValue placeholder="Select a role" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {roles.length === 0 ? (
-                      <>
-                        <SelectItem value="admin">Admin</SelectItem>
-                        <SelectItem value="user">User</SelectItem>
-                      </>
-                    ) : (
-                      roles.map(role => (
-                        <SelectItem key={role.id} value={role.id}>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setShowInviteDialog(false)}>
+              Cancel
+            </Button>
+            <Button
+              onClick={() => inviteUserMutation.mutate(inviteData)}
+              disabled={!inviteData.email || !inviteData.role_id}
+              className="bg-indigo-600 hover:bg-indigo-700"
+            >
+              <Send className="w-4 h-4 mr-2" />
+              Send Invitation
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Edit User Role Dialog */}
+      <Dialog open={!!editingUser} onOpenChange={() => setEditingUser(null)}>
+        <DialogContent className="max-w-[calc(100vw-2rem)] sm:max-w-lg max-h-[90vh] overflow-y-auto scrollbar-thin">
+          <DialogHeader>
+            <DialogTitle>Edit User Role</DialogTitle>
+          </DialogHeader>
+
+          <div className="py-4 space-y-6">
+            <div className="flex items-center gap-3">
+              <Avatar className="w-12 h-12">
+                <AvatarFallback className="bg-indigo-100 text-indigo-600">
+                  {editingUser?.full_name?.[0] || editingUser?.email?.[0]?.toUpperCase()}
+                </AvatarFallback>
+              </Avatar>
+              <div>
+                <p className="font-medium text-slate-900">{editingUser?.full_name || 'No Name'}</p>
+                <p className="text-sm text-slate-500">{editingUser?.email}</p>
+              </div>
+            </div>
+
+            <div className="space-y-2">
+              <Label>Full Name {currentUser?.role !== 'admin' && <span className="text-xs text-slate-400 font-normal">(Admin Only)</span>}</Label>
+              <Input
+                value={editingUser?.full_name || ''}
+                onChange={(e) => setEditingUser(u => ({ ...u, full_name: e.target.value }))}
+                placeholder="Enter full name"
+                disabled={currentUser?.role !== 'admin'}
+              />
+            </div>
+
+            <div className="space-y-2">
+              <Label>Department</Label>
+              <Select
+                value={editingUser?.department_id || ''}
+                onValueChange={(v) => setEditingUser(u => ({ ...u, department_id: v === 'none' ? '' : v }))}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Select a department" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="none">No Department</SelectItem>
+                  {departments.map(dept => (
+                    <SelectItem key={dept.id} value={dept.id}>{dept.name}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div className="space-y-2">
+              <Label>Role *</Label>
+              <Select
+                value={editingUser?.role_id || ''}
+                onValueChange={(v) => setEditingUser(u => ({ ...u, role_id: v }))}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Select a role" />
+                </SelectTrigger>
+                <SelectContent>
+                  {roles.length === 0 ? (
+                    <>
+                      <SelectItem value="admin">
+                        <div className="flex items-center gap-2">
+                          <Shield className="w-4 h-4" />
+                          Admin
+                        </div>
+                      </SelectItem>
+                      <SelectItem value="user">
+                        <div className="flex items-center gap-2">
+                          <Shield className="w-4 h-4" />
+                          User
+                        </div>
+                      </SelectItem>
+                    </>
+                  ) : (
+                    roles.map(role => (
+                      <SelectItem key={role.id} value={role.id}>
+                        <div className="flex items-center gap-2">
+                          <Shield className="w-4 h-4" />
                           {role.name}
-                        </SelectItem>
-                      ))
-                    )}
-                  </SelectContent>
-                </Select>
-              </div>
+                        </div>
+                      </SelectItem>
+                    ))
+                  )}
+                </SelectContent>
+              </Select>
+            </div>
 
-              <div className="grid grid-cols-2 gap-4">
-                <div className="space-y-2">
-                  <Label>User Category</Label>
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label>Job Title</Label>
+                {isSalesUser({ department_id: editingUser?.department_id }, departments) ? (
                   <Select
-                    value={inviteData.user_category}
-                    onValueChange={(v) => setInviteData(p => ({ ...p, user_category: v }))}
+                    value={editingUser?.job_title || ''}
+                    onValueChange={(v) => setEditingUser(u => ({ ...u, job_title: v }))}
                   >
                     <SelectTrigger>
-                      <SelectValue />
+                      <SelectValue placeholder="Select sales role" />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="internal">Internal Team</SelectItem>
-                      <SelectItem value="realtor">Realtor</SelectItem>
-                      <SelectItem value="cp">Channel Partner (CP)</SelectItem>
-                      <SelectItem value="acp">Associate CP (ACP)</SelectItem>
-                      <SelectItem value="rm">Relationship Manager (RM)</SelectItem>
-                      <SelectItem value="external">External Team</SelectItem>
+                      {SALES_JOB_TITLES.map(title => (
+                        <SelectItem key={title} value={title}>{title}</SelectItem>
+                      ))}
                     </SelectContent>
                   </Select>
-                </div>
-
-                <div className="space-y-2">
-                  <Label>Territory (Optional)</Label>
+                ) : (
                   <Input
-                    value={inviteData.territory || ''}
-                    onChange={(e) => setInviteData(p => ({ ...p, territory: e.target.value }))}
-                    placeholder="e.g. North Zone"
+                    placeholder="e.g. HR Manager"
+                    value={editingUser?.job_title || ''}
+                    onChange={(e) => setEditingUser(u => ({ ...u, job_title: e.target.value }))}
                   />
-                </div>
+                )}
+              </div>
+
+              <div className="space-y-2">
+                <Label>Reports To {currentUser?.role !== 'admin' && <span className="text-xs text-slate-400 font-normal">(Admin Only)</span>}</Label>
+                <Select
+                  value={editingUser?.reports_to || 'none'}
+                  onValueChange={(v) => setEditingUser(u => ({ ...u, reports_to: v === 'none' ? '' : v }))}
+                  disabled={currentUser?.role !== 'admin'}
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="Select manager" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="none">No Manager</SelectItem>
+                    {allUsers
+                      .filter(u => u.email !== editingUser?.email) // Prevent selecting self
+                      .map(u => (
+                        <SelectItem key={u.id} value={u.email}>
+                          {getUserDisplayName(u)}
+                        </SelectItem>
+                      ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label>User Category</Label>
+                <Select
+                  value={editingUser?.user_category || 'internal'}
+                  onValueChange={(v) => setEditingUser(u => ({ ...u, user_category: v }))}
+                >
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="internal">Internal Team</SelectItem>
+                    <SelectItem value="realtor">Realtor</SelectItem>
+                    <SelectItem value="cp">Channel Partner (CP)</SelectItem>
+                    <SelectItem value="acp">Associate CP (ACP)</SelectItem>
+                    <SelectItem value="rm">Relationship Manager (RM)</SelectItem>
+                    <SelectItem value="external">External Team</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <div className="space-y-2">
+                <Label>Territory (Optional)</Label>
+                <Input
+                  value={editingUser?.territory || ''}
+                  onChange={(e) => setEditingUser(u => ({ ...u, territory: e.target.value }))}
+                  placeholder="e.g. North Zone"
+                />
+              </div>
+            </div>
+
+            <div className="space-y-2">
+              <Label>Assign to Projects (Optional)</Label>
+              <div className="border rounded-lg p-3 max-h-40 overflow-y-auto space-y-2">
+                {projects.length === 0 ? (
+                  <p className="text-sm text-slate-500">No projects available</p>
+                ) : (
+                  projects.map(project => (
+                    <div key={project.id} className="flex items-center gap-2">
+                      <Checkbox
+                        id={`edit-project-${project.id}`}
+                        checked={(editingUser?.project_ids || []).includes(project.id)}
+                        onCheckedChange={(checked) => {
+                          if (checked) {
+                            setEditingUser(u => ({ ...u, project_ids: [...(u.project_ids || []), project.id] }));
+                          } else {
+                            setEditingUser(u => ({ ...u, project_ids: (u.project_ids || []).filter(id => id !== project.id) }));
+                          }
+                        }}
+                      />
+                      <Label
+                        htmlFor={`edit-project-${project.id}`}
+                        className="text-sm font-normal cursor-pointer flex items-center gap-2"
+                      >
+                        <div
+                          className="w-2 h-2 rounded-full"
+                          style={{ backgroundColor: project.color || '#6366F1' }}
+                        />
+                        {project.name}
+                      </Label>
+                    </div>
+                  ))
+                )}
+              </div>
+              {(editingUser?.project_ids || []).length > 0 && (
+                <p className="text-xs text-slate-500">{editingUser.project_ids.length} project(s) assigned</p>
+              )}
+            </div>
+
+            <div className="flex items-center justify-between p-4 bg-slate-50 rounded-lg">
+              <div>
+                <Label className="text-base">Account Active</Label>
+                <p className="text-sm text-slate-500">User can login when active</p>
+              </div>
+              <Switch
+                checked={isUserActive(editingUser)}
+                onCheckedChange={(checked) => setEditingUser(u => ({ ...u, active: checked, status: checked ? 'active' : 'inactive' }))}
+              />
+            </div>
+          </div>
+
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setEditingUser(null)}>
+              Cancel
+            </Button>
+            <Button
+              onClick={async () => {
+                if (!editingUser) return;
+
+                if (editingUser.type === 'invitation') {
+                  const updateData = {
+                    role_id: editingUser.role_id,
+                    department_id: editingUser.department_id,
+                    project_ids: editingUser.project_ids || [],
+                    reports_to: editingUser.reports_to,
+                    active: editingUser.active,
+                    user_category: editingUser.user_category || 'internal',
+                    territory: editingUser.territory || '',
+                    full_name: editingUser.full_name
+                  };
+
+                  updateInvitationDataMutation.mutate({
+                    id: editingUser.id,
+                    data: updateData
+                  });
+                } else {
+                  const originalUser = users.find(u => u.id === editingUser.id);
+
+                  // Update name via backend if changed and user is admin
+                  if (currentUser?.role === 'admin' && editingUser.full_name !== originalUser?.full_name) {
+                    try {
+                      const response = await base44.functions.invoke('updateUserName', {
+                        email: editingUser.email,
+                        full_name: editingUser.full_name
+                      });
+
+                      if (response.data?.error) {
+                        toast.error('Failed to update name: ' + response.data.error);
+                        return;
+                      }
+                    } catch (error) {
+                      toast.error('Failed to update name: ' + error.message);
+                      return;
+                    }
+                  }
+
+                  updateUserMutation.mutate({
+                    userId: editingUser.id,
+                    data: {
+                      role_id: editingUser.role_id,
+                      department_id: editingUser.department_id,
+                      active: editingUser.active,
+                      status: editingUser.active ? 'active' : 'inactive',
+                      project_ids: editingUser.project_ids || [],
+                      job_title: editingUser.job_title,
+                      reports_to: editingUser.reports_to || null,
+                      user_category: editingUser.user_category || 'internal',
+                      territory: editingUser.territory || ''
+                    },
+                    oldUser: originalUser
+                  });
+                }
+              }}
+              className="bg-indigo-600 hover:bg-indigo-700"
+              disabled={updateUserMutation.isPending || updateInvitationDataMutation.isPending}
+            >
+              {(updateUserMutation.isPending || updateInvitationDataMutation.isPending) ? 'Saving...' : 'Save Changes'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Delete User Confirmation Dialog */}
+      <AlertDialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete User</AlertDialogTitle>
+            <AlertDialogDescription>
+              Are you sure you want to delete <strong>{userToDelete?.full_name || userToDelete?.email}</strong>?
+              <br /><br />
+              This action cannot be undone. All user data, assignments, and permissions will be permanently removed.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={() => deleteUserMutation.mutate({ user: userToDelete })}
+              className="bg-red-600 hover:bg-red-700"
+              disabled={deleteUserMutation.isPending}
+            >
+              {deleteUserMutation.isPending ? 'Deleting...' : 'Delete User'}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {/* Bulk Delete Confirmation Dialog */}
+      <AlertDialog open={bulkDeleteDialogOpen} onOpenChange={setBulkDeleteDialogOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete Multiple Users</AlertDialogTitle>
+            <AlertDialogDescription>
+              Are you sure you want to delete <strong>{selectedUsers.length} user(s)</strong>?
+              <br /><br />
+              This action cannot be undone. All selected users' data, assignments, and permissions will be permanently removed.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={handleBulkDelete}
+              className="bg-red-600 hover:bg-red-700"
+            >
+              Delete {selectedUsers.length} User(s)
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {/* Add Member Dialog (Direct - No Invitation) */}
+      <Dialog open={showAddMemberDialog} onOpenChange={setShowAddMemberDialog}>
+        <DialogContent className="max-w-[calc(100vw-2rem)] sm:max-w-lg max-h-[90vh] overflow-y-auto scrollbar-thin">
+          <DialogHeader>
+            <DialogTitle>Add Member Directly</DialogTitle>
+          </DialogHeader>
+
+          <div className="space-y-4 py-4">
+            <div className="space-y-2">
+              <Label>Email Address *</Label>
+              <Input
+                type="email"
+                value={memberData.email}
+                onChange={(e) => setMemberData(p => ({ ...p, email: e.target.value }))}
+                placeholder="user@example.com"
+              />
+            </div>
+
+            <div className="space-y-2">
+              <Label>Full Name *</Label>
+              <Input
+                value={memberData.full_name}
+                onChange={(e) => setMemberData(p => ({ ...p, full_name: e.target.value }))}
+                placeholder="John Doe"
+              />
+            </div>
+
+            <div className="space-y-2">
+              <Label>Password *</Label>
+              <Input
+                type="password"
+                value={memberData.password}
+                onChange={(e) => setMemberData(p => ({ ...p, password: e.target.value }))}
+                placeholder="Minimum 6 characters"
+              />
+              <p className="text-xs text-slate-500">Password must be at least 6 characters</p>
+            </div>
+
+            <div className="space-y-2">
+              <Label>Department (Optional)</Label>
+              <Select
+                value={memberData.department_id}
+                onValueChange={(v) => setMemberData(p => ({ ...p, department_id: v }))}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Select a department" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="none">No Department</SelectItem>
+                  {departments.map(dept => (
+                    <SelectItem key={dept.id} value={dept.id}>{dept.name}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div className="space-y-2">
+              <Label>Role *</Label>
+              <Select
+                value={memberData.role_id}
+                onValueChange={(v) => setMemberData(p => ({ ...p, role_id: v }))}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Select a role" />
+                </SelectTrigger>
+                <SelectContent>
+                  {roles.length === 0 ? (
+                    <>
+                      <SelectItem value="admin">Admin</SelectItem>
+                      <SelectItem value="user">User</SelectItem>
+                    </>
+                  ) : (
+                    roles.map(role => (
+                      <SelectItem key={role.id} value={role.id}>
+                        {role.name}
+                      </SelectItem>
+                    ))
+                  )}
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label>User Category</Label>
+                <Select
+                  value={memberData.user_category}
+                  onValueChange={(v) => setMemberData(p => ({ ...p, user_category: v }))}
+                >
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="internal">Internal Team</SelectItem>
+                    <SelectItem value="realtor">Realtor</SelectItem>
+                    <SelectItem value="cp">Channel Partner (CP)</SelectItem>
+                    <SelectItem value="acp">Associate CP (ACP)</SelectItem>
+                    <SelectItem value="rm">Relationship Manager (RM)</SelectItem>
+                    <SelectItem value="external">External Team</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <div className="space-y-2">
+                <Label>Job Title (Optional)</Label>
+                <Input
+                  value={memberData.job_title || ''}
+                  onChange={(e) => setMemberData(p => ({ ...p, job_title: e.target.value }))}
+                  placeholder="e.g. Sales Manager"
+                />
+              </div>
+            </div>
+
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label>Territory (Optional)</Label>
+                <Input
+                  value={memberData.territory || ''}
+                  onChange={(e) => setMemberData(p => ({ ...p, territory: e.target.value }))}
+                  placeholder="e.g. North Zone"
+                />
               </div>
 
               <div className="space-y-2">
                 <Label>Reports To (Optional)</Label>
                 <Select
-                  value={inviteData.reports_to || 'none'}
-                  onValueChange={(v) => setInviteData(p => ({ ...p, reports_to: v === 'none' ? '' : v }))}
+                  value={memberData.reports_to || 'none'}
+                  onValueChange={(v) => setMemberData(p => ({ ...p, reports_to: v === 'none' ? '' : v }))}
                 >
                   <SelectTrigger>
                     <SelectValue placeholder="Select manager" />
@@ -1045,613 +1605,78 @@ export default function UserManagement() {
                   </SelectContent>
                 </Select>
               </div>
-
-              <div className="space-y-2">
-                <Label>Assign to Projects (Optional)</Label>
-                <div className="border rounded-lg p-3 max-h-40 overflow-y-auto space-y-2">
-                  {projects.length === 0 ? (
-                    <p className="text-sm text-slate-500">No projects available</p>
-                  ) : (
-                    projects.map(project => (
-                      <div key={project.id} className="flex items-center gap-2">
-                        <Checkbox
-                          id={`project-${project.id}`}
-                          checked={inviteData.project_ids.includes(project.id)}
-                          onCheckedChange={(checked) => {
-                            if (checked) {
-                              setInviteData(p => ({ ...p, project_ids: [...p.project_ids, project.id] }));
-                            } else {
-                              setInviteData(p => ({ ...p, project_ids: p.project_ids.filter(id => id !== project.id) }));
-                            }
-                          }}
-                        />
-                        <Label
-                          htmlFor={`project-${project.id}`}
-                          className="text-sm font-normal cursor-pointer flex items-center gap-2"
-                        >
-                          <div
-                            className="w-2 h-2 rounded-full"
-                            style={{ backgroundColor: project.color || '#6366F1' }}
-                          />
-                          {project.name}
-                        </Label>
-                      </div>
-                    ))
-                  )}
-                </div>
-                {inviteData.project_ids.length > 0 && (
-                  <p className="text-xs text-slate-500">{inviteData.project_ids.length} project(s) selected</p>
-                )}
-              </div>
             </div>
 
-            <DialogFooter>
-              <Button variant="outline" onClick={() => setShowInviteDialog(false)}>
-                Cancel
-              </Button>
-              <Button
-                onClick={() => inviteUserMutation.mutate(inviteData)}
-                disabled={!inviteData.email || !inviteData.role_id}
-                className="bg-indigo-600 hover:bg-indigo-700"
-              >
-                <Send className="w-4 h-4 mr-2" />
-                Send Invitation
-              </Button>
-            </DialogFooter>
-          </DialogContent>
-        </Dialog>
-
-        {/* Edit User Role Dialog */}
-        <Dialog open={!!editingUser} onOpenChange={() => setEditingUser(null)}>
-          <DialogContent className="max-w-[calc(100vw-2rem)] sm:max-w-lg max-h-[90vh] overflow-y-auto scrollbar-thin">
-            <DialogHeader>
-              <DialogTitle>Edit User Role</DialogTitle>
-            </DialogHeader>
-
-            <div className="py-4 space-y-6">
-              <div className="flex items-center gap-3">
-                <Avatar className="w-12 h-12">
-                  <AvatarFallback className="bg-indigo-100 text-indigo-600">
-                    {editingUser?.full_name?.[0] || editingUser?.email?.[0]?.toUpperCase()}
-                  </AvatarFallback>
-                </Avatar>
-                <div>
-                  <p className="font-medium text-slate-900">{editingUser?.full_name || 'No Name'}</p>
-                  <p className="text-sm text-slate-500">{editingUser?.email}</p>
-                </div>
-              </div>
-
-              <div className="space-y-2">
-                <Label>Full Name {currentUser?.role !== 'admin' && <span className="text-xs text-slate-400 font-normal">(Admin Only)</span>}</Label>
-                <Input
-                  value={editingUser?.full_name || ''}
-                  onChange={(e) => setEditingUser(u => ({ ...u, full_name: e.target.value }))}
-                  placeholder="Enter full name"
-                  disabled={currentUser?.role !== 'admin'}
-                />
-              </div>
-
-              <div className="space-y-2">
-                <Label>Department</Label>
-                <Select
-                  value={editingUser?.department_id || ''}
-                  onValueChange={(v) => setEditingUser(u => ({ ...u, department_id: v === 'none' ? '' : v }))}
-                >
-                  <SelectTrigger>
-                    <SelectValue placeholder="Select a department" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="none">No Department</SelectItem>
-                    {departments.map(dept => (
-                      <SelectItem key={dept.id} value={dept.id}>{dept.name}</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-
-              <div className="space-y-2">
-                <Label>Role *</Label>
-                <Select
-                  value={editingUser?.role_id || ''}
-                  onValueChange={(v) => setEditingUser(u => ({ ...u, role_id: v }))}
-                >
-                  <SelectTrigger>
-                    <SelectValue placeholder="Select a role" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {roles.length === 0 ? (
-                      <>
-                        <SelectItem value="admin">
-                          <div className="flex items-center gap-2">
-                            <Shield className="w-4 h-4" />
-                            Admin
-                          </div>
-                        </SelectItem>
-                        <SelectItem value="user">
-                          <div className="flex items-center gap-2">
-                            <Shield className="w-4 h-4" />
-                            User
-                          </div>
-                        </SelectItem>
-                      </>
-                    ) : (
-                      roles.map(role => (
-                        <SelectItem key={role.id} value={role.id}>
-                          <div className="flex items-center gap-2">
-                            <Shield className="w-4 h-4" />
-                            {role.name}
-                          </div>
-                        </SelectItem>
-                      ))
-                    )}
-                  </SelectContent>
-                </Select>
-              </div>
-
-              <div className="grid grid-cols-2 gap-4">
-                <div className="space-y-2">
-                  <Label>Job Title</Label>
-                  {isSalesUser({ department_id: editingUser?.department_id }, departments) ? (
-                    <Select
-                      value={editingUser?.job_title || ''}
-                      onValueChange={(v) => setEditingUser(u => ({ ...u, job_title: v }))}
-                    >
-                      <SelectTrigger>
-                        <SelectValue placeholder="Select sales role" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {SALES_JOB_TITLES.map(title => (
-                          <SelectItem key={title} value={title}>{title}</SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  ) : (
-                    <Input
-                      placeholder="e.g. HR Manager"
-                      value={editingUser?.job_title || ''}
-                      onChange={(e) => setEditingUser(u => ({ ...u, job_title: e.target.value }))}
-                    />
-                  )}
-                </div>
-
-                <div className="space-y-2">
-                  <Label>Reports To {currentUser?.role !== 'admin' && <span className="text-xs text-slate-400 font-normal">(Admin Only)</span>}</Label>
-                  <Select
-                    value={editingUser?.reports_to || 'none'}
-                    onValueChange={(v) => setEditingUser(u => ({ ...u, reports_to: v === 'none' ? '' : v }))}
-                    disabled={currentUser?.role !== 'admin'}
-                  >
-                    <SelectTrigger>
-                      <SelectValue placeholder="Select manager" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="none">No Manager</SelectItem>
-                      {allUsers
-                        .filter(u => u.email !== editingUser?.email) // Prevent selecting self
-                        .map(u => (
-                          <SelectItem key={u.id} value={u.email}>
-                            {getUserDisplayName(u)}
-                          </SelectItem>
-                        ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-              </div>
-
-              <div className="grid grid-cols-2 gap-4">
-                <div className="space-y-2">
-                  <Label>User Category</Label>
-                  <Select
-                    value={editingUser?.user_category || 'internal'}
-                    onValueChange={(v) => setEditingUser(u => ({ ...u, user_category: v }))}
-                  >
-                    <SelectTrigger>
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="internal">Internal Team</SelectItem>
-                      <SelectItem value="realtor">Realtor</SelectItem>
-                      <SelectItem value="cp">Channel Partner (CP)</SelectItem>
-                      <SelectItem value="acp">Associate CP (ACP)</SelectItem>
-                      <SelectItem value="rm">Relationship Manager (RM)</SelectItem>
-                      <SelectItem value="external">External Team</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-
-                <div className="space-y-2">
-                  <Label>Territory (Optional)</Label>
-                  <Input
-                    value={editingUser?.territory || ''}
-                    onChange={(e) => setEditingUser(u => ({ ...u, territory: e.target.value }))}
-                    placeholder="e.g. North Zone"
-                  />
-                </div>
-              </div>
-
-              <div className="space-y-2">
-                <Label>Assign to Projects (Optional)</Label>
-                <div className="border rounded-lg p-3 max-h-40 overflow-y-auto space-y-2">
-                  {projects.length === 0 ? (
-                    <p className="text-sm text-slate-500">No projects available</p>
-                  ) : (
-                    projects.map(project => (
-                      <div key={project.id} className="flex items-center gap-2">
-                        <Checkbox
-                          id={`edit-project-${project.id}`}
-                          checked={(editingUser?.project_ids || []).includes(project.id)}
-                          onCheckedChange={(checked) => {
-                            if (checked) {
-                              setEditingUser(u => ({ ...u, project_ids: [...(u.project_ids || []), project.id] }));
-                            } else {
-                              setEditingUser(u => ({ ...u, project_ids: (u.project_ids || []).filter(id => id !== project.id) }));
-                            }
-                          }}
-                        />
-                        <Label
-                          htmlFor={`edit-project-${project.id}`}
-                          className="text-sm font-normal cursor-pointer flex items-center gap-2"
-                        >
-                          <div
-                            className="w-2 h-2 rounded-full"
-                            style={{ backgroundColor: project.color || '#6366F1' }}
-                          />
-                          {project.name}
-                        </Label>
-                      </div>
-                    ))
-                  )}
-                </div>
-                {(editingUser?.project_ids || []).length > 0 && (
-                  <p className="text-xs text-slate-500">{editingUser.project_ids.length} project(s) assigned</p>
-                )}
-              </div>
-
-              <div className="flex items-center justify-between p-4 bg-slate-50 rounded-lg">
-                <div>
-                  <Label className="text-base">Account Active</Label>
-                  <p className="text-sm text-slate-500">User can login when active</p>
-                </div>
-                <Switch
-                  checked={isUserActive(editingUser)}
-                  onCheckedChange={(checked) => setEditingUser(u => ({ ...u, active: checked, status: checked ? 'active' : 'inactive' }))}
-                />
-              </div>
-            </div>
-
-            <DialogFooter>
-              <Button variant="outline" onClick={() => setEditingUser(null)}>
-                Cancel
-              </Button>
-              <Button
-                onClick={async () => {
-                  if (!editingUser) return;
-
-                  if (editingUser.type === 'invitation') {
-                    const updateData = {
-                      role_id: editingUser.role_id,
-                      department_id: editingUser.department_id,
-                      project_ids: editingUser.project_ids || [],
-                      reports_to: editingUser.reports_to,
-                      active: editingUser.active,
-                      user_category: editingUser.user_category || 'internal',
-                      territory: editingUser.territory || '',
-                      full_name: editingUser.full_name
-                    };
-
-                    updateInvitationDataMutation.mutate({
-                      id: editingUser.id,
-                      data: updateData
-                    });
-                  } else {
-                    const originalUser = users.find(u => u.id === editingUser.id);
-
-                    // Update name via backend if changed and user is admin
-                    if (currentUser?.role === 'admin' && editingUser.full_name !== originalUser?.full_name) {
-                      try {
-                        const response = await base44.functions.invoke('updateUserName', {
-                          email: editingUser.email,
-                          full_name: editingUser.full_name
-                        });
-
-                        if (response.data?.error) {
-                          toast.error('Failed to update name: ' + response.data.error);
-                          return;
-                        }
-                      } catch (error) {
-                        toast.error('Failed to update name: ' + error.message);
-                        return;
-                      }
-                    }
-
-                    updateUserMutation.mutate({
-                      userId: editingUser.id,
-                      data: {
-                        role_id: editingUser.role_id,
-                        department_id: editingUser.department_id,
-                        active: editingUser.active,
-                        status: editingUser.active ? 'active' : 'inactive',
-                        project_ids: editingUser.project_ids || [],
-                        job_title: editingUser.job_title,
-                        reports_to: editingUser.reports_to || null,
-                        user_category: editingUser.user_category || 'internal',
-                        territory: editingUser.territory || ''
-                      },
-                      oldUser: originalUser
-                    });
-                  }
-                }}
-                className="bg-indigo-600 hover:bg-indigo-700"
-                disabled={updateUserMutation.isPending || updateInvitationDataMutation.isPending}
-              >
-                {(updateUserMutation.isPending || updateInvitationDataMutation.isPending) ? 'Saving...' : 'Save Changes'}
-              </Button>
-            </DialogFooter>
-          </DialogContent>
-        </Dialog>
-
-        {/* Delete User Confirmation Dialog */}
-        <AlertDialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
-          <AlertDialogContent>
-            <AlertDialogHeader>
-              <AlertDialogTitle>Delete User</AlertDialogTitle>
-              <AlertDialogDescription>
-                Are you sure you want to delete <strong>{userToDelete?.full_name || userToDelete?.email}</strong>?
-                <br /><br />
-                This action cannot be undone. All user data, assignments, and permissions will be permanently removed.
-              </AlertDialogDescription>
-            </AlertDialogHeader>
-            <AlertDialogFooter>
-              <AlertDialogCancel>Cancel</AlertDialogCancel>
-              <AlertDialogAction
-                onClick={() => deleteUserMutation.mutate({ user: userToDelete })}
-                className="bg-red-600 hover:bg-red-700"
-                disabled={deleteUserMutation.isPending}
-              >
-                {deleteUserMutation.isPending ? 'Deleting...' : 'Delete User'}
-              </AlertDialogAction>
-            </AlertDialogFooter>
-          </AlertDialogContent>
-        </AlertDialog>
-
-        {/* Bulk Delete Confirmation Dialog */}
-        <AlertDialog open={bulkDeleteDialogOpen} onOpenChange={setBulkDeleteDialogOpen}>
-          <AlertDialogContent>
-            <AlertDialogHeader>
-              <AlertDialogTitle>Delete Multiple Users</AlertDialogTitle>
-              <AlertDialogDescription>
-                Are you sure you want to delete <strong>{selectedUsers.length} user(s)</strong>?
-                <br /><br />
-                This action cannot be undone. All selected users' data, assignments, and permissions will be permanently removed.
-              </AlertDialogDescription>
-            </AlertDialogHeader>
-            <AlertDialogFooter>
-              <AlertDialogCancel>Cancel</AlertDialogCancel>
-              <AlertDialogAction
-                onClick={handleBulkDelete}
-                className="bg-red-600 hover:bg-red-700"
-              >
-                Delete {selectedUsers.length} User(s)
-              </AlertDialogAction>
-            </AlertDialogFooter>
-          </AlertDialogContent>
-        </AlertDialog>
-
-        {/* Add Member Dialog (Direct - No Invitation) */}
-        <Dialog open={showAddMemberDialog} onOpenChange={setShowAddMemberDialog}>
-          <DialogContent className="max-w-[calc(100vw-2rem)] sm:max-w-lg max-h-[90vh] overflow-y-auto scrollbar-thin">
-            <DialogHeader>
-              <DialogTitle>Add Member Directly</DialogTitle>
-            </DialogHeader>
-
-            <div className="space-y-4 py-4">
-              <div className="space-y-2">
-                <Label>Email Address *</Label>
-                <Input
-                  type="email"
-                  value={memberData.email}
-                  onChange={(e) => setMemberData(p => ({ ...p, email: e.target.value }))}
-                  placeholder="user@example.com"
-                />
-              </div>
-
-              <div className="space-y-2">
-                <Label>Full Name *</Label>
-                <Input
-                  value={memberData.full_name}
-                  onChange={(e) => setMemberData(p => ({ ...p, full_name: e.target.value }))}
-                  placeholder="John Doe"
-                />
-              </div>
-
-              <div className="space-y-2">
-                <Label>Password *</Label>
-                <Input
-                  type="password"
-                  value={memberData.password}
-                  onChange={(e) => setMemberData(p => ({ ...p, password: e.target.value }))}
-                  placeholder="Minimum 6 characters"
-                />
-                <p className="text-xs text-slate-500">Password must be at least 6 characters</p>
-              </div>
-
-              <div className="space-y-2">
-                <Label>Department (Optional)</Label>
-                <Select
-                  value={memberData.department_id}
-                  onValueChange={(v) => setMemberData(p => ({ ...p, department_id: v }))}
-                >
-                  <SelectTrigger>
-                    <SelectValue placeholder="Select a department" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="none">No Department</SelectItem>
-                    {departments.map(dept => (
-                      <SelectItem key={dept.id} value={dept.id}>{dept.name}</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-
-              <div className="space-y-2">
-                <Label>Role *</Label>
-                <Select
-                  value={memberData.role_id}
-                  onValueChange={(v) => setMemberData(p => ({ ...p, role_id: v }))}
-                >
-                  <SelectTrigger>
-                    <SelectValue placeholder="Select a role" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {roles.length === 0 ? (
-                      <>
-                        <SelectItem value="admin">Admin</SelectItem>
-                        <SelectItem value="user">User</SelectItem>
-                      </>
-                    ) : (
-                      roles.map(role => (
-                        <SelectItem key={role.id} value={role.id}>
-                          {role.name}
-                        </SelectItem>
-                      ))
-                    )}
-                  </SelectContent>
-                </Select>
-              </div>
-
-              <div className="grid grid-cols-2 gap-4">
-                <div className="space-y-2">
-                  <Label>User Category</Label>
-                  <Select
-                    value={memberData.user_category}
-                    onValueChange={(v) => setMemberData(p => ({ ...p, user_category: v }))}
-                  >
-                    <SelectTrigger>
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="internal">Internal Team</SelectItem>
-                      <SelectItem value="realtor">Realtor</SelectItem>
-                      <SelectItem value="cp">Channel Partner (CP)</SelectItem>
-                      <SelectItem value="acp">Associate CP (ACP)</SelectItem>
-                      <SelectItem value="rm">Relationship Manager (RM)</SelectItem>
-                      <SelectItem value="external">External Team</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-
-                <div className="space-y-2">
-                  <Label>Job Title (Optional)</Label>
-                  <Input
-                    value={memberData.job_title || ''}
-                    onChange={(e) => setMemberData(p => ({ ...p, job_title: e.target.value }))}
-                    placeholder="e.g. Sales Manager"
-                  />
-                </div>
-              </div>
-
-              <div className="grid grid-cols-2 gap-4">
-                <div className="space-y-2">
-                  <Label>Territory (Optional)</Label>
-                  <Input
-                    value={memberData.territory || ''}
-                    onChange={(e) => setMemberData(p => ({ ...p, territory: e.target.value }))}
-                    placeholder="e.g. North Zone"
-                  />
-                </div>
-
-                <div className="space-y-2">
-                  <Label>Reports To (Optional)</Label>
-                  <Select
-                    value={memberData.reports_to || 'none'}
-                    onValueChange={(v) => setMemberData(p => ({ ...p, reports_to: v === 'none' ? '' : v }))}
-                  >
-                    <SelectTrigger>
-                      <SelectValue placeholder="Select manager" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="none">No Manager</SelectItem>
-                      {allUsers.map(u => (
-                        <SelectItem key={u.id} value={u.email}>
-                          {getUserDisplayName(u)}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-              </div>
-
-              <div className="space-y-2">
-                <Label>Assign to Projects (Optional)</Label>
-                <div className="border rounded-lg p-3 max-h-40 overflow-y-auto space-y-2">
-                  {projects.length === 0 ? (
-                    <p className="text-sm text-slate-500">No projects available</p>
-                  ) : (
-                    projects.map(project => (
-                      <div key={project.id} className="flex items-center gap-2">
-                        <Checkbox
-                          id={`member-project-${project.id}`}
-                          checked={memberData.project_ids.includes(project.id)}
-                          onCheckedChange={(checked) => {
-                            if (checked) {
-                              setMemberData(p => ({ ...p, project_ids: [...p.project_ids, project.id] }));
-                            } else {
-                              setMemberData(p => ({ ...p, project_ids: p.project_ids.filter(id => id !== project.id) }));
-                            }
-                          }}
-                        />
-                        <Label
-                          htmlFor={`member-project-${project.id}`}
-                          className="text-sm font-normal cursor-pointer flex items-center gap-2"
-                        >
-                          <div
-                            className="w-2 h-2 rounded-full"
-                            style={{ backgroundColor: project.color || '#6366F1' }}
-                          />
-                          {project.name}
-                        </Label>
-                      </div>
-                    ))
-                  )}
-                </div>
-                {memberData.project_ids.length > 0 && (
-                  <p className="text-xs text-slate-500">{memberData.project_ids.length} project(s) selected</p>
-                )}
-              </div>
-            </div>
-
-            <DialogFooter>
-              <Button variant="outline" onClick={() => setShowAddMemberDialog(false)}>
-                Cancel
-              </Button>
-              <Button
-                onClick={() => addMemberMutation.mutate(memberData)}
-                disabled={
-                  !memberData.email ||
-                  !memberData.full_name ||
-                  !memberData.password ||
-                  memberData.password.length < 6 ||
-                  !memberData.role_id ||
-                  addMemberMutation.isPending
-                }
-                className="bg-emerald-600 hover:bg-emerald-700"
-              >
-                {addMemberMutation.isPending ? (
-                  <>
-                    <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                    Adding...
-                  </>
+            <div className="space-y-2">
+              <Label>Assign to Projects (Optional)</Label>
+              <div className="border rounded-lg p-3 max-h-40 overflow-y-auto space-y-2">
+                {projects.length === 0 ? (
+                  <p className="text-sm text-slate-500">No projects available</p>
                 ) : (
-                  <>
-                    <Plus className="w-4 h-4 mr-2" />
-                    Add Member
-                  </>
+                  projects.map(project => (
+                    <div key={project.id} className="flex items-center gap-2">
+                      <Checkbox
+                        id={`member-project-${project.id}`}
+                        checked={memberData.project_ids.includes(project.id)}
+                        onCheckedChange={(checked) => {
+                          if (checked) {
+                            setMemberData(p => ({ ...p, project_ids: [...p.project_ids, project.id] }));
+                          } else {
+                            setMemberData(p => ({ ...p, project_ids: p.project_ids.filter(id => id !== project.id) }));
+                          }
+                        }}
+                      />
+                      <Label
+                        htmlFor={`member-project-${project.id}`}
+                        className="text-sm font-normal cursor-pointer flex items-center gap-2"
+                      >
+                        <div
+                          className="w-2 h-2 rounded-full"
+                          style={{ backgroundColor: project.color || '#6366F1' }}
+                        />
+                        {project.name}
+                      </Label>
+                    </div>
+                  ))
                 )}
-              </Button>
-            </DialogFooter>
-          </DialogContent>
-        </Dialog>
-      </div>
-    </ProtectedRoute>
+              </div>
+              {memberData.project_ids.length > 0 && (
+                <p className="text-xs text-slate-500">{memberData.project_ids.length} project(s) selected</p>
+              )}
+            </div>
+          </div>
+
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setShowAddMemberDialog(false)}>
+              Cancel
+            </Button>
+            <Button
+              onClick={() => addMemberMutation.mutate(memberData)}
+              disabled={
+                !memberData.email ||
+                !memberData.full_name ||
+                !memberData.password ||
+                memberData.password.length < 6 ||
+                !memberData.role_id ||
+                addMemberMutation.isPending
+              }
+              className="bg-emerald-600 hover:bg-emerald-700"
+            >
+              {addMemberMutation.isPending ? (
+                <>
+                  <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                  Adding...
+                </>
+              ) : (
+                <>
+                  <Plus className="w-4 h-4 mr-2" />
+                  Add Member
+                </>
+              )}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    </div>
   );
 }

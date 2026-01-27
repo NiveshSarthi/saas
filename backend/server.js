@@ -152,6 +152,11 @@ app.get('/health', (req, res) => {
   res.json({ status: 'ok', timestamp: new Date() });
 });
 
+// Serve uploaded files
+const uploadsPath = path.resolve(__dirname, 'uploads');
+app.use('/uploads', express.static(uploadsPath));
+console.log(`Serving uploads from ${uploadsPath}`);
+
 // =============================================
 // STATIC FILE SERVING (Production)
 // =============================================

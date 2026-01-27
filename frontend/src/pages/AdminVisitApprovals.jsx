@@ -5,12 +5,16 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Textarea } from '@/components/ui/textarea';
-import { CheckCircle2, XCircle, MapPin, Clock, Calendar, User } from 'lucide-react';
+import { CheckCircle2, XCircle, MapPin, Clock, Calendar, User, ShieldX } from 'lucide-react';
 import { toast } from 'sonner';
 import { format } from 'date-fns';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from '@/components/ui/dialog';
+import { usePermissions } from '@/components/rbac/PermissionsContext';
+import { Link } from 'react-router-dom';
+import { createPageUrl } from '@/utils';
 
 export default function AdminVisitApprovals({ user }) {
+    const { isAdmin, can } = usePermissions();
     const [rejectDialog, setRejectDialog] = useState(null);
     const [rejectionReason, setRejectionReason] = useState('');
     const queryClient = useQueryClient();
@@ -63,6 +67,31 @@ export default function AdminVisitApprovals({ user }) {
             reason: rejectionReason
         });
     };
+
+    const hasAccess = isAdmin() ||
+        user?.role_id === 'hr' ||
+        (user?.department_name && (user.department_name.toLowerCase().includes('hr') || user.department_name.toLowerCase().includes('admin'))) ||
+        user?.department_id === 'dept_hr';
+
+    if (!hasAccess && !isLoading) {
+        return (
+            <div className="flex flex-col items-center justify-center min-h-[60vh] text-center p-6 space-y-6">
+                <div className="w-20 h-20 rounded-full bg-red-100 flex items-center justify-center">
+                    <ShieldX className="w-10 h-10 text-red-600" />
+                </div>
+                <div className="max-w-md">
+                    <h1 className="text-2xl font-bold text-slate-900 mb-2">Access Denied</h1>
+                    <p className="text-slate-500 mb-6">
+                        You don't have permission to access the Gate Pass Approvals.
+                        This page is restricted to HR and Administration departments.
+                    </p>
+                    <Link to={createPageUrl('Dashboard')}>
+                        <Button variant="default">Go to Dashboard</Button>
+                    </Link>
+                </div>
+            </div>
+        );
+    }
 
     if (isLoading) return <div className="p-8 text-center">Loading pending visits...</div>;
 
