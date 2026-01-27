@@ -303,19 +303,28 @@ export default function CheckInOutWidget({ user, todayRecord, onUpdate }) {
         console.log('CheckIn Process: Saving to Database...', attendanceData);
         toast.info('Saving attendance...');
 
-        let dbResponse;
         if (todayRecord) {
-        },
-        onSuccess: () => {
-          queryClient.invalidateQueries({ queryKey: ['today-attendance', user?.email] });
-          queryClient.invalidateQueries({ queryKey: ['attendance-today', user?.email] });
-          toast.success('Successfully checked in');
-          if (onUpdate) onUpdate();
-        },
-          onError: (error) => {
-            toast.error(error.message || 'Check in failed');
-          }
-      });
+          dbResponse = await base44.entities.Attendance.update(todayRecord.id, attendanceData);
+        } else {
+          dbResponse = await base44.entities.Attendance.create(attendanceData);
+        }
+        console.log('CheckIn Process: Database Save Success', dbResponse);
+        toast.success('Attendance Saved!');
+      } catch (err) {
+        console.error('CheckIn Process: Mutation Error Detected', err);
+        throw err;
+      }
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['today-attendance', user?.email] });
+      queryClient.invalidateQueries({ queryKey: ['attendance-today', user?.email] });
+      toast.success('Successfully checked in');
+      if (onUpdate) onUpdate();
+    },
+    onError: (error) => {
+      toast.error(error.message || 'Check in failed');
+    }
+  });
 
   const checkOutMutation = useMutation({
     mutationFn: async () => {
