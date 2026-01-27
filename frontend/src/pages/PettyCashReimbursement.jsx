@@ -1,5 +1,11 @@
+import { jsPDF } from 'jspdf';
+import autoTable from 'jspdf-autotable'; // Default import usually works for autotable
 import React, { useState, useMemo } from 'react';
 import { base44 } from '@/api/base44Client';
+
+// ...
+
+
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { usePermissions } from '@/components/rbac/PermissionsContext';
 import { format } from 'date-fns';
@@ -102,6 +108,7 @@ export default function PettyCashReimbursement() {
   const [selectedItems, setSelectedItems] = useState([]);
   const [activeTab, setActiveTab] = useState('transactions');
   const [searchQuery, setSearchQuery] = useState('');
+  const [exportStatus, setExportStatus] = useState(''); // Visual debug status
 
   const [formData, setFormData] = useState({
     transaction_type: 'reimbursement',
@@ -250,6 +257,102 @@ export default function PettyCashReimbursement() {
     return { myPending, myPaid, systemApprovalCount };
   }, [myReimbursements, pendingApprovals]);
 
+  const handleExportPDF = () => {
+    setExportStatus('Starting PDF export...');
+    try {
+      if (reimbursements.length === 0) {
+        setExportStatus('Error: No data to export');
+        toast.error('No data to export');
+        return;
+      }
+
+      console.log('Starting PDF Export with', reimbursements.length, 'records');
+      const doc = new jsPDF();
+
+      // Add Header
+      doc.setFontSize(18);
+      doc.text('Petty Cash Report', 14, 22);
+      doc.setFontSize(11);
+      doc.setTextColor(100);
+      doc.text(`Generated on: ${format(new Date(), 'MMM dd, yyyy')}`, 14, 30);
+
+      // Table
+      const tableColumn = ["Date", "Employee", "Type", "Category", "Purpose", "Amount", "Status"];
+      const tableRows = reimbursements.map(r => [
+        r.expense_date ? format(new Date(r.expense_date), 'MMM dd, yyyy') : '-',
+        r.employee_name,
+        r.transaction_type,
+        r.category,
+        r.purpose,
+        `Rs. ${r.amount}`,
+        r.status
+      ]);
+
+      console.log('Generating AutoTable');
+      autoTable(doc, {
+        head: [tableColumn],
+        body: tableRows,
+        startY: 40,
+        styles: { fontSize: 8 },
+        headStyles: { fillColor: [79, 70, 229] } // Indigo-600
+      });
+
+      console.log('Saving PDF');
+      doc.save(`petty_cash_report_${new Date().toISOString().split('T')[0]}.pdf`);
+      setExportStatus('PDF Downloaded Successfully');
+      toast.success('PDF Downloaded');
+      setTimeout(() => setExportStatus(''), 5000);
+    } catch (e) {
+      console.error('PDF Export Error:', e);
+      setExportStatus(`PDF Error: ${e.message}`);
+      toast.error('Failed to export PDF: ' + e.message);
+    }
+  };
+
+  const handleExportCSV = () => {
+    setExportStatus('Starting CSV export...');
+    try {
+      if (reimbursements.length === 0) {
+        setExportStatus('No data to export');
+        toast.error('No data to export');
+        return;
+      }
+
+      const headers = ['ID', 'Date', 'Employee', 'Type', 'Category', 'Purpose', 'Amount', 'Status', 'Approved By'];
+      const csvContent = [
+        headers.join(','),
+        ...reimbursements.map(r => [
+          r.id,
+          r.expense_date,
+          `"${r.employee_name || ''}"`,
+          r.transaction_type,
+          r.category,
+          `"${(r.purpose || '').replace(/"/g, '""')}"`,
+          `Rs. ${r.amount}`,
+          r.status,
+          r.approved_by || ''
+        ].join(','))
+      ].join('\n');
+
+      const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.setAttribute('download', `petty_cash_export_${new Date().toISOString().split('T')[0]}.csv`);
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+
+      setExportStatus('CSV Downloaded');
+      toast.success('CSV Downloaded');
+      setTimeout(() => setExportStatus(''), 5000);
+    } catch (e) {
+      console.error('CSV Export Error:', e);
+      setExportStatus(`CSV Error: ${e.message}`);
+      toast.error('CSV Export Failed');
+    }
+  };
+
   return (
     <div className="min-h-screen bg-slate-50 p-6 lg:p-10 space-y-8">
       {/* Header Section */}
@@ -267,10 +370,27 @@ export default function PettyCashReimbursement() {
         </div>
 
         <div className="flex items-center gap-3">
-          <Button variant="outline" className="h-11 px-5 border-slate-200 hover:bg-white shadow-sm">
-            <Download className="w-4 h-4 mr-2" />
-            Export Data
-          </Button>
+          {exportStatus && <div className="text-xs font-bold text-red-600 bg-red-50 px-2 py-1 rounded animate-pulse">{exportStatus}</div>}
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button variant="outline" className="h-11 px-5 border-slate-200 hover:bg-white shadow-sm gap-2">
+                <Download className="w-4 h-4" />
+                Export
+                <ChevronRight className="w-3 h-3 opacity-50 rotate-90" />
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" className="w-40">
+              <DropdownMenuItem onSelect={(e) => { e.preventDefault(); handleExportCSV(); }} className="cursor-pointer">
+                <FileText className="w-4 h-4 mr-2" />
+                As CSV
+              </DropdownMenuItem>
+              <DropdownMenuItem onSelect={(e) => { e.preventDefault(); handleExportPDF(); }} className="cursor-pointer">
+                <FileText className="w-4 h-4 mr-2" />
+                As PDF
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
+
           <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
             <DialogTrigger asChild>
               <Button className="h-11 px-6 bg-indigo-600 hover:bg-indigo-700 text-white shadow-lg shadow-indigo-100 transition-all active:scale-95">
