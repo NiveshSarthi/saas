@@ -140,155 +140,169 @@ export default function CheckInOutWidget({ user, todayRecord, onUpdate }) {
   }, []);
 
 
-  const getLocation = (useHighAccuracy = true) => {
-    return new Promise((resolve) => {
-      console.log('CheckIn Process: Starting getLocation', { useHighAccuracy });
-      toast.info('Requesting location access...');
-
-      if (!navigator.geolocation) {
-        console.error('CheckIn Process: Geolocation not supported');
-        toast.error('Location services not supported by your browser');
-        resolve(null);
-        return;
-      }
-
-      setGettingLocation(true);
-      setLocationPermissionDenied(false);
-
-      const options = {
-        timeout: useHighAccuracy ? 10000 : 5000, // Increased timeout slightly
-        enableHighAccuracy: useHighAccuracy,
-        maximumAge: 0 // Force fresh location
-      };
-
-      const successCallback = (position) => {
-        console.log('CheckIn Process: Location success', position);
-        setGettingLocation(false);
-        resolve({
-          latitude: position.coords.latitude,
-          longitude: position.coords.longitude,
-          accuracy: position.coords.accuracy
-        });
-      };
-
-      const errorCallback = async (error) => {
-        console.warn('CheckIn Process: Location error', error.code, error.message);
-
-        if (error.code === 1) { // Permission Denied
-          setGettingLocation(false);
-          setLocationPermissionDenied(true);
-          toast.error('Location access denied. Please enable it in browser settings.');
-          resolve(null);
-        } else if (useHighAccuracy) {
-          // Fallback to standard accuracy
-          console.log('CheckIn Process: High accuracy failed, retrying with low accuracy...');
-          toast.loading('High accuracy failed, trying standard location...');
-          const standardLocation = await getLocation(false);
-          resolve(standardLocation);
-        } else {
-          setGettingLocation(false);
-          toast.error(`Location failed: ${error.message}`);
-          resolve(null);
-        }
-      };
-
-      // Safety timeout in case the browser's geolocation API hangs (happens on some Windows devices)
-      const safetyTimeout = setTimeout(() => {
-        console.error('CheckIn Process: Safety timeout triggered');
-        if (useHighAccuracy) {
-          // Try fallback
-          // We can't easily cancel the pending geolocation request, but we can resolve this promise
-          // The errorCallback might still fire later but we've already resolved.
-          // Ideally we just treat it as a fail or fallback here.
-          console.log('CheckIn Process: Triggering fallback due to timeout');
-          // We'll let the fallback logic handle it by simulating an error or just recursively calling
-          getLocation(false).then(resolve);
-        } else {
-          setGettingLocation(false);
-          toast.error('Location request timed out. Please check your GPS.');
-          resolve(null);
-        }
-      }, 12000); // 12 seconds total timeout (slightly longer than options.timeout)
-
-      navigator.geolocation.getCurrentPosition(
-        (pos) => {
-          clearTimeout(safetyTimeout);
-          successCallback(pos);
-        },
-        (err) => {
-          clearTimeout(safetyTimeout);
-          errorCallback(err);
-        },
-        options
-      );
+  // Helper to wrap navigator.geolocation in a promise
+  const fetchPosition = (options) => {
+    return new Promise((resolve, reject) => {
+      navigator.geolocation.getCurrentPosition(resolve, reject, options);
     });
+  };
+
+  // Helper to add timeout to a promise
+  const withTimeout = (promise, ms) => {
+    return new Promise((resolve, reject) => {
+      const timer = setTimeout(() => {
+        reject(new Error('Location request timed out'));
+      }, ms);
+
+      promise
+        .then((res) => {
+          clearTimeout(timer);
+          resolve(res);
+        })
+        .catch((err) => {
+          clearTimeout(timer);
+          reject(err);
+        });
+    });
+  };
+
+  const getLocation = async () => {
+    console.log('CheckIn Process: getLocation handling started');
+    toast.info('Requesting location...');
+    setGettingLocation(true);
+    setLocationPermissionDenied(false);
+
+    if (!navigator.geolocation) {
+      toast.error('Location services not supported');
+      setGettingLocation(false);
+      return null;
+    }
+
+    try {
+      // Try High Accuracy First (5s timeout)
+      console.log('CheckIn Process: Trying High Accuracy');
+      const pos = await withTimeout(
+        fetchPosition({ enableHighAccuracy: true, timeout: 5000, maximumAge: 0 }),
+        6000 // 6s safety timeout wrapper
+      );
+
+      console.log('CheckIn Process: High Accuracy Success', pos);
+      return {
+        latitude: pos.coords.latitude,
+        longitude: pos.coords.longitude,
+        accuracy: pos.coords.accuracy
+      };
+
+    } catch (err) {
+      console.warn('CheckIn Process: High Accuracy Failed/Timed out', err);
+      toast.info('High accuracy failed, trying standard location...');
+
+      // Try Low Accuracy Fallback (5s timeout)
+      try {
+        console.log('CheckIn Process: Trying Low Accuracy');
+        const pos = await withTimeout(
+          fetchPosition({ enableHighAccuracy: false, timeout: 5000, maximumAge: 0 }),
+          6000
+        );
+
+        console.log('CheckIn Process: Low Accuracy Success', pos);
+        return {
+          latitude: pos.coords.latitude,
+          longitude: pos.coords.longitude,
+          accuracy: pos.coords.accuracy
+        };
+      } catch (finalErr) {
+        console.error('CheckIn Process: All location attempts failed', finalErr);
+
+        if (finalErr.code === 1) { // Permission Denied
+          setLocationPermissionDenied(true);
+          toast.error('Location permission denied.');
+        } else {
+          toast.error('Could not determine location. Please ensure GPS is on.');
+        }
+        return null;
+      }
+    } finally {
+      console.log('CheckIn Process: getLocation cleanup');
+      setGettingLocation(false);
+    }
   };
 
 
   const checkInMutation = useMutation({
     mutationFn: async () => {
+      console.log('CheckIn Process: Mutation Started');
+      toast.info('Starting Check-in Process...');
       const now = new Date();
 
-      if (settings && !isWorkDay(now, settings)) {
-        throw new Error('Today is a week-off or holiday. Attendance not required.');
-      }
+      try {
+        console.log('CheckIn Process: Settings & Record', { settings, todayRecord, isWorkDay: settings ? isWorkDay(now, settings) : 'N/A' });
 
-      if (todayRecord && todayRecord.check_in && settings && !settings.allow_multiple_checkins) {
-        throw new Error('You have already checked in today');
-      }
+        if (settings && !isWorkDay(now, settings)) {
+          throw new Error('Today is a week-off or holiday. Attendance not required.');
+        }
 
-      const today = format(now, 'yyyy-MM-dd');
+        if (todayRecord && todayRecord.check_in && settings && !settings.allow_multiple_checkins) {
+          throw new Error('You have already checked in today');
+        }
 
-      let location = null;
-      let ip = null;
+        const today = format(now, 'yyyy-MM-dd');
 
-      // STRICT LOCATION ENFORCEMENT
-      location = await getLocation();
+        let location = null;
+        let ip = null;
 
-      // If geofencing enabled and no location -> BLOCK
-      if (settings?.enable_geofencing && !location) {
-        throw new Error("Location access is MANDATORY for attendance geofencing. Please ensure GPS is active.");
-      }
+        // STRICT LOCATION ENFORCEMENT
+        location = await getLocation();
 
-      ip = await getIPAddress();
+        // If geofencing enabled and no location -> BLOCK
+        if (settings?.enable_geofencing && !location) {
+          throw new Error("Location access is MANDATORY for attendance geofencing. Please ensure GPS is active.");
+        }
 
-      if (settings && settings.enable_geofencing && location) {
-        const distance = calculateDistance(
-          location.latitude,
-          location.longitude,
-          settings.office_latitude,
-          settings.office_longitude
-        );
+        ip = await getIPAddress();
 
-        if (distance > settings.geofence_radius_meters) {
-          throw new Error(`You are ${Math.round(distance)}m away. Must be within ${settings.geofence_radius_meters}m.`);
+        if (settings && settings.enable_geofencing && location) {
+          const distance = calculateDistance(
+            location.latitude,
+            location.longitude,
+            settings.office_latitude,
+            settings.office_longitude
+          );
+
+          if (distance > settings.geofence_radius_meters) {
+            throw new Error(`You are ${Math.round(distance)}m away. Must be within ${settings.geofence_radius_meters}m.`);
+          }
+        }
+
+        const isLate = isLateCheckIn(now, settings);
+
+        const attendanceData = {
+          user_email: user.email,
+          user_name: user.full_name || user.email,
+          department_id: user.department_id,
+          role_id: user.role_id,
+          date: today,
+          check_in: now.toISOString(),
+          status: 'checked_in',
+          source: 'web',
+          ip_address: ip,
+          location: location,
+          device_info: getDeviceInfo(),
+          is_late: isLate,
+          marked_by: user.email
+        };
+
+        if (todayRecord) {
+          await base44.entities.Attendance.update(todayRecord.id, attendanceData);
+        } else {
+          await base44.entities.Attendance.create(attendanceData);
         }
       }
-
-      const isLate = isLateCheckIn(now, settings);
-
-      const attendanceData = {
-        user_email: user.email,
-        user_name: user.full_name || user.email,
-        department_id: user.department_id,
-        role_id: user.role_id,
-        date: today,
-        check_in: now.toISOString(),
-        status: 'checked_in',
-        source: 'web',
-        ip_address: ip,
-        location: location,
-        device_info: getDeviceInfo(),
-        is_late: isLate,
-        marked_by: user.email
-      };
-
-      if (todayRecord) {
-        await base44.entities.Attendance.update(todayRecord.id, attendanceData);
-      } else {
-        await base44.entities.Attendance.create(attendanceData);
-      }
-    },
+    } catch(err) {
+      console.error('CheckIn Process: Mutation Error Detected', err);
+      throw err; // Re-throw to be caught by onError
+    }
+  },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['today-attendance', user?.email] });
       queryClient.invalidateQueries({ queryKey: ['attendance-today', user?.email] });
@@ -300,238 +314,242 @@ export default function CheckInOutWidget({ user, todayRecord, onUpdate }) {
     }
   });
 
-  const checkOutMutation = useMutation({
-    mutationFn: async () => {
-      const now = new Date();
-      const ip = await getIPAddress();
-      let location = await getLocation();
+const checkOutMutation = useMutation({
+  mutationFn: async () => {
+    const now = new Date();
+    const ip = await getIPAddress();
+    let location = await getLocation();
 
-      if (settings?.enable_geofencing && !location) {
-        throw new Error("Location access is MANDATORY for checkout geofencing. Please ensure GPS is active.");
-      }
-
-      const checkInTime = new Date(todayRecord.check_in);
-      const diffMs = now.getTime() - checkInTime.getTime();
-      const hours = diffMs / (1000 * 60 * 60);
-
-      const updateData = {
-        check_out: now.toISOString(),
-        status: 'completed',
-        total_hours: hours,
-        checkout_location: location,
-        checkout_ip: ip
-      };
-
-      await base44.entities.Attendance.update(todayRecord.id, updateData);
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['today-attendance', user?.email] });
-      queryClient.invalidateQueries({ queryKey: ['attendance-today', user?.email] });
-      toast.success('Checked out successfully');
-      if (onUpdate) onUpdate();
-    },
-    onError: (error) => {
-      toast.error(error.message || 'Check out failed');
+    if (settings?.enable_geofencing && !location) {
+      throw new Error("Location access is MANDATORY for checkout geofencing. Please ensure GPS is active.");
     }
-  });
 
-  const handleStartVisitClick = async () => {
-    try {
-      const loc = await getLocation();
+    const checkInTime = new Date(todayRecord.check_in);
+    const diffMs = now.getTime() - checkInTime.getTime();
+    const hours = diffMs / (1000 * 60 * 60);
 
-      if (!loc && settings?.enable_geofencing) {
-        toast.error("Location is required to start a site visit.");
-        return;
-      }
+    const updateData = {
+      check_out: now.toISOString(),
+      status: 'completed',
+      total_hours: hours,
+      checkout_location: location,
+      checkout_ip: ip
+    };
 
-      setCurrentLocation(loc);
-      setVisitDialogOpen(true);
-    } catch (e) {
-      toast.error("Location access needed for Gate Pass");
+    await base44.entities.Attendance.update(todayRecord.id, updateData);
+  },
+  onSuccess: () => {
+    queryClient.invalidateQueries({ queryKey: ['today-attendance', user?.email] });
+    queryClient.invalidateQueries({ queryKey: ['attendance-today', user?.email] });
+    toast.success('Checked out successfully');
+    if (onUpdate) onUpdate();
+  },
+  onError: (error) => {
+    toast.error(error.message || 'Check out failed');
+  }
+});
+
+const handleStartVisitClick = async () => {
+  try {
+    const loc = await getLocation();
+
+    if (!loc && settings?.enable_geofencing) {
+      toast.error("Location is required to start a site visit.");
+      return;
     }
-  };
 
-  return (
-    <div className="space-y-6">
-      {/* Active Visit Card */}
-      {activeVisit && <ActiveVisitCard visit={activeVisit} currentLocation={currentLocation} />}
+    setCurrentLocation(loc);
+    setVisitDialogOpen(true);
+  } catch (e) {
+    toast.error("Location access needed for Gate Pass");
+  }
+};
 
-      <Card className="border-0 shadow-lg bg-gradient-to-r from-indigo-600 to-purple-700 text-white overflow-hidden relative">
-        <div className="absolute inset-0 bg-[url('data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iNjAiIGhlaWdodD0iNjAiIHhtbG5zPSJodHRwOi8vd3d3LnczLm9yZy8yMDAwL3N2ZyI+PGRlZnM+PHBhdHRlcm4gaWQ9ImdyaWQiIHdpZHRoPSI2MCIgaGVpZ2h0PSI2MCIgcGF0dGVyblVuaXRzPSJ1c2VyU3BhY2VPblVzZSI+PHBhdGggZD0iTSAxMCAwIEwgMCAwIDAgMTAiIGZpbGw9Im5vbmUiIHN0cm9rZT0id2hpdGUiIHN0cm9rZS1vcGFjaXR5PSIwLjEiIHN0cm9rZS13aWR0aD0iMSIvPjwvcGF0dGVybj48L2RlZnM+PHJlY3Qgd2lkdGg9IjEwMCUiIGhlaWdodD0iMTAwJSIgZmlsbD0idXJsKCNncmlkKSIvPjwvc3ZnPg==')] opacity-10"></div>
+return (
+  <div className="space-y-6">
+    {/* Active Visit Card */}
+    {activeVisit && <ActiveVisitCard visit={activeVisit} currentLocation={currentLocation} />}
 
-        <div className="relative p-6 flex flex-col items-center justify-between gap-6 md:gap-8">
+    <Card className="border-0 shadow-lg bg-gradient-to-r from-indigo-600 to-purple-700 text-white overflow-hidden relative">
+      <div className="absolute inset-0 bg-[url('data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iNjAiIGhlaWdodD0iNjAiIHhtbG5zPSJodHRwOi8vd3d3LnczLm9yZy8yMDAwL3N2ZyI+PGRlZnM+PHBhdHRlcm4gaWQ9ImdyaWQiIHdpZHRoPSI2MCIgaGVpZ2h0PSI2MCIgcGF0dGVyblVuaXRzPSJ1c2VyU3BhY2VPblVzZSI+PHBhdGggZD0iTSAxMCAwIEwgMCAwIDAgMTAiIGZpbGw9Im5vbmUiIHN0cm9rZT0id2hpdGUiIHN0cm9rZS1vcGFjaXR5PSIwLjEiIHN0cm9rZS13aWR0aD0iMSIvPjwvcGF0dGVybj48L2RlZnM+PHJlY3Qgd2lkdGg9IjEwMCUiIGhlaWdodD0iMTAwJSIgZmlsbD0idXJsKCNncmlkKSIvPjwvc3ZnPg==')] opacity-10"></div>
 
-          {/* Top: Clock & Date */}
-          <div className="flex flex-col sm:flex-row items-center gap-6 w-full justify-center sm:justify-start">
-            <div className="p-4 bg-white/10 backdrop-blur-md rounded-2xl border border-white/20 shadow-xl flex-shrink-0">
-              <Clock className="w-10 h-10 text-white" />
+      <div className="relative p-6 flex flex-col items-center justify-between gap-6 md:gap-8">
+
+        {/* Top: Clock & Date */}
+        <div className="flex flex-col sm:flex-row items-center gap-6 w-full justify-center sm:justify-start">
+          <div className="p-4 bg-white/10 backdrop-blur-md rounded-2xl border border-white/20 shadow-xl flex-shrink-0">
+            <Clock className="w-10 h-10 text-white" />
+          </div>
+          <div className="text-center sm:text-left">
+            <div className="text-sm font-medium text-indigo-100">
+              {format(currentTime, 'EEEE, MMMM d, yyyy')}
             </div>
-            <div className="text-center sm:text-left">
-              <div className="text-sm font-medium text-indigo-100">
-                {format(currentTime, 'EEEE, MMMM d, yyyy')}
-              </div>
-              <div className="text-4xl sm:text-5xl font-bold tracking-tight whitespace-nowrap">
-                {format(currentTime, 'hh:mm:ss')}
-                <span className="text-xl sm:text-2xl font-medium ml-2 text-indigo-200">{format(currentTime, 'a')}</span>
-              </div>
-              <div className="flex items-center justify-center sm:justify-start gap-2 mt-2">
-                <Badge className={cn("bg-white/20 hover:bg-white/30 text-white border-0", !todayRecord && "animate-pulse")}>
-                  {todayRecord ? (todayRecord.status === 'checked_in' ? 'Running' : 'Completed') : 'Not Started'}
-                </Badge>
-                {todayRecord?.location && (
-                  <span className="text-xs text-indigo-200 flex items-center gap-1">
-                    <MapPin className="w-3 h-3" /> Location Active
-                  </span>
-                )}
-              </div>
+            <div className="text-4xl sm:text-5xl font-bold tracking-tight whitespace-nowrap">
+              {format(currentTime, 'hh:mm:ss')}
+              <span className="text-xl sm:text-2xl font-medium ml-2 text-indigo-200">{format(currentTime, 'a')}</span>
+            </div>
+            <div className="flex items-center justify-center sm:justify-start gap-2 mt-2">
+              <Badge className={cn("bg-white/20 hover:bg-white/30 text-white border-0", !todayRecord && "animate-pulse")}>
+                {todayRecord ? (todayRecord.status === 'checked_in' ? 'Running' : 'Completed') : 'Not Started'}
+              </Badge>
+              {todayRecord?.location && (
+                <span className="text-xs text-indigo-200 flex items-center gap-1">
+                  <MapPin className="w-3 h-3" /> Location Active
+                </span>
+              )}
             </div>
           </div>
+        </div>
 
-          {/* Location Error Alert */}
-          {locationPermissionDenied && (
-            <div className="w-full bg-red-500/20 border border-red-500/50 rounded-xl p-4 flex items-center gap-3 animate-in fade-in slide-in-from-top-4">
-              <AlertCircle className="w-6 h-6 text-red-200" />
-              <div className="flex-1">
-                <p className="font-bold text-red-100">Location Access Required</p>
-                <p className="text-sm text-red-200/80">
-                  Please enable location services in your browser settings to mark attendance.
-                </p>
-              </div>
-              <Button
-                size="sm"
-                onClick={() => getLocation()}
-                className="bg-white text-red-600 hover:bg-red-50"
-              >
-                Retry Location
-              </Button>
+        {/* Location Error Alert */}
+        {locationPermissionDenied && (
+          <div className="w-full bg-red-500/20 border border-red-500/50 rounded-xl p-4 flex items-center gap-3 animate-in fade-in slide-in-from-top-4">
+            <AlertCircle className="w-6 h-6 text-red-200" />
+            <div className="flex-1">
+              <p className="font-bold text-red-100">Location Access Required</p>
+              <p className="text-sm text-red-200/80">
+                Please enable location services in your browser settings to mark attendance.
+              </p>
             </div>
-          )}
-
-          {/* Middle: Stats (Only if checked in) */}
-          {todayRecord && (
-            <div className="flex flex-wrap items-center justify-around gap-4 w-full bg-indigo-800/20 p-4 rounded-xl border border-white/5">
-              <div className="text-center flex-1 min-w-[80px]">
-                <p className="text-xs text-indigo-200 uppercase font-semibold mb-1">Check In</p>
-                <p className="text-lg sm:text-xl font-bold">
-                  {(() => {
-                    if (!todayRecord.check_in) return '-';
-                    const d = new Date(todayRecord.check_in);
-                    return !isNaN(d.getTime()) ? format(d, 'hh:mm a') : 'Invalid Time';
-                  })()}
-                </p>
-              </div>
-              <div className="w-px h-8 bg-white/20"></div>
-              <div className="text-center flex-1 min-w-[80px]">
-                <p className="text-xs text-indigo-200 uppercase font-semibold mb-1">Check Out</p>
-                <p className="text-lg sm:text-xl font-bold">
-                  {(() => {
-                    if (!todayRecord.check_out) return '-';
-                    const d = new Date(todayRecord.check_out);
-                    return !isNaN(d.getTime()) ? format(d, 'hh:mm a') : '-';
-                  })()}
-                </p>
-              </div>
-              <div className="w-px h-8 bg-white/20"></div>
-              <div className="text-center flex-1 min-w-[80px]">
-                <p className="text-xs text-indigo-200 uppercase font-semibold mb-1">Duration</p>
-                <p className="text-lg sm:text-xl font-bold">
-                  {(() => {
-                    const hours = todayRecord.total_hours || 0;
-                    const h = Math.floor(hours);
-                    const m = Math.round((hours - h) * 60);
-                    if (h === 0 && m === 0) return '0h';
-                    return `${h}h ${m}m`;
-                  })()}
-                </p>
-              </div>
-            </div>
-          )}
-
-          {/* Bottom: Actions */}
-          <div className="flex flex-col sm:flex-row items-stretch gap-4 w-full">
-            {user?.role_id === 'admin' && ( // Debug helpers only for admin if needed, hidden for now
-              null
-            )}
-
-            {isWeekOff && (
-              <div className="sm:hidden w-full mb-2">
-                <Badge variant="outline" className="w-full justify-center text-amber-300 border-amber-300/50 bg-amber-900/20 py-1">
-                  Holiday / Week Off
-                </Badge>
-              </div>
-            )}
-
-            {!locationPermissionDenied && (
-              <Button
-                size="lg"
-                onClick={() => checkInMutation.mutate()}
-                disabled={!canCheckIn || checkInMutation.isPending || gettingLocation}
-                className={cn(
-                  "flex-1 h-12 sm:h-14 rounded-xl font-bold text-base sm:text-lg shadow-lg transition-all",
-                  canCheckIn
-                    ? "bg-white text-indigo-600 hover:bg-indigo-50"
-                    : "bg-indigo-900/50 text-indigo-400 cursor-not-allowed"
-                )}
-              >
-                <LogIn className="w-5 h-5 mr-2 sm:mr-3" />
-                {gettingLocation ? 'Locating...' : (todayRecord?.check_out && !canCheckIn ? 'Completed' : 'Check In')}
-              </Button>
-            )}
-
-            {locationPermissionDenied && (
-              <Button
-                size="lg"
-                onClick={() => getLocation()} // Retry
-                className="flex-1 h-12 sm:h-14 rounded-xl font-bold text-base sm:text-lg shadow-lg transition-all bg-red-600 hover:bg-red-700 text-white animate-pulse"
-              >
-                <MapPin className="w-5 h-5 mr-2 sm:mr-3" />
-                Enable Location
-              </Button>
-            )}
-
-            {/* Site Visit Button (Only if Checked In AND Sales AND No Active Visit) */}
-            {todayRecord?.status === 'checked_in' && !todayRecord.check_out && isSalesUser && !activeVisit && (
-              <Button
-                size="lg"
-                onClick={handleStartVisitClick}
-                disabled={locationPermissionDenied} // Disable if location denied
-                className={cn(
-                  "flex-1 h-12 sm:h-14 rounded-xl font-bold text-base sm:text-lg shadow-lg transition-all text-white",
-                  locationPermissionDenied
-                    ? "bg-slate-600 cursor-not-allowed"
-                    : "bg-emerald-600 hover:bg-emerald-700"
-                )}
-              >
-                <MapPin className="w-5 h-5 mr-2 sm:mr-3" />
-                Start Visit
-              </Button>
-            )}
-
             <Button
-              size="lg"
-              onClick={() => checkOutMutation.mutate()}
-              disabled={!canCheckOut || checkOutMutation.isPending}
-              className={cn(
-                "flex-1 h-12 sm:h-14 rounded-xl font-bold text-base sm:text-lg shadow-lg transition-all",
-                canCheckOut
-                  ? "bg-orange-500 hover:bg-orange-600 text-white border-2 border-transparent"
-                  : "bg-indigo-900/50 text-indigo-400 border-2 border-transparent cursor-not-allowed"
-              )}
+              size="sm"
+              onClick={() => getLocation()}
+              className="bg-white text-red-600 hover:bg-red-50"
             >
-              <LogOut className="w-5 h-5 mr-2 sm:mr-3" />
-              Check Out
+              Retry Location
             </Button>
           </div>
+        )}
 
+        {/* Middle: Stats (Only if checked in) */}
+        {todayRecord && (
+          <div className="flex flex-wrap items-center justify-around gap-4 w-full bg-indigo-800/20 p-4 rounded-xl border border-white/5">
+            <div className="text-center flex-1 min-w-[80px]">
+              <p className="text-xs text-indigo-200 uppercase font-semibold mb-1">Check In</p>
+              <p className="text-lg sm:text-xl font-bold">
+                {(() => {
+                  if (!todayRecord.check_in) return '-';
+                  const d = new Date(todayRecord.check_in);
+                  return !isNaN(d.getTime()) ? format(d, 'hh:mm a') : 'Invalid Time';
+                })()}
+              </p>
+            </div>
+            <div className="w-px h-8 bg-white/20"></div>
+            <div className="text-center flex-1 min-w-[80px]">
+              <p className="text-xs text-indigo-200 uppercase font-semibold mb-1">Check Out</p>
+              <p className="text-lg sm:text-xl font-bold">
+                {(() => {
+                  if (!todayRecord.check_out) return '-';
+                  const d = new Date(todayRecord.check_out);
+                  return !isNaN(d.getTime()) ? format(d, 'hh:mm a') : '-';
+                })()}
+              </p>
+            </div>
+            <div className="w-px h-8 bg-white/20"></div>
+            <div className="text-center flex-1 min-w-[80px]">
+              <p className="text-xs text-indigo-200 uppercase font-semibold mb-1">Duration</p>
+              <p className="text-lg sm:text-xl font-bold">
+                {(() => {
+                  const hours = todayRecord.total_hours || 0;
+                  const h = Math.floor(hours);
+                  const m = Math.round((hours - h) * 60);
+                  if (h === 0 && m === 0) return '0h';
+                  return `${h}h ${m}m`;
+                })()}
+              </p>
+            </div>
+          </div>
+        )}
+
+        {/* Bottom: Actions */}
+        <div className="flex flex-col sm:flex-row items-stretch gap-4 w-full">
+          {user?.role_id === 'admin' && ( // Debug helpers only for admin if needed, hidden for now
+            null
+          )}
+
+          {isWeekOff && (
+            <div className="sm:hidden w-full mb-2">
+              <Badge variant="outline" className="w-full justify-center text-amber-300 border-amber-300/50 bg-amber-900/20 py-1">
+                Holiday / Week Off
+              </Badge>
+            </div>
+          )}
+
+          {!locationPermissionDenied && (
+            <Button
+              size="lg"
+              onClick={() => {
+                console.log('CheckIn Process: Button Clicked');
+                toast.info("Button Clicked - Initiating...");
+                checkInMutation.mutate();
+              }}
+              disabled={!canCheckIn || checkInMutation.isPending || gettingLocation}
+              className={cn(
+                "flex-1 h-12 sm:h-14 rounded-xl font-bold text-base sm:text-lg shadow-lg transition-all",
+                canCheckIn
+                  ? "bg-white text-indigo-600 hover:bg-indigo-50"
+                  : "bg-indigo-900/50 text-indigo-400 cursor-not-allowed"
+              )}
+            >
+              <LogIn className="w-5 h-5 mr-2 sm:mr-3" />
+              {gettingLocation ? 'Locating...' : (todayRecord?.check_out && !canCheckIn ? 'Completed' : 'Check In')}
+            </Button>
+          )}
+
+          {locationPermissionDenied && (
+            <Button
+              size="lg"
+              onClick={() => getLocation()} // Retry
+              className="flex-1 h-12 sm:h-14 rounded-xl font-bold text-base sm:text-lg shadow-lg transition-all bg-red-600 hover:bg-red-700 text-white animate-pulse"
+            >
+              <MapPin className="w-5 h-5 mr-2 sm:mr-3" />
+              Enable Location
+            </Button>
+          )}
+
+          {/* Site Visit Button (Only if Checked In AND Sales AND No Active Visit) */}
+          {todayRecord?.status === 'checked_in' && !todayRecord.check_out && isSalesUser && !activeVisit && (
+            <Button
+              size="lg"
+              onClick={handleStartVisitClick}
+              disabled={locationPermissionDenied} // Disable if location denied
+              className={cn(
+                "flex-1 h-12 sm:h-14 rounded-xl font-bold text-base sm:text-lg shadow-lg transition-all text-white",
+                locationPermissionDenied
+                  ? "bg-slate-600 cursor-not-allowed"
+                  : "bg-emerald-600 hover:bg-emerald-700"
+              )}
+            >
+              <MapPin className="w-5 h-5 mr-2 sm:mr-3" />
+              Start Visit
+            </Button>
+          )}
+
+          <Button
+            size="lg"
+            onClick={() => checkOutMutation.mutate()}
+            disabled={!canCheckOut || checkOutMutation.isPending}
+            className={cn(
+              "flex-1 h-12 sm:h-14 rounded-xl font-bold text-base sm:text-lg shadow-lg transition-all",
+              canCheckOut
+                ? "bg-orange-500 hover:bg-orange-600 text-white border-2 border-transparent"
+                : "bg-indigo-900/50 text-indigo-400 border-2 border-transparent cursor-not-allowed"
+            )}
+          >
+            <LogOut className="w-5 h-5 mr-2 sm:mr-3" />
+            Check Out
+          </Button>
         </div>
-      </Card>
 
-      <SalesVisitDialog
-        open={visitDialogOpen}
-        onOpenChange={setVisitDialogOpen}
-        user={user}
-        currentLocation={currentLocation}
-      />
-    </div>
-  );
+      </div>
+    </Card>
+
+    <SalesVisitDialog
+      open={visitDialogOpen}
+      onOpenChange={setVisitDialogOpen}
+      user={user}
+      currentLocation={currentLocation}
+    />
+  </div>
+);
 }
