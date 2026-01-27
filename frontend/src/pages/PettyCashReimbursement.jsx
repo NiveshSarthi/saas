@@ -27,14 +27,15 @@ import {
   CreditCard,
   TrendingUp,
   CheckSquare,
-  Image as ImageIcon,
+  ImageIcon,
   ChevronRight,
   Filter,
   ArrowUpRight,
   ArrowDownLeft,
   Search,
   MoreVertical,
-  History
+  History,
+  Trash
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -182,6 +183,15 @@ export default function PettyCashReimbursement() {
     }
   });
 
+  const deleteMutation = useMutation({
+    mutationFn: (id) => base44.entities.PettyCashReimbursement.delete(id),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['petty-cash-reimbursements'] });
+      toast.success('Record deleted');
+    },
+    onError: (err) => toast.error('Failed to delete: ' + err.message)
+  });
+
   const handleFileUpload = async (e) => {
     const files = Array.from(e.target.files);
     if (files.length === 0) return;
@@ -250,7 +260,11 @@ export default function PettyCashReimbursement() {
   };
 
   const stats = useMemo(() => {
-    const myPending = myReimbursements.filter(r => r.status === 'submitted').reduce((s, r) => s + (r.amount || 0), 0);
+    // Out-of-Pocket includes Submitted (Pending) AND Approved (but not yet Paid)
+    const myPending = myReimbursements
+      .filter(r => r.status === 'submitted' || r.status === 'approved')
+      .reduce((s, r) => s + (r.amount || 0), 0);
+
     const myPaid = myReimbursements.filter(r => r.status === 'paid').reduce((s, r) => s + (r.amount || 0), 0);
     const systemApprovalCount = pendingApprovals.length;
 
@@ -624,6 +638,11 @@ export default function PettyCashReimbursement() {
             <TransactionTable
               data={myReimbursements.filter(r => r.purpose?.toLowerCase().includes(searchQuery.toLowerCase()))}
               isLoading={isLoading}
+              onDelete={(id) => {
+                if (window.confirm('Are you sure you want to delete this record?')) {
+                  deleteMutation.mutate(id);
+                }
+              }}
             />
           </TabsContent>
 
@@ -663,7 +682,7 @@ export default function PettyCashReimbursement() {
   );
 }
 
-function TransactionTable({ data = [], isAdminView = false, onStatusUpdate, isLoading }) {
+function TransactionTable({ data = [], isAdminView = false, onStatusUpdate, onDelete, isLoading }) {
   if (isLoading) return <div className="flex flex-col gap-3">{[1, 2, 3].map(i => <div key={i} className="h-16 w-full animate-pulse bg-slate-200 rounded-xl" />)}</div>;
 
   if (data.length === 0) return (
@@ -773,6 +792,12 @@ function TransactionTable({ data = [], isAdminView = false, onStatusUpdate, isLo
                     {item.receipt_urls?.length > 0 && (
                       <DropdownMenuItem className="rounded-lg flex items-center gap-2 cursor-pointer py-2" onClick={() => window.open(item.receipt_urls[0], '_blank')}>
                         <Receipt className="w-4 h-4 text-slate-500" /> View Receipt
+                      </DropdownMenuItem>
+                    )}
+
+                    {!isAdminView && onDelete && (item.status === 'submitted' || item.status === 'rejected') && (
+                      <DropdownMenuItem className="rounded-lg flex items-center gap-2 cursor-pointer py-2 text-rose-600 font-bold bg-rose-50 my-1" onClick={() => onDelete(item.id)}>
+                        <Trash className="w-4 h-4" /> Delete
                       </DropdownMenuItem>
                     )}
                   </DropdownMenuContent>
