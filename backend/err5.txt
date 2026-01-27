@@ -1,0 +1,68 @@
+Server running on port 3000
+node : Local MongoDB 
+connection failed: 
+connect ECONNREFUSED 
+127.0.0.1:27017
+At line:1 char:27
++ taskkill /F /IM 
+node.exe; node 
+server.js 2>&1 | 
+Out-File -FilePath 
+er ...
++                    
+       
+~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo   
+           : NotSpe  
+  cified: (Local M   
+ ongoDB c...127.0    
+.0.1:27017:Strin    
+g) [], RemoteExc    
+eption
+    + FullyQualified 
+   ErrorId : Native  
+  CommandError
+ 
+Starting In-Memory MongoDB...
+Connected to In-Memory MongoDB at mongodb://127.0.0.1:51847/
+Seeding initial data...
+Starting seed operation...
+Upserted Role: Super Admin
+Upserted Role: Admin
+Upserted Role: Project Manager
+Upserted Role: Team Member
+Upserted Role: Freelancer
+Upserted Role: HR Manager
+Upserted Role: Client
+Created Department: Engineering
+Created Department: Sales
+Created Department: HR
+Created Department: Marketing
+Created Project: Syndicate
+Created Project: Website Redesign
+Created Project: Marketing_Collateral
+Upserted Group: Frontend Team
+Upserted Group: Backend Team
+Upserted Group: Digital Marketing
+Upserted User: admin@sarthi.com
+Upserted User: pm@sarthi.com
+Upserted User: user@sarthi.com
+Upserted User: client@sarthi.com
+Upserted User: sales.manager@sarthi.com
+Upserted User: freelancer@sarthi.com
+Upserted User: hr@niveshsarthi.com
+Seeding complete
+Seeding complete.
+[Auto-Sync] Starting for 0 active pages...
+[Auto-Sync] Completed: 0 new leads, 0 duplicates.
+Auth Check: undefined
+Auth Check: undefined
+Login Attempt: admin@sarthi.com
+Auth Check: ratnakerkumar56@gmail.com
+Auth Check: ratnakerkumar56@gmail.com
+Auth Check: ratnakerkumar56@gmail.com
+Login Attempt: admin@sarthi.com
+[Auto-Sync] Starting for 0 active pages...
+[Auto-Sync] Completed: 0 new leads, 0 duplicates.
+[Auto-Sync] Starting for 0 active pages...
+[Auto-Sync] Completed: 0 new leads, 0 duplicates.

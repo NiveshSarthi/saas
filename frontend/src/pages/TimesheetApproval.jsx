@@ -100,14 +100,26 @@ export default function TimesheetApproval() {
 
       return await base44.entities.Timesheet.filter(filter, '-submitted_at');
     },
-    enabled: !!user?.email && (user?.role === 'admin' || user?.role === 'manager'),
+    enabled: !!user?.email && (
+      user?.role === 'admin' ||
+      user?.role === 'manager' ||
+      user?.role_id === 'hr' ||
+      user?.department_id === 'dept_hr' || // Fallback for seeds
+      (user?.department_name && (user.department_name.toLowerCase().includes('hr') || user.department_name.toLowerCase().includes('admin')))
+    ),
   });
 
   // Get freelancers for filter
   const { data: freelancers = [] } = useQuery({
     queryKey: ['freelancers-for-filter'],
     queryFn: () => base44.entities.User.filter({ role: 'freelancer' }),
-    enabled: !!user?.email && (user?.role === 'admin' || user?.role === 'manager'),
+    enabled: !!user?.email && (
+      user?.role === 'admin' ||
+      user?.role === 'manager' ||
+      user?.role_id === 'hr' ||
+      user?.department_id === 'dept_hr' ||
+      (user?.department_name && (user.department_name.toLowerCase().includes('hr') || user.department_name.toLowerCase().includes('admin')))
+    ),
   });
 
   const approveTimesheetMutation = useMutation({
@@ -315,7 +327,13 @@ export default function TimesheetApproval() {
     );
   }
 
-  if (user.role !== 'admin' && user.role !== 'manager') {
+  if (
+    user.role !== 'admin' &&
+    user.role !== 'manager' &&
+    user.role_id !== 'hr' &&
+    user.department_id !== 'dept_hr' &&
+    !(user.department_name && (user.department_name.toLowerCase().includes('hr') || user.department_name.toLowerCase().includes('admin')))
+  ) {
     return (
       <div className="min-h-screen bg-slate-50 flex items-center justify-center p-4">
         <div className="bg-white p-8 rounded-2xl shadow-xl text-center max-w-md w-full">
@@ -323,7 +341,7 @@ export default function TimesheetApproval() {
             <XCircle className="w-8 h-8 text-rose-400" />
           </div>
           <h2 className="text-2xl font-bold text-slate-900 mb-2">Access Restricted</h2>
-          <p className="text-slate-500">Only administrators and managers can access timesheet approval.</p>
+          <p className="text-slate-500">Only administrators, managers, and HR/Admin department members can access timesheet approval.</p>
         </div>
       </div>
     );

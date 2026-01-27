@@ -93,6 +93,11 @@ export default function Sidebar({ projects = [], currentPage, user, collapsed, o
     .map(d => d.id || d._id);
   const isHRUser = user?.department_id && hrDeptIds.includes(user.department_id);
 
+  const adminDeptIds = departments
+    .filter(d => d.name?.toLowerCase().includes('administration') || d.name?.toLowerCase() === 'admin')
+    .map(d => d.id || d._id);
+  const isAdminDeptUser = user?.department_id && adminDeptIds.includes(user.department_id);
+
   const isFreelancer = user?.role_id === 'freelancer' || user?.role === 'freelancer';
 
   const isSalesExec = isSalesExecutive(user);
@@ -107,12 +112,12 @@ export default function Sidebar({ projects = [], currentPage, user, collapsed, o
   ];
 
   const hrmsItems = [
-    { name: 'HR Dashboard', icon: UserCheck, page: 'HRDashboard', hrOnly: true },
-    { name: 'Recruitment', icon: UserPlus, page: 'Recruitment', hrOnly: true },
+    { name: 'HR Dashboard', icon: UserCheck, page: 'HRDashboard', hrOrAdminOnly: true },
+    { name: 'Recruitment', icon: UserPlus, page: 'Recruitment', hrOrAdminOnly: true },
     { name: 'Attendance', icon: UserCheck, page: 'Attendance' },
     { name: 'Leave', icon: Calendar, page: 'LeaveManagement', adminOnly: true },
-    { name: 'Salary', icon: DollarSign, page: 'Salary', hrOnly: true },
-    { name: 'Petty Cash', icon: Wallet, page: 'PettyCashReimbursement', hrOnly: true },
+    { name: 'Salary', icon: DollarSign, page: 'Salary', hrOrAdminOnly: true },
+    { name: 'Petty Cash', icon: Wallet, page: 'PettyCashReimbursement', hrOrAdminOnly: true },
   ];
 
   const adminItems = [
@@ -446,6 +451,8 @@ export default function Sidebar({ projects = [], currentPage, user, collapsed, o
                   {hrmsItems.map((item) => {
                     // Skip HR-only items for non-HR users (unless admin)
                     if (item.hrOnly && user?.role_id !== 'hr' && !isAdmin) return null;
+                    // Skip HR/Admin-only items for non-HR and non-Admin users
+                    if (item.hrOrAdminOnly && user?.role_id !== 'hr' && !isHRUser && !isAdminDeptUser && !isAdmin) return null;
                     // Skip admin-only items for non-admins
                     if (item.adminOnly && !isAdmin) return null;
 
@@ -610,7 +617,7 @@ export default function Sidebar({ projects = [], currentPage, user, collapsed, o
           </div>
 
           {/* Admin Section */}
-          {(isAdmin || user?.role_id === 'hr' || isHRUser) && !collapsed && (
+          {(isAdmin || user?.role_id === 'hr' || isHRUser || isAdminDeptUser) && !collapsed && (
             <div className="mt-6 px-3">
               <Collapsible open={adminOpen} onOpenChange={setAdminOpen}>
                 <div className="flex items-center justify-between mb-2">
