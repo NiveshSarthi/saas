@@ -92,9 +92,21 @@ export const parseResume = async (req, res) => {
 };
 
 export const uploadResumeHandler = (req, res) => {
-    if (!req.file) {
-        return res.status(400).json({ error: 'No file uploaded' });
+    try {
+        console.log('--- uploadResumeHandler triggered ---');
+        console.log('Request File:', req.file);
+
+        if (!req.file) {
+            console.error('No file in request');
+            return res.status(400).json({ error: 'No file uploaded' });
+        }
+
+        const url = `/uploads/resumes/${req.file.filename}`;
+        console.log('Upload success, returning URL:', url);
+        res.json({ success: true, url: url, filename: req.file.filename });
+
+    } catch (e) {
+        console.error('Upload Handler Error:', e);
+        res.status(500).json({ error: e.message });
     }
-    const url = `/uploads/resumes/${req.file.filename}`;
-    res.json({ success: true, url: url, filename: req.file.filename });
 };
