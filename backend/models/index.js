@@ -802,6 +802,38 @@ const videoCommentSchema = new mongoose.Schema({
     updated_at: { type: Date, default: Date.now }
 });
 
+const reviewFeedbackSchema = new mongoose.Schema({
+    video_id: { type: String, required: true },
+    reviewer_email: { type: String, required: true },
+    feedback: { type: String, required: true },
+    timestamp: { type: Date, default: Date.now }
+});
+
+export const ReviewFeedback = mongoose.model('ReviewFeedback', reviewFeedbackSchema);
+
+// NEW: Marketing KPI Models
+const marketingKPISettingsSchema = new mongoose.Schema({
+    user_id: String,
+    content_targets: mongoose.Schema.Types.Mixed, // { egc_weekly: 5, ... }
+    production_goals: mongoose.Schema.Types.Mixed, // { planning: { yearly: 100... } }
+    created_by: String,
+    created_at: { type: Date, default: Date.now },
+    updated_at: { type: Date, default: Date.now }
+});
+
+const marketingPerformanceLogSchema = new mongoose.Schema({
+    user_id: String,
+    date: String, // YYYY-MM-DD
+    metrics: mongoose.Schema.Types.Mixed, // { egc: 1, awareness: 2 ... }
+    production_data: mongoose.Schema.Types.Mixed, // { planning: 1, shoot: 0 ... }
+    notes: String,
+    created_by: String,
+    created_at: { type: Date, default: Date.now }
+});
+
+export const MarketingKPISettings = mongoose.model('MarketingKPISettings', marketingKPISettingsSchema);
+export const MarketingPerformanceLog = mongoose.model('MarketingPerformanceLog', marketingPerformanceLogSchema);
+
 // Video Log Schema - For activity logging
 const videoLogSchema = new mongoose.Schema({
     video_id: { type: String, required: true },
