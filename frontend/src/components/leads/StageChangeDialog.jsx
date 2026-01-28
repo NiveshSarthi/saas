@@ -92,14 +92,21 @@ export default function StageChangeDialog({ open, onOpenChange, lead, targetStag
         const currentMonth = new Date().toISOString().slice(0, 7); // YYYY-MM
 
         console.log(`💰 Adding incentive bonus of ${bonusAmount} for ${bonusRecipient}`);
-        await base44.entities.SalaryAdjustment.create({
-          employee_email: bonusRecipient,
-          month: currentMonth,
-          adjustment_type: 'incentive',
-          amount: bonusAmount,
-          status: 'approved',
-          description: `Deal closed with ${lead.lead_name || lead.name || 'Client'} - Lead closure incentive bonus`
+        console.log(`💰 Adding sales activity record of ${bonusAmount} for ${bonusRecipient}`);
+
+        // Create SalesActivity for the new incentive policy
+        await base44.entities.SalesActivity.create({
+          user_email: bonusRecipient,
+          user_id: lead.assigned_to_id || '', // Best effort to get ID, though email is primary for calc
+          activity_type: 'closure',
+          amount: parseFloat(data.final_amount), // Store the deal value, NOT the incentive amount
+          approval_status: 'approved',
+          description: `Deal closed with ${lead.lead_name || lead.name || 'Client'}`,
+          lead_id: lead.id,
+          timestamp: new Date().toISOString()
         });
+
+        console.log('✅ Sales Activity record added');
         console.log('✅ Incentive bonus added');
 
         // 1% to Accounts
