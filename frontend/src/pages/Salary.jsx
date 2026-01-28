@@ -498,7 +498,10 @@ export default function SalaryPage() {
     });
 
     // Calculate Totals
-    const totalNet = filteredSalaries.reduce((sum, s) => sum + (s.net_salary || 0), 0);
+    const totalNet = filteredSalaries.reduce((sum, s) => {
+      const calc = calculateEmployeeSalary(s.employee_email);
+      return sum + (calc.net || 0);
+    }, 0);
     doc.setFontSize(12);
     doc.setTextColor(0, 0, 0);
     doc.text(`Total Net Payroll: Rs. ${totalNet.toLocaleString()}`, 280, 20, { align: 'right' });
