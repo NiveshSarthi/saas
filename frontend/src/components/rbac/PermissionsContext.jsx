@@ -152,6 +152,24 @@ export function PermissionsProvider({ children }) {
       }
 
       let fetchedRole = null;
+      let isAdministrationDept = false;
+
+      // Fetch Department Info to check for "Administration"
+      if (userData.department_id) {
+        try {
+          // Attempt to fetch department details
+          // We use filter because get might not be available or consistent for all adapters
+          const depts = await base44.entities.Department.filter({ id: userData.department_id });
+          if (depts && depts.length > 0) {
+            const deptName = depts[0].name.toLowerCase();
+            if (deptName.includes('administration') || deptName === 'admin') {
+              isAdministrationDept = true;
+            }
+          }
+        } catch (deptErr) {
+          console.warn('Failed to fetch department info', deptErr);
+        }
+      }
 
       if (userData.role_id) {
         const roles = await base44.entities.Role.filter({ id: userData.role_id });
@@ -161,7 +179,12 @@ export function PermissionsProvider({ children }) {
       if (fetchedRole) {
         setRole(fetchedRole);
         setPermissions(fetchedRole.permissions || {});
-      } else if (userData.role === 'admin' || userData.role_id === 'admin' || userData.role_id === 'super_admin') {
+      } else if (
+        userData.role === 'admin' ||
+        userData.role_id === 'admin' ||
+        userData.role_id === 'super_admin' ||
+        isAdministrationDept // Grant Admin access to Administration department
+      ) {
         // Fallback for admin users without role_id or if role lookup failed
         setRole({ name: 'Admin', permissions: DEFAULT_ROLES.admin.permissions });
         setPermissions(DEFAULT_ROLES.admin.permissions);
