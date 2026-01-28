@@ -706,8 +706,8 @@ router.post('/invoke/uploadBulkAttendance', async (req, res) => {
             const parts = parseCSVLine(line);
             if (parts.length < 2) continue;
 
-            const employeeName = parts[0];
-            const employeeEmail = parts[1];
+            const employeeName = parts[0]?.trim();
+            const employeeEmail = parts[1]?.trim().toLowerCase();
 
             if (!employeeEmail) continue;
 
@@ -716,9 +716,9 @@ router.post('/invoke/uploadBulkAttendance', async (req, res) => {
                 const dayIdx = 2 + (d - 1) * 3;
                 if (dayIdx + 2 >= parts.length) break;
 
-                const statusInput = parts[dayIdx]?.toLowerCase();
-                const checkInInput = parts[dayIdx + 1];
-                const checkOutInput = parts[dayIdx + 2];
+                const statusInput = parts[dayIdx]?.trim().toLowerCase();
+                const checkInInput = parts[dayIdx + 1]?.trim();
+                const checkOutInput = parts[dayIdx + 2]?.trim();
 
                 // Skip if everything is empty for this day
                 if (!statusInput && !checkInInput && !checkOutInput) continue;

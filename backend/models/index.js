@@ -25,6 +25,13 @@ const userSchema = new mongoose.Schema({
     password_reset_expires: Date,
     last_login: Date,
     created_by: String, // Email of user who created this account
+
+    // Added for extended user management
+    reports_to: String, // Email of manager
+    user_category: String, // internal, realtor, cp, acp, rm, external
+    territory: String,
+    status: { type: String, default: 'active' }, // active, inactive (synced with is_active)
+
     created_at: { type: Date, default: Date.now }
 });
 
