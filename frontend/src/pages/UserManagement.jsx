@@ -188,7 +188,11 @@ export default function UserManagement() {
   const toggleUserActiveMutation = useMutation({
     mutationFn: async ({ userId, active, user }) => {
       console.log('Toggling user:', userId, 'to active:', active);
-      await base44.entities.User.update(userId, { active, status: active ? 'active' : 'inactive' });
+      await base44.entities.User.update(userId, {
+        active,
+        is_active: active, // Update DB schema field
+        status: active ? 'active' : 'inactive' // Update status string
+      });
       await base44.entities.AuditLog.create({
         user_email: currentUser?.email,
         action: 'user_role_changed',
