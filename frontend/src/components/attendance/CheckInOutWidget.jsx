@@ -121,17 +121,15 @@ export default function CheckInOutWidget({ user, todayRecord, onUpdate }) {
   }, [settings, workDays]);
 
   const canCheckIn = React.useMemo(() => {
-    // 1. Safety check for active session (already checked in but not out)
-    if (todayRecord?.status === 'checked_in' && !todayRecord?.check_out) return false;
+    // 1. If no record for today yet -> Allow
+    if (!todayRecord) return true;
 
-    // 2. If we have a completed record (checked out)
-    if (todayRecord?.check_out) {
-      // Only allow if settings EXIST and EXPLICITLY set allow_multiple_checkins to true
-      return settings?.allow_multiple_checkins === true;
-    }
+    // 2. Safety check for active session (already checked in but not out)
+    if (todayRecord.status === 'checked_in' && !todayRecord.check_out) return false;
 
-    // 3. No record for today yet -> Allow
-    return true;
+    // 3. If we have ANY record (completed, present, checked_out, etc.)
+    // We can only check in again if multiple checkins are allowed
+    return settings?.allow_multiple_checkins === true;
   }, [settings, todayRecord]);
 
   const canCheckOut = React.useMemo(() => {
