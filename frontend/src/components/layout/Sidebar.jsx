@@ -138,7 +138,7 @@ export default function Sidebar({ projects = [], currentPage, user, collapsed, o
     { name: 'Settings', icon: Settings, page: 'Settings' },
   ];
 
-  const isAdmin = user?.role === 'admin';
+  const isAdmin = isAdminFunc();
 
   return (
     <>
