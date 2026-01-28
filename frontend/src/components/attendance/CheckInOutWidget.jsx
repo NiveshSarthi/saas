@@ -144,7 +144,9 @@ export default function CheckInOutWidget({ user, todayRecord, onUpdate }) {
   }, [settings, todayRecord]);
 
   const canCheckOut = React.useMemo(() => {
-    return todayRecord && todayRecord.status === 'checked_in' && !todayRecord.check_out;
+    // Relaxed check: logic relies on presence of check_in and absence of check_out
+    // This allows checkout even if status is 'present' or other variants
+    return todayRecord && todayRecord.check_in && !todayRecord.check_out;
   }, [todayRecord]);
 
   // Update time
@@ -463,11 +465,27 @@ export default function CheckInOutWidget({ user, todayRecord, onUpdate }) {
                 <p className="text-xs text-indigo-200 uppercase font-semibold mb-1">Duration</p>
                 <p className="text-lg sm:text-xl font-bold">
                   {(() => {
-                    const hours = todayRecord.total_hours || 0;
-                    const h = Math.floor(hours);
-                    const m = Math.round((hours - h) * 60);
-                    if (h === 0 && m === 0) return '0h';
-                    return `${h}h ${m}m`;
+                    // If checked out, show fixed total
+                    if (todayRecord.check_out && todayRecord.total_hours) {
+                      const hours = todayRecord.total_hours;
+                      const h = Math.floor(hours);
+                      const m = Math.round((hours - h) * 60);
+                      return `${h}h ${m}m`;
+                    }
+
+                    // If running, calculate live difference
+                    if (todayRecord.check_in && !todayRecord.check_out) {
+                      const start = new Date(todayRecord.check_in);
+                      const diffMs = currentTime.getTime() - start.getTime();
+                      if (diffMs < 0) return '0h'; // Clock drift safety
+
+                      const totalHours = diffMs / (1000 * 60 * 60);
+                      const h = Math.floor(totalHours);
+                      const m = Math.round((totalHours - h) * 60);
+                      return `${h}h ${m}m`;
+                    }
+
+                    return '0h';
                   })()}
                 </p>
               </div>
