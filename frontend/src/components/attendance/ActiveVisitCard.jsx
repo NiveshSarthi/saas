@@ -18,7 +18,31 @@ export default function ActiveVisitCard({ visit, currentLocation }) {
 
     const queryClient = useQueryClient();
 
-    // ... (keep useEffect)
+    useEffect(() => {
+        const calculateTime = () => {
+            if (!visit?.start_time || !visit?.estimated_duration_minutes) return;
+
+            const startTime = new Date(visit.start_time);
+            const duration = visit.estimated_duration_minutes;
+            const endTime = addMinutes(startTime, duration);
+            const now = new Date();
+
+            const diff = differenceInMinutes(endTime, now);
+
+            if (diff < 0) {
+                setIsOverdue(true);
+                setTimeLeft(0);
+            } else {
+                setIsOverdue(false);
+                setTimeLeft(diff);
+            }
+        };
+
+        calculateTime();
+        const timer = setInterval(calculateTime, 60000); // Update every minute
+
+        return () => clearInterval(timer);
+    }, [visit]);
 
     const endVisitMutation = useMutation({
         mutationFn: async () => {
