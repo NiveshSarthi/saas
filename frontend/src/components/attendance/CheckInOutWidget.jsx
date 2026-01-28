@@ -27,11 +27,22 @@ export default function CheckInOutWidget({ user, todayRecord, onUpdate }) {
   });
 
   const isSalesUser = React.useMemo(() => {
-    if (!user || departments.length === 0) return false;
-    const dept = departments.find(d => d.id === user.department_id);
-    // Strict check: Only members of a department with "Sales" in the name can see the Visit button
-    // This is for Gate Pass creation
-    return dept?.name?.toLowerCase().includes('sales');
+    if (!user) return false;
+
+    // 1. Check Department logic
+    if (departments.length > 0) {
+      const dept = departments.find(d => d.id === user.department_id);
+      const deptName = dept?.name?.toLowerCase();
+      if (deptName?.includes('sales') || deptName?.includes('marketing') || deptName?.includes('presales')) return true;
+    }
+
+    // 2. Check Role/Department ID hardcodes
+    const deptId = user.department_id?.toLowerCase() || '';
+    if (deptId.includes('sales') || deptId.includes('marketing')) return true;
+
+    // 3. Check Job Title
+    const title = user.job_title?.toLowerCase() || '';
+    return title.includes('sales') || title.includes('business development') || title.includes('executive') || title.includes('manager');
   }, [user, departments]);
 
   // Fetch active site visit
@@ -509,8 +520,8 @@ export default function CheckInOutWidget({ user, todayRecord, onUpdate }) {
               </Button>
             )}
 
-            {/* Site Visit Button (Only if Checked In AND Sales AND No Active Visit) */}
-            {todayRecord?.status === 'checked_in' && !todayRecord.check_out && isSalesUser && !activeVisit && (
+            {/* Site Visit Button (Only if Checked In/Present AND Sales AND No Active Visit) */}
+            {todayRecord && !todayRecord.check_out && isSalesUser && !activeVisit && (
               <Button
                 size="lg"
                 onClick={handleStartVisitClick}
