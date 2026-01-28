@@ -1,63 +1,71 @@
+
 import mongoose from 'mongoose';
-import { Lead, FacebookPageConnection } from './models/index.js';
 import dotenv from 'dotenv';
+import path from 'path';
+import { fileURLToPath } from 'url';
 
-dotenv.config();
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+dotenv.config({ path: path.resolve(__dirname, '.env') });
 
-const DEBUG_API_VERSION = 'v21.0';
+import { Lead, SalesActivity, User } from './models/index.js';
 
-mongoose.connect(process.env.MONGODB_URI)
-    .then(async () => {
-        console.log('--- DB DIAGNOSTIC ---');
+const run = async () => {
+    try {
+        console.log('Connecting to DB...', process.env.MONGODB_URI);
+        await mongoose.connect(process.env.MONGODB_URI);
+        console.log('Connected!');
 
-        // 1. Check Lead Count
-        const leadCount = await Lead.countDocuments();
-        console.log(`Total Leads in DB: ${leadCount}`);
+        // Check User Hierarchies
+        const usersToCheck = ['client@sarthi.com', 'admin@sarthi.com', 'sales.manager@sarthi.com'];
+        const users = await User.find({ email: { $in: usersToCheck } });
 
-        if (leadCount > 0) {
-            const sample = await Lead.findOne();
-            console.log('Sample Lead:', JSON.stringify(sample, null, 2));
+        console.log('\n--- User Hierarchy Check ---');
+        users.forEach(u => {
+            console.log(`User: ${u.email}, Reports To: ${u.reports_to}, Role: ${u.role}`);
+        });
+
+        // Check for leads updated TODAY (Jan 28 2026)
+        const startOfDay = new Date('2026-01-28T00:00:00.000Z');
+        const leads = await Lead.find({
+            updated_at: { $gte: startOfDay }
+        }).limit(20);
+
+        console.log(`\nFound ${leads.length} leads updated today.`);
+
+        leads.forEach((lead, index) => {
+            console.log(`\n--- Lead ${index + 1} ---`);
+            console.log(JSON.stringify({
+                id: lead._id,
+                name: lead.lead_name,
+                email: lead.email,
+                assigned_to: lead.assigned_to,
+                status: lead.status,
+                payment_date: lead.payment_date,
+                updated_at: lead.updated_at,
+                created_date: lead.created_date,
+                payment_amount: lead.payment_amount,
+                final_amount: lead.final_amount,
+                fb_page_id: lead.fb_page_id // check if it's social
+            }, null, 2));
+        });
+
+        if (leads.length === 0) {
+            console.log("No completed leads found. Dumping first 3 leads of ANY status:");
+            const allLeads = await Lead.find({}).limit(3);
+            console.log(JSON.stringify(allLeads, null, 2));
         }
 
-        // 2. Check Connection
-        console.log('\n--- FACEBOOK CONNECTION ---');
-        const pages = await FacebookPageConnection.find();
-        console.log(`Connected Pages: ${pages.length}`);
+        // Also check SalesActivity
+        console.log("\n--- Sales Activities (Last 5) ---");
+        const activities = await SalesActivity.find({}).sort({ timestamp: -1 }).limit(5);
+        console.log(JSON.stringify(activities, null, 2));
 
-        for (const page of pages) {
-            console.log(`Page: ${page.page_name} (ID: ${page.page_id}) - Status: ${page.status}`);
-            console.log(`Forms detected: ${page.lead_forms.length}`);
+    } catch (e) {
+        console.error(e);
+    } finally {
+        await mongoose.disconnect();
+    }
+};
 
-            // 3. Test API for each form
-            if (page.status === 'active' && page.lead_forms.length > 0) {
-                for (const form of page.lead_forms) {
-                    console.log(`\nTesting Form: ${form.form_name} (${form.form_id})`);
-                    try {
-                        const url = `https://graph.facebook.com/${DEBUG_API_VERSION}/${form.form_id}/leads?access_token=${page.access_token}`;
-                        // console.log(`Fetching: ${url}`); // Don't log full token in artifact if possible, but safe here locally
-
-                        const res = await fetch(url);
-                        const data = await res.json();
-
-                        if (data.error) {
-                            console.error('API Error:', data.error.message);
-                        } else {
-                            console.log(`API Lead Count: ${data.data ? data.data.length : 0}`);
-                            if (data.data && data.data.length > 0) {
-                                console.log('First Lead ID:', data.data[0].id);
-                                console.log('First Lead Created Time:', data.data[0].created_time);
-                            }
-                        }
-                    } catch (e) {
-                        console.error('Fetch Failed:', e.message);
-                    }
-                }
-            }
-        }
-
-        process.exit(0);
-    })
-    .catch(err => {
-        console.error('Setup Error:', err);
-        process.exit(1);
-    });
+run();

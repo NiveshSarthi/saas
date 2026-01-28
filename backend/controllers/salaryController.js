@@ -52,6 +52,12 @@ export const calculateMonthlySalary = async (req, res) => {
             if (!uniqueUsers.includes(r.employee_email)) uniqueUsers.push(r.employee_email);
         });
 
+        // FIX: Ensure ALL active users are processed (e.g. Sales users without attendance)
+        const activeUsers = await User.find({ is_active: true });
+        activeUsers.forEach(u => {
+            if (!uniqueUsers.includes(u.email)) uniqueUsers.push(u.email);
+        });
+
         for (const userEmail of uniqueUsers) {
             const userAttendance = attendanceRecords.filter(a => a.user_email === userEmail);
             const policy = allPolicies.find(p => p.user_email === userEmail);
@@ -339,10 +345,22 @@ export const calculateMonthlySalary = async (req, res) => {
             });
 
             // Fetch Completed Leads (Direct Sales) - Fix for missing incentives
+            // Use payment_date if available, otherwise fallback to updated_at or created_date (assuming close happens near update)
             const salesLeads = await Lead.find({
                 assigned_to: userEmail,
-                payment_date: { $gte: new Date(startDate), $lte: new Date(endDate + 'T23:59:59') },
-                status: { $in: ['won', 'closed', 'booked', 'sold', 'completed', 'final'] }
+                status: { $in: ['won', 'closed', 'booked', 'sold', 'completed', 'final', 'closed_won'] }, // Added closed_won
+                $or: [
+                    { payment_date: { $gte: new Date(startDate), $lte: new Date(endDate + 'T23:59:59') } },
+                    {
+                        payment_date: { $exists: false },
+                        updated_at: { $gte: new Date(startDate), $lte: new Date(endDate + 'T23:59:59') }
+                    },
+                    {
+                        payment_date: { $exists: false },
+                        updated_at: { $exists: false },
+                        created_date: { $gte: new Date(startDate), $lte: new Date(endDate + 'T23:59:59') }
+                    }
+                ]
             });
 
             // Combine Unique Sales (Activity + Leads)
@@ -399,8 +417,19 @@ export const calculateMonthlySalary = async (req, res) => {
                 // Fetch Team Leads
                 const teamLeads = await Lead.find({
                     assigned_to: { $in: teamEmails },
-                    payment_date: { $gte: new Date(startDate), $lte: new Date(endDate + 'T23:59:59') },
-                    status: { $in: ['won', 'closed', 'booked', 'sold', 'completed', 'final'] }
+                    status: { $in: ['won', 'closed', 'booked', 'sold', 'completed', 'final', 'closed_won'] },
+                    $or: [
+                        { payment_date: { $gte: new Date(startDate), $lte: new Date(endDate + 'T23:59:59') } },
+                        {
+                            payment_date: { $exists: false },
+                            updated_at: { $gte: new Date(startDate), $lte: new Date(endDate + 'T23:59:59') }
+                        },
+                        {
+                            payment_date: { $exists: false },
+                            updated_at: { $exists: false },
+                            created_date: { $gte: new Date(startDate), $lte: new Date(endDate + 'T23:59:59') }
+                        }
+                    ]
                 });
 
                 // Combine Team Sales

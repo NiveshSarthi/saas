@@ -82,6 +82,12 @@ export default function LeadDetail() {
     fetchUser();
   }, []);
 
+  const { data: organization } = useQuery({
+    queryKey: ['organization', currentUser?.organization_id],
+    queryFn: () => base44.entities.Organization.get(currentUser.organization_id),
+    enabled: !!currentUser?.organization_id
+  });
+
   const { data: lead, isLoading, error, refetch: refetchLead } = useQuery({
     queryKey: ['lead-detail', leadId],
     queryFn: async () => {
