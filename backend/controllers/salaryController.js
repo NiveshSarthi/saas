@@ -1,5 +1,4 @@
-import {
-    Attendance, SalaryRecord, SalaryPolicy, SalaryAdvance, SalaryAdjustment, LeaveRequest, User, SalesActivity
+Attendance, SalaryRecord, SalaryPolicy, SalaryAdvance, SalaryAdjustment, LeaveRequest, User, SalesActivity, Lead
 } from '../models/index.js';
 
 export const calculateMonthlySalary = async (req, res) => {
@@ -330,6 +329,7 @@ export const calculateMonthlySalary = async (req, res) => {
             // Fetch Approved Sales Activities for this user in this month
             // Date format in DB is ISO Date, so we filter by range
             // Reuse startDate and endDate from Attendance Logic
+            // Fetch Approved Sales Activities for this user
             const salesActivities = await SalesActivity.find({
                 user_email: userEmail,
                 timestamp: { $gte: new Date(startDate), $lte: new Date(endDate + 'T23:59:59') },
@@ -337,9 +337,39 @@ export const calculateMonthlySalary = async (req, res) => {
                 $or: [{ activity_type: 'closure' }, { status: 'closed_won' }]
             });
 
+            // Fetch Completed Leads (Direct Sales) - Fix for missing incentives
+            const salesLeads = await Lead.find({
+                assigned_to: userEmail,
+                payment_date: { $gte: new Date(startDate), $lte: new Date(endDate + 'T23:59:59') },
+                status: { $in: ['won', 'closed', 'booked', 'sold', 'completed', 'final'] }
+            });
+
+            // Combine Unique Sales (Activity + Leads)
+            const uniqueSalesMap = new Map();
+
+            salesActivities.forEach(a => {
+                // Use lead_id if available, unique sales
+                const key = a.lead_id || a._id.toString();
+                uniqueSalesMap.set(key, { amount: a.amount || 0 });
+            });
+
+            salesLeads.forEach(l => {
+                const key = l._id.toString();
+                // If not already counted via SalesActivity
+                if (!uniqueSalesMap.has(key)) {
+                    // Try to parse amount string to number (remove commas, currency symbols)
+                    let amt = 0;
+                    if (l.payment_amount) amt = parseFloat(l.payment_amount.replace(/[^0-9.-]+/g, ""));
+                    if (isNaN(amt) && l.final_amount) amt = parseFloat(l.final_amount.replace(/[^0-9.-]+/g, ""));
+                    if (isNaN(amt)) amt = 0;
+                    uniqueSalesMap.set(key, { amount: amt });
+                }
+            });
+
             // Calculate Personal Stats
-            const personalSalesCount = salesActivities.length;
-            const personalSalesVolume = salesActivities.reduce((sum, a) => sum + (a.amount || 0), 0);
+            const personalSalesCount = uniqueSalesMap.size;
+            let personalSalesVolume = 0;
+            uniqueSalesMap.forEach(v => personalSalesVolume += v.amount);
 
             // Determine Role Context
             // We check job_title or role for 'Sales Executive' vs 'Sales Manager'
@@ -356,6 +386,7 @@ export const calculateMonthlySalary = async (req, res) => {
 
                 // Fetch Team Sales
                 // Performance optimization: We could do one big query at start, but for now this is safer
+                // Fetch Team Sales Activities
                 const teamEmails = teamMembers.map(u => u.email);
                 const teamActivities = await SalesActivity.find({
                     user_email: { $in: teamEmails },
@@ -364,8 +395,34 @@ export const calculateMonthlySalary = async (req, res) => {
                     $or: [{ activity_type: 'closure' }, { status: 'closed_won' }]
                 });
 
-                const teamSalesCount = teamActivities.length;
-                const teamSalesVolume = teamActivities.reduce((sum, a) => sum + (a.amount || 0), 0);
+                // Fetch Team Leads
+                const teamLeads = await Lead.find({
+                    assigned_to: { $in: teamEmails },
+                    payment_date: { $gte: new Date(startDate), $lte: new Date(endDate + 'T23:59:59') },
+                    status: { $in: ['won', 'closed', 'booked', 'sold', 'completed', 'final'] }
+                });
+
+                // Combine Team Sales
+                const teamUniqueSalesMap = new Map();
+                teamActivities.forEach(a => {
+                    const key = a.lead_id || a._id.toString();
+                    teamUniqueSalesMap.set(key, { amount: a.amount || 0 });
+                });
+
+                teamLeads.forEach(l => {
+                    const key = l._id.toString();
+                    if (!teamUniqueSalesMap.has(key)) {
+                        let amt = 0;
+                        if (l.payment_amount) amt = parseFloat(l.payment_amount.replace(/[^0-9.-]+/g, ""));
+                        if (isNaN(amt) && l.final_amount) amt = parseFloat(l.final_amount.replace(/[^0-9.-]+/g, ""));
+                        if (isNaN(amt)) amt = 0;
+                        teamUniqueSalesMap.set(key, { amount: amt });
+                    }
+                });
+
+                const teamSalesCount = teamUniqueSalesMap.size;
+                let teamSalesVolume = 0;
+                teamUniqueSalesMap.forEach(v => teamSalesVolume += v.amount);
 
                 salesMeta.team_sales_count = teamSalesCount;
                 salesMeta.team_sales_volume = teamSalesVolume;
