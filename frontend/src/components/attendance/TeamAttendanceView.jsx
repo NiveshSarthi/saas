@@ -49,6 +49,29 @@ export default function TeamAttendanceView({ allUsers = [], todayRecords }) {
     },
   });
 
+  // Fetch settings for geofencing coordinates
+  const { data: settings } = useQuery({
+    queryKey: ['attendance-settings'],
+    queryFn: async () => {
+      const res = await base44.entities.AttendanceSettings.list();
+      return res[0] || null;
+    }
+  });
+
+  const calculateDistance = (lat1, lon1, lat2, lon2) => {
+    if (!lat1 || !lon1 || !lat2 || !lon2) return null;
+    const R = 6371e3; // metres
+    const φ1 = lat1 * Math.PI / 180;
+    const φ2 = lat2 * Math.PI / 180;
+    const Δφ = (lat2 - lat1) * Math.PI / 180;
+    const Δλ = (lon2 - lon1) * Math.PI / 180;
+    const a = Math.sin(Δφ / 2) * Math.sin(Δφ / 2) +
+      Math.cos(φ1) * Math.cos(φ2) *
+      Math.sin(Δλ / 2) * Math.sin(Δλ / 2);
+    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+    return Math.round(R * c);
+  };
+
   const teamAttendance = (allUsers || []).map(user => {
     const record = dateRecords.find(r => r.user_email === user.email);
 
@@ -322,11 +345,27 @@ export default function TeamAttendanceView({ allUsers = [], todayRecords }) {
                       </div>
                     </TableCell>
                     <TableCell>
-                      {item.record?.location ? (
-                        <span className="text-xs text-slate-600">
-                          ±{Math.round(item.record.location.accuracy || 0)}m
-                        </span>
-                      ) : (
+                      {item.record?.location ? (() => {
+                        const dist = settings ? calculateDistance(
+                          item.record.location.latitude,
+                          item.record.location.longitude,
+                          settings.office_latitude,
+                          settings.office_longitude
+                        ) : null;
+
+                        return (
+                          <div className="flex flex-col">
+                            {dist !== null && (
+                              <span className={cn("text-xs font-medium", dist > (settings?.geofence_radius_meters || 500) ? "text-red-500" : "text-green-600")}>
+                                {dist}m from Office
+                              </span>
+                            )}
+                            <span className="text-[10px] text-slate-400">
+                              (±{Math.round(item.record.location.accuracy || 0)}m acc)
+                            </span>
+                          </div>
+                        );
+                      })() : (
                         <span className="text-slate-400 text-xs">-</span>
                       )}
                     </TableCell>
