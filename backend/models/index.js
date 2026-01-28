@@ -31,6 +31,7 @@ const userSchema = new mongoose.Schema({
     user_category: String, // internal, realtor, cp, acp, rm, external
     territory: String,
     status: { type: String, default: 'active' }, // active, inactive (synced with is_active)
+    joining_date: Date,
 
     created_at: { type: Date, default: Date.now }
 });
@@ -129,6 +130,9 @@ const salaryRecordSchema = new mongoose.Schema({
     weekoff_days: Number,
     holiday_days: Number,
     gross_salary: Number,
+    sales_incentive: { type: Number, default: 0 },
+    sales_reward: { type: Number, default: 0 },
+    sales_performance_meta: mongoose.Schema.Types.Mixed, // Stores breakdown: count, team_avg, rates
     total_deductions: Number,
     net_salary: Number,
     attendance_adjustments: Number,

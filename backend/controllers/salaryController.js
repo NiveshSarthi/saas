@@ -1,5 +1,5 @@
 import {
-    Attendance, SalaryRecord, SalaryPolicy, SalaryAdvance, SalaryAdjustment, LeaveRequest, User
+    Attendance, SalaryRecord, SalaryPolicy, SalaryAdvance, SalaryAdjustment, LeaveRequest, User, SalesActivity
 } from '../models/index.js';
 
 export const calculateMonthlySalary = async (req, res) => {
@@ -311,6 +311,120 @@ export const calculateMonthlySalary = async (req, res) => {
                     advance_recovery += Math.min(adv.installment_amount || 0, adv.remaining_balance);
                 }
             }
+
+            // Sales Incentive Logic
+            let salesIncentive = 0;
+            let salesReward = 0;
+            let salesMeta = {
+                role_type: 'none',
+                personal_sales_count: 0,
+                personal_sales_volume: 0,
+                team_sales_count: 0,
+                team_sales_volume: 0,
+                team_size: 0,
+                avg_sales_count: 0,
+                applied_incentive_rate: 0,
+                reward_applied: false
+            };
+
+            // Fetch Approved Sales Activities for this user in this month
+            // Date format in DB is ISO Date, so we filter by range
+            // Reuse startDate and endDate from Attendance Logic
+            const salesActivities = await SalesActivity.find({
+                user_email: userEmail,
+                timestamp: { $gte: new Date(startDate), $lte: new Date(endDate + 'T23:59:59') },
+                approval_status: 'approved',
+                $or: [{ activity_type: 'closure' }, { status: 'closed_won' }]
+            });
+
+            // Calculate Personal Stats
+            const personalSalesCount = salesActivities.length;
+            const personalSalesVolume = salesActivities.reduce((sum, a) => sum + (a.amount || 0), 0);
+
+            // Determine Role Context
+            // We check job_title or role for 'Sales Executive' vs 'Sales Manager'
+            const userProfile = allUsers.find(u => u.email === userEmail);
+            const jobTitle = userProfile?.job_title?.toLowerCase() || '';
+
+            if (jobTitle.includes('sales manager') || jobTitle.includes('team lead')) {
+                // SALES MANAGER POLICY
+                salesMeta.role_type = 'manager';
+
+                // Find Team Members (Direct Reports)
+                const teamMembers = allUsers.filter(u => u.reports_to === userEmail);
+                salesMeta.team_size = teamMembers.length;
+
+                // Fetch Team Sales
+                // Performance optimization: We could do one big query at start, but for now this is safer
+                const teamEmails = teamMembers.map(u => u.email);
+                const teamActivities = await SalesActivity.find({
+                    user_email: { $in: teamEmails },
+                    timestamp: { $gte: new Date(startDate), $lte: new Date(endDate + 'T23:59:59') },
+                    approval_status: 'approved',
+                    $or: [{ activity_type: 'closure' }, { status: 'closed_won' }]
+                });
+
+                const teamSalesCount = teamActivities.length;
+                const teamSalesVolume = teamActivities.reduce((sum, a) => sum + (a.amount || 0), 0);
+
+                salesMeta.team_sales_count = teamSalesCount;
+                salesMeta.team_sales_volume = teamSalesVolume;
+
+                // Average Sales per Executive
+                const avgSales = salesMeta.team_size > 0 ? (teamSalesCount / salesMeta.team_size) : 0;
+                salesMeta.avg_sales_count = avgSales;
+
+                // Rate Logic
+                // 3+ (Avg) -> 0.25%
+                // 2 (Avg) -> 0.25%
+                // 1 (Avg) -> 0.10%
+                let rate = 0;
+                if (avgSales >= 2) rate = 0.0025; // 0.25%
+                else if (avgSales >= 1) rate = 0.0010; // 0.10%
+
+                salesMeta.applied_incentive_rate = rate;
+                salesIncentive = teamSalesVolume * rate;
+
+                // Reward Logic: 3+ Avg -> +50% Salary
+                // Base for reward is "Salary" which we interpret as Earned Gross (Policy Based)
+                if (avgSales >= 3) {
+                    salesReward = emp.base_earned_salary * 0.5;
+                    salesMeta.reward_applied = true;
+                }
+
+            } else if (jobTitle.includes('sales') || jobTitle.includes('executive') || jobTitle.includes('associate')) {
+                // SALES EXECUTIVE POLICY
+                salesMeta.role_type = 'executive';
+                salesMeta.personal_sales_count = personalSalesCount;
+                salesMeta.personal_sales_volume = personalSalesVolume;
+
+                // Incentive Logic
+                // 3+ Sales -> 0.25% + Reward
+                // 2 Sales -> 0.25%
+                // 1 Sale -> Basic + Allowance (No CV Incentive implies "25% Nil" refers to incentive rate being Nil/0%)
+
+                if (personalSalesCount >= 2) {
+                    salesMeta.applied_incentive_rate = 0.0025;
+                    salesIncentive = personalSalesVolume * 0.0025;
+                } else if (personalSalesCount === 1) {
+                    // Explicitly Nil incentive for 1 sale based on rule: "25% Nil"
+                    salesMeta.applied_incentive_rate = 0;
+                    salesIncentive = 0;
+                }
+
+                // Reward Logic: 3+ Sales -> +50% Salary
+                if (personalSalesCount >= 3) {
+                    salesReward = emp.base_earned_salary * 0.5;
+                    salesMeta.reward_applied = true;
+                }
+            }
+
+            emp.sales_incentive = Math.round(salesIncentive);
+            emp.sales_reward = Math.round(salesReward);
+            emp.sales_performance_meta = salesMeta;
+
+            // Add Sales Components to Bonus for Net Calculation
+            bonus += emp.sales_incentive + emp.sales_reward;
 
             // Final Totals
             emp.gross_salary = emp.base_earned_salary + attendanceAdjustments;

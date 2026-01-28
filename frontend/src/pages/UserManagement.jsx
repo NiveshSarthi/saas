@@ -395,7 +395,8 @@ export default function UserManagement() {
         role_id: data.role_id || 'team_member',
         department_id: data.department_id || null,
         project_ids: data.project_ids || [],
-        job_title: data.job_title || null
+        job_title: data.job_title || null,
+        joining_date: data.joining_date || null
       });
 
       // Send welcome email (optional)
@@ -425,7 +426,7 @@ export default function UserManagement() {
       queryClient.invalidateQueries({ queryKey: ['invitations'] });
       queryClient.invalidateQueries({ queryKey: ['team-data'] });
       setShowAddMemberDialog(false);
-      setMemberData({ email: '', full_name: '', password: '', role_id: '', department_id: '', project_ids: [], reports_to: '', user_category: 'internal', territory: '', job_title: '' });
+      setMemberData({ email: '', full_name: '', password: '', role_id: '', department_id: '', project_ids: [], reports_to: '', user_category: 'internal', territory: '', job_title: '', joining_date: '' });
       toast.success('Member added successfully');
     },
     onError: (error) => {
@@ -713,6 +714,7 @@ export default function UserManagement() {
                     </th>
                     <th className="px-4 py-3 text-left text-xs font-semibold text-slate-600 uppercase">User</th>
                     <th className="px-4 py-3 text-left text-xs font-semibold text-slate-600 uppercase">Role</th>
+                    <th className="px-4 py-3 text-left text-xs font-semibold text-slate-600 uppercase">Joining Date</th>
                     <th className="px-4 py-3 text-left text-xs font-semibold text-slate-600 uppercase">Department</th>
                     <th className="px-4 py-3 text-left text-xs font-semibold text-slate-600 uppercase">Job Title</th>
                     <th className="px-4 py-3 text-left text-xs font-semibold text-slate-600 uppercase">Reports To</th>
@@ -749,6 +751,11 @@ export default function UserManagement() {
                           <Shield className="w-3 h-3" />
                           {getRoleName(user.role_id)}
                         </Badge>
+                      </td>
+                      <td className="px-4 py-3">
+                        <span className="text-sm text-slate-600">
+                          {user.joining_date ? format(new Date(user.joining_date), 'MMM d, yyyy') : '-'}
+                        </span>
                       </td>
                       <td className="px-4 py-3">
                         <span className="text-sm text-slate-600">
@@ -1339,6 +1346,16 @@ export default function UserManagement() {
               )}
             </div>
 
+            <div className="space-y-2">
+              <Label>Date of Joining {currentUser?.role !== 'admin' && <span className="text-xs text-slate-400 font-normal">(Admin Only)</span>}</Label>
+              <Input
+                type="date"
+                value={editingUser?.joining_date ? format(new Date(editingUser.joining_date), 'yyyy-MM-dd') : ''}
+                onChange={(e) => setEditingUser(u => ({ ...u, joining_date: e.target.value }))}
+                disabled={currentUser?.role !== 'admin'}
+              />
+            </div>
+
             <div className="flex items-center justify-between p-4 bg-slate-50 rounded-lg">
               <div>
                 <Label className="text-base">Account Active</Label>
@@ -1407,7 +1424,8 @@ export default function UserManagement() {
                       job_title: editingUser.job_title,
                       reports_to: editingUser.reports_to || null,
                       user_category: editingUser.user_category || 'internal',
-                      territory: editingUser.territory || ''
+                      territory: editingUser.territory || '',
+                      joining_date: editingUser.joining_date || null
                     },
                     oldUser: originalUser
                   });
@@ -1611,6 +1629,15 @@ export default function UserManagement() {
                   </SelectContent>
                 </Select>
               </div>
+            </div>
+
+            <div className="space-y-2">
+              <Label>Date of Joining (Optional)</Label>
+              <Input
+                type="date"
+                value={memberData.joining_date || ''}
+                onChange={(e) => setMemberData(p => ({ ...p, joining_date: e.target.value }))}
+              />
             </div>
 
             <div className="space-y-2">
