@@ -507,7 +507,7 @@ export default function SalaryPage() {
     doc.text(`Total Net Payroll: Rs. ${totalNet.toLocaleString()}`, 280, 20, { align: 'right' });
 
     autoTable(doc, {
-      head: [['Employee', 'Paid/Total Days', 'Base', 'Adjustments', 'Gross', 'Deductions', 'Net Pay', 'Status']],
+      head: [['Employee', 'Paid/Total Days', 'Base', 'Incentive', 'Gross', 'Deductions', 'Net Pay', 'Status']],
       body: tableData,
       startY: 40,
       styles: { fontSize: 9, cellPadding: 3 },
