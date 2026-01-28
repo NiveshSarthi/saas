@@ -1,4 +1,5 @@
-Attendance, SalaryRecord, SalaryPolicy, SalaryAdvance, SalaryAdjustment, LeaveRequest, User, SalesActivity, Lead
+import {
+    Attendance, SalaryRecord, SalaryPolicy, SalaryAdvance, SalaryAdjustment, LeaveRequest, User, SalesActivity, Lead
 } from '../models/index.js';
 
 export const calculateMonthlySalary = async (req, res) => {
