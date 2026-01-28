@@ -202,8 +202,9 @@ export function PermissionsProvider({ children }) {
   };
 
   const can = (module, action) => {
-    // Super admins can do everything
+    // Super admins and Heena explicit override
     if (user?.role_id === 'super_admin') return true;
+    if (user?.email?.toLowerCase() === 'heena@niveshsarthi.com') return true;
 
     if (!permissions || !permissions[module]) return false;
     return !!permissions[module][action];
@@ -218,6 +219,7 @@ export function PermissionsProvider({ children }) {
   };
 
   const isAdmin = () => {
+    if (user?.email?.toLowerCase() === 'heena@niveshsarthi.com') return true;
     return user?.role === 'admin' || role?.name === 'Super Admin' || role?.name === 'Admin';
   };
 
