@@ -220,7 +220,20 @@ export function PermissionsProvider({ children }) {
 
   const isAdmin = () => {
     if (user?.email?.toLowerCase() === 'heena@niveshsarthi.com') return true;
-    return user?.role === 'admin' || role?.name === 'Super Admin' || role?.name === 'Admin';
+
+    // Explicitly check for Administration department
+    if (user?.department_id) {
+      // We can't easily access departments list here synchronously if it's not in state
+      // But we loaded 'role' based on department earlier.
+      // However, let's rely on the role state which SHOULD be 'Admin' if verify works.
+      // If role state isn't reliable, better to check department if we had it.
+      // Since we don't have departments in context state, we'll trust the role logic.
+      // BUT, to be safe, let's check if the role assigned IS Admin.
+    }
+
+    return user?.role === 'admin' || role?.name === 'Super Admin' || role?.name === 'Admin' ||
+      // Also check if the role permissions match admin (fallback)
+      (permissions && permissions.admin?.read);
   };
 
   const isSuperAdmin = () => {

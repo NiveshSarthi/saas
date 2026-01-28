@@ -142,7 +142,8 @@ export default function LeadManagement() {
     queryFn: () => base44.auth.me(),
   });
 
-  const { can, canAny } = usePermissions();
+  const { can, canAny, isAdmin: isAdminFunc } = usePermissions();
+  const isAdmin = isAdminFunc();
 
   const { data: leads = [] } = useQuery({
     queryKey: ['leads-management'],
@@ -154,51 +155,6 @@ export default function LeadManagement() {
     refetchOnWindowFocus: true,
     refetchOnMount: false,
     refetchOnReconnect: false,
-  });
-
-  const { data: users = [] } = useQuery({
-    queryKey: ['users-for-leads-list'],
-    queryFn: () => base44.entities.User.list(),
-    enabled: !!user,
-  });
-
-  const { data: departments = [] } = useQuery({
-    queryKey: ['departments'],
-    queryFn: () => base44.entities.Department.list('name'),
-    enabled: !!user,
-  });
-
-  const { data: savedFilters = [] } = useQuery({
-    queryKey: ['saved-filters', 'leads'],
-    queryFn: () => base44.entities.SavedFilter.filter({ module: 'leads' }),
-    enabled: !!user,
-    staleTime: 30 * 60 * 1000, // 30 minutes
-    gcTime: 60 * 60 * 1000, // 1 hour
-    retry: false,
-    refetchOnWindowFocus: false,
-    refetchOnMount: false,
-    refetchOnReconnect: false,
-  });
-
-  const { data: fbPages = [] } = useQuery({
-    queryKey: ['facebook-pages-filter'],
-    queryFn: () => base44.entities.FacebookPageConnection.list('-created_date'),
-    enabled: !!user,
-    staleTime: 30 * 60 * 1000, // 30 minutes
-    gcTime: 60 * 60 * 1000, // 1 hour
-    retry: false,
-    refetchOnWindowFocus: false,
-    refetchOnMount: false,
-    refetchOnReconnect: false,
-  });
-
-  const { data: organization } = useQuery({
-    queryKey: ['organization-settings'],
-    queryFn: async () => {
-      const orgs = await base44.entities.Organization.list();
-      return orgs[0] || null;
-    },
-    enabled: !!user?.role && user.role === 'admin',
   });
 
   useEffect(() => {
@@ -290,8 +246,6 @@ export default function LeadManagement() {
     },
   });
 
-
-
   const applyAdvancedFilters = (lead) => {
     // Stage filter
     if (advancedFilters.stage?.length > 0 && !advancedFilters.stage.includes(lead.status)) {
@@ -348,16 +302,14 @@ export default function LeadManagement() {
   const filteredLeads = leads.filter(lead => {
     // Apply advanced filters first
     if (!applyAdvancedFilters(lead)) {
-      console.log('Lead filtered out by advanced filters:', lead.id);
       return false;
     }
 
     // Role-based visibility: Non-admins only see their assigned leads (case-insensitive comparison)
-    if (user?.role !== 'admin') {
+    if (!isAdmin) {
       const userEmail = user?.email?.toLowerCase()?.trim();
       const assignedEmail = lead.assigned_to?.toLowerCase()?.trim();
       if (!assignedEmail || assignedEmail !== userEmail) {
-        console.log('Lead filtered out by role-based visibility:', lead.id);
         return false;
       }
     }
@@ -402,17 +354,7 @@ export default function LeadManagement() {
 
     const matchesFormNameFilter = filterFormName === 'all' || extractFormName(lead.notes) === filterFormName;
 
-    const result = matchesSearch && matchesSource && matchesAssignment && matchesMember && matchesStatus && matchesContactStatus && matchesDate && matchesPageFilter && matchesFormFilter && matchesFormNameFilter;
-
-    if (!result) {
-      console.log('Lead filtered out:', lead.id, {
-        matchesSearch, matchesSource, matchesAssignment, matchesMember,
-        matchesStatus, matchesContactStatus, matchesDate, matchesPageFilter,
-        matchesFormFilter, matchesFormNameFilter
-      });
-    }
-
-    return result;
+    return matchesSearch && matchesSource && matchesAssignment && matchesMember && matchesStatus && matchesContactStatus && matchesDate && matchesPageFilter && matchesFormFilter && matchesFormNameFilter;
   });
 
   // Sort filtered leads
@@ -475,7 +417,7 @@ export default function LeadManagement() {
     await base44.entities.SavedFilter.create({
       ...filterData,
       created_by: user?.email,
-      is_global: user?.role === 'admin'
+      is_global: isAdmin
     });
     queryClient.invalidateQueries({ queryKey: ['saved-filters'] });
   };
@@ -550,7 +492,6 @@ export default function LeadManagement() {
         if (lead) {
           // Check if user is assigned to this lead or is admin
           const isAssigned = lead.assigned_to === user?.email;
-          const isAdmin = user?.role === 'admin';
 
           if (!isAssigned && !isAdmin) {
             continue; // Skip leads not assigned to current user
@@ -601,7 +542,7 @@ export default function LeadManagement() {
           <div className="flex items-center justify-between">
             <h1 className="text-xl font-bold text-slate-900">Lead Management</h1>
             <div className="flex items-center gap-2">
-              {user?.role === 'admin' && (
+              {isAdmin && (
                 <>
                   <FacebookSetupGuide />
                   <FacebookConnectionManager />
@@ -633,7 +574,7 @@ export default function LeadManagement() {
               <Badge variant="outline" className="text-xs">
                 {sortedLeads.length} leads
               </Badge>
-              {user?.role === 'admin' && (
+              {isAdmin && (
                 <div className="flex flex-wrap items-center gap-2">
                   <Button
                     variant="outline"
@@ -951,7 +892,7 @@ export default function LeadManagement() {
                 <Table className="min-w-max">
                   <TableHeader className="sticky top-0 bg-white z-20 shadow-sm border-b">
                     <TableRow>
-                      {(user?.role === 'admin' || canAny('leads', ['assign', 'delete', 'update'])) && (
+                      {(isAdmin || canAny('leads', ['assign', 'delete', 'update'])) && (
                         <TableHead className="w-12 min-w-[3rem]">
                           <Checkbox
                             checked={selectedLeads.length === sortedLeads.length && sortedLeads.length > 0}
@@ -1048,7 +989,7 @@ export default function LeadManagement() {
                   </TableHeader>
                   <TableBody>
                     {paginatedLeads.map(lead => {
-                      const isAdmin = user?.role === 'admin';
+                      // Uses context isAdmin
                       const canViewLead = isAdmin || lead.assigned_to === user?.email;
 
                       return (
@@ -1061,7 +1002,7 @@ export default function LeadManagement() {
                             overdueLeads.some(l => l.id === lead.id) && "bg-red-50"
                           )}
                         >
-                          {(user?.role === 'admin' || canAny('leads', ['assign', 'delete', 'update'])) && (
+                          {(isAdmin || canAny('leads', ['assign', 'delete', 'update'])) && (
                             <TableCell onClick={(e) => e.stopPropagation()}>
                               <Checkbox
                                 checked={selectedLeads.includes(lead.id)}

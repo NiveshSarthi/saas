@@ -75,82 +75,123 @@ export default function StageChangeDialog({ open, onOpenChange, lead, targetStag
 
   const updateMutation = useMutation({
     mutationFn: async (data) => {
-        console.log('🔄 Mutation function started with data:', data);
-        const currentStageLabel = STAGES.find(s => s.key === lead.status)?.label || 'Unknown';
-        const targetStageLabel = targetStage?.label || 'Unknown';
+      console.log('🔄 Mutation function started with data:', data);
+      const currentStageLabel = STAGES.find(s => s.key === lead.status)?.label || 'Unknown';
+      const targetStageLabel = targetStage?.label || 'Unknown';
 
-        console.log('📝 Updating lead in database...');
-        await base44.entities.Lead.update(lead.id, data);
-        console.log('✅ Lead updated successfully');
+      console.log('📝 Updating lead in database...');
+      await base44.entities.Lead.update(lead.id, data);
+      console.log('✅ Lead updated successfully');
 
-        // Add incentive bonus when lead is closed won
-        if (targetStage.key === 'closed_won' && data.final_amount) {
-          const bonusRecipient = lead.assigned_to || lead.created_by; // Use assigned user or lead creator
-          if (!bonusRecipient) return;
+      // Add incentive bonus when lead is closed won
+      if (targetStage.key === 'closed_won' && data.final_amount) {
+        const bonusRecipient = lead.assigned_to || lead.created_by; // Use assigned user or lead creator
+        if (!bonusRecipient) return;
 
-          const bonusAmount = parseFloat(data.final_amount) * 0.0025; // 0.25%
-          const currentMonth = new Date().toISOString().slice(0, 7); // YYYY-MM
+        const bonusAmount = parseFloat(data.final_amount) * 0.0025; // 0.25%
+        const currentMonth = new Date().toISOString().slice(0, 7); // YYYY-MM
 
-          console.log(`💰 Adding incentive bonus of ${bonusAmount} for ${bonusRecipient}`);
-          await base44.entities.SalaryAdjustment.create({
-            employee_email: bonusRecipient,
-            month: currentMonth,
-            adjustment_type: 'incentive',
-            amount: bonusAmount,
-            status: 'approved',
-            description: `Deal closed with ${lead.lead_name || lead.name || 'Client'} - Lead closure incentive bonus`
-          });
-          console.log('✅ Incentive bonus added');
-        }
-
-        // Check for duplicate log within last 5 seconds
-        const recentActivities = await base44.entities.RELeadActivity.filter(
-          { lead_id: lead.id },
-          '-created_date',
-          5
-        );
-
-        const isDuplicate = recentActivities.some(activity => {
-          if (activity.activity_type !== 'Stage Change') return false;
-          const timeDiff = Date.now() - new Date(activity.created_date).getTime();
-          return timeDiff < 5000 && activity.description?.includes(`${currentStageLabel} → ${targetStageLabel}`);
+        console.log(`💰 Adding incentive bonus of ${bonusAmount} for ${bonusRecipient}`);
+        await base44.entities.SalaryAdjustment.create({
+          employee_email: bonusRecipient,
+          month: currentMonth,
+          adjustment_type: 'incentive',
+          amount: bonusAmount,
+          status: 'approved',
+          description: `Deal closed with ${lead.lead_name || lead.name || 'Client'} - Lead closure incentive bonus`
         });
+        console.log('✅ Incentive bonus added');
 
-        // Log activity only if not duplicate
-        if (!isDuplicate) {
-          console.log('📝 Creating activity log...');
-          await base44.entities.RELeadActivity.create({
-            lead_id: lead.id,
-            activity_type: 'Stage Change',
-            description: `Stage Updated: ${currentStageLabel} → ${targetStageLabel}`,
-            actor_email: lead.assigned_to || lead.created_by,
-            metadata: { 
-              from: lead.status, 
-              to: targetStage.key,
-              stageDetails: {
-                budget: data.budget,
-                requirements: data.requirement,
-                location: data.location,
-                timeline: data.timeline,
-                verified_budget: data.verified_budget,
-                proposal_sent: data.proposal_sent,
-                negotiation_notes: data.negotiation_notes,
-                visit_date: data.visit_date,
-                agreement_signed: data.agreement_signed,
-                payment_amount: data.payment_amount,
-                payment_date: data.payment_date,
-                final_amount: data.final_amount,
-                notes: data.stage_notes
-              }
-            }
-          });
-          console.log('✅ Activity log created');
-        } else {
-          console.log('⏭️ Skipping duplicate activity log');
+        // 1% to Accounts
+        try {
+          const accountAmount = parseFloat(data.final_amount) * 0.01;
+          const accountName = "Sales Revenue";
+
+          // Find or Create Revenue Account
+          const accounts = await base44.entities.ChartOfAccount.filter({ name: accountName });
+          let accountId;
+
+          if (accounts && accounts.length > 0) {
+            accountId = accounts[0].id;
+          } else {
+            console.log('Creating Sales Revenue account...');
+            const newAccount = await base44.entities.ChartOfAccount.create({
+              code: '4000', // Standard revenue code
+              name: accountName,
+              type: 'Income',
+              balance: 0,
+              is_active: true
+            });
+            accountId = newAccount.id;
+          }
+
+          if (accountId) {
+            console.log(`💰 Adding 1% transaction of ${accountAmount} to Accounts`);
+            await base44.entities.Transaction.create({
+              date: new Date().toISOString(),
+              description: `1% Share from Lead: ${lead.lead_name || 'Unknown'}`,
+              reference_id: lead.id,
+              reference_type: 'payment',
+              account_id: accountId,
+              type: 'credit', // Income
+              amount: accountAmount,
+              created_by: lead.assigned_to || 'system'
+            });
+            console.log('✅ Transaction added');
+          }
+        } catch (accErr) {
+          console.error('❌ Failed to add accounting transaction:', accErr);
         }
+      }
 
-        return { ...lead, ...data };
-      },
+      // Check for duplicate log within last 5 seconds
+      const recentActivities = await base44.entities.RELeadActivity.filter(
+        { lead_id: lead.id },
+        '-created_date',
+        5
+      );
+
+      const isDuplicate = recentActivities.some(activity => {
+        if (activity.activity_type !== 'Stage Change') return false;
+        const timeDiff = Date.now() - new Date(activity.created_date).getTime();
+        return timeDiff < 5000 && activity.description?.includes(`${currentStageLabel} → ${targetStageLabel}`);
+      });
+
+      // Log activity only if not duplicate
+      if (!isDuplicate) {
+        console.log('📝 Creating activity log...');
+        await base44.entities.RELeadActivity.create({
+          lead_id: lead.id,
+          activity_type: 'Stage Change',
+          description: `Stage Updated: ${currentStageLabel} → ${targetStageLabel}`,
+          actor_email: lead.assigned_to || lead.created_by,
+          metadata: {
+            from: lead.status,
+            to: targetStage.key,
+            stageDetails: {
+              budget: data.budget,
+              requirements: data.requirement,
+              location: data.location,
+              timeline: data.timeline,
+              verified_budget: data.verified_budget,
+              proposal_sent: data.proposal_sent,
+              negotiation_notes: data.negotiation_notes,
+              visit_date: data.visit_date,
+              agreement_signed: data.agreement_signed,
+              payment_amount: data.payment_amount,
+              payment_date: data.payment_date,
+              final_amount: data.final_amount,
+              notes: data.stage_notes
+            }
+          }
+        });
+        console.log('✅ Activity log created');
+      } else {
+        console.log('⏭️ Skipping duplicate activity log');
+      }
+
+      return { ...lead, ...data };
+    },
     onSuccess: (updatedLead) => {
       console.log('✅ onSuccess callback triggered');
       queryClient.invalidateQueries({ queryKey: ['leads-management'] });
@@ -170,7 +211,7 @@ export default function StageChangeDialog({ open, onOpenChange, lead, targetStag
 
   const validate = () => {
     const newErrors = {};
-    
+
     requiredFields.forEach(field => {
       if (!formData[field]) {
         newErrors[field] = 'This field is required';
@@ -184,12 +225,12 @@ export default function StageChangeDialog({ open, onOpenChange, lead, targetStag
   const handleSubmit = async (e) => {
     e?.preventDefault();
     e?.stopPropagation();
-    
+
     console.log('=== Stage Change Submission ===');
     console.log('Form data:', formData);
     console.log('Target stage:', targetStage);
     console.log('Validation result:', validate());
-    
+
     if (!validate()) {
       console.log('❌ Validation failed');
       return;
@@ -201,7 +242,7 @@ export default function StageChangeDialog({ open, onOpenChange, lead, targetStag
         ...formData,
         status: targetStage.key,
       };
-      
+
       // Auto-update contact_status to "connected" when stage is "contacted"
       if (targetStage.key === 'contacted') {
         updateData.contact_status = 'connected';
@@ -209,7 +250,7 @@ export default function StageChangeDialog({ open, onOpenChange, lead, targetStag
           updateData.contacted_date = new Date().toISOString();
         }
       }
-      
+
       await updateMutation.mutateAsync(updateData);
       console.log('✅ Mutation completed');
       onOpenChange(false);
