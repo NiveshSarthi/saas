@@ -594,6 +594,7 @@ const userInvitationSchema = new mongoose.Schema({
 
 const salesActivitySchema = new mongoose.Schema({
     user_id: String,
+    user_email: String, // Added for easier querying in salary controller
     activity_type: String, // call, email, meeting
     description: String,
     lead_id: String,
