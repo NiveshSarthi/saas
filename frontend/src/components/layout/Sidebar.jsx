@@ -94,7 +94,10 @@ export default function Sidebar({ projects = [], currentPage, user, collapsed, o
   const isHRUser = user?.department_id && hrDeptIds.includes(user.department_id);
 
   const adminDeptIds = departments
-    .filter(d => d.name?.toLowerCase().includes('administration') || d.name?.toLowerCase() === 'admin')
+    .filter(d => {
+      const name = d.name?.toLowerCase() || '';
+      return name.includes('administration') || name === 'admin' || name.includes('administrator');
+    })
     .map(d => d.id || d._id);
   const isAdminDeptUser = user?.department_id && adminDeptIds.includes(user.department_id);
 

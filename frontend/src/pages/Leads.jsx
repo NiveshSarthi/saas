@@ -71,101 +71,40 @@ import LeadDetailDialog from '@/components/leads/LeadDetailDialog';
 import { getUserDisplayByEmail } from '@/components/utils/userDisplay';
 import { createPageUrl } from '@/utils';
 import { Link, useNavigate } from 'react-router-dom';
-import { getVisibleLeads, getVisibleSalesUsers } from '@/components/utils/salesPermissions';
-import AdvancedFilterPanel from '@/components/filters/AdvancedFilterPanel';
-import FilterChips from '@/components/filters/FilterChips';
-import { LEAD_FILTERS } from '@/components/filters/filterConfigs';
-import FollowUpDialog from '@/components/leads/FollowUpDialog';
-
-const statusConfig = {
-  new: { label: 'New', color: 'bg-blue-100 text-blue-700', icon: AlertCircle },
-  contacted: { label: 'Contacted', color: 'bg-purple-100 text-purple-700', icon: PhoneIcon },
-  follow_up: { label: 'Follow-Up', color: 'bg-amber-100 text-amber-700', icon: Clock },
-  meeting_done: { label: 'Meeting Done', color: 'bg-indigo-100 text-indigo-700', icon: Users },
-  proposal: { label: 'Proposal', color: 'bg-cyan-100 text-cyan-700', icon: FileText },
-  negotiation: { label: 'Negotiation', color: 'bg-orange-100 text-orange-700', icon: TrendingUp },
-  closed_won: { label: 'Closed Won', color: 'bg-emerald-100 text-emerald-700', icon: CheckCircle2 },
-  closed_lost: { label: 'Closed Lost', color: 'bg-red-100 text-red-700', icon: XCircle }
-};
+import { usePermissions } from '@/components/rbac/PermissionsContext';
 
 export default function Leads() {
   const navigate = useNavigate();
-  const [searchQuery, setSearchQuery] = useState('');
-  const [contactStatusFilter, setContactStatusFilter] = useState('all');
-  const [filterMember, setFilterMember] = useState('all');
-  const [dateFilter, setDateFilter] = useState('all');
-  const [showImportDialog, setShowImportDialog] = useState(false);
-  const [showAssignDialog, setShowAssignDialog] = useState(false);
-  const [selectedLeads, setSelectedLeads] = useState([]);
-  const [viewingLead, setViewingLead] = useState(null);
-  const [statusUpdateLead, setStatusUpdateLead] = useState(null);
-  const [deletingLead, setDeletingLead] = useState(null);
-  const [currentPage, setCurrentPage] = useState(1);
-  const [itemsPerPage, setItemsPerPage] = useState(100);
-  const [lastClickedIndex, setLastClickedIndex] = useState(null);
-  const [advancedFilters, setAdvancedFilters] = useState({});
-  const [showAdvancedFilter, setShowAdvancedFilter] = useState(false);
+  const { isAdmin: isAdminFunc } = usePermissions();
+  const isAdmin = isAdminFunc();
+  // ... (keep existing state declarations)
 
-  const queryClient = useQueryClient();
+  // ...
 
   const { data: user } = useQuery({
     queryKey: ['current-user'],
     queryFn: () => base44.auth.me(),
   });
 
-  const { data: allLeadsRaw = [], isLoading } = useQuery({
-    queryKey: ['leads-management'],
-    queryFn: () => base44.entities.Lead.list('-created_date', 5000),
-    enabled: !!user,
-    staleTime: 30 * 60 * 1000,
-    cacheTime: 60 * 60 * 1000,
-    retry: false,
-    refetchOnWindowFocus: false,
-    refetchOnMount: false,
-    refetchOnReconnect: false,
-  });
-
-  const { data: departments = [] } = useQuery({
-    queryKey: ['departments'],
-    queryFn: () => base44.entities.Department.list('name'),
-  });
-
-  const { data: users = [] } = useQuery({
-    queryKey: ['users-for-leads-list'],
-    queryFn: () => base44.entities.User.list(),
-    enabled: !!user,
-  });
-
-  const salesDeptIds = departments.filter(d => d.name?.toLowerCase().includes('sales')).map(d => d.id);
+  // ...
 
   // Apply sales hierarchy permissions - show only assigned leads for non-admins
   const leads = React.useMemo(() => {
     if (!user) return [];
 
     // Admin sees all leads
-    if (user.role === 'admin') return allLeadsRaw;
+    if (isAdmin) return allLeadsRaw;
 
     // Non-admins only see leads assigned to them
     return allLeadsRaw.filter(lead => {
       if (!lead.assigned_to) return false;
       return lead.assigned_to?.toLowerCase()?.trim() === user.email?.toLowerCase()?.trim();
     });
-  }, [allLeadsRaw, user]);
+  }, [allLeadsRaw, user, isAdmin]);
 
-  // Filter visible sales users based on hierarchy
-  const visibleSalesUsers = React.useMemo(() => {
-    if (!user) return [];
-    return getVisibleSalesUsers(user, users, departments).filter(u =>
-      u.department_id && salesDeptIds.includes(u.department_id)
-    );
-  }, [user, users, departments, salesDeptIds]);
+  // ...
 
-  const salesUsers = users.filter(u => u.department_id && salesDeptIds.includes(u.department_id));
-
-  const visibleLeads = leads;
-
-  // Check if user is sales member (non-admin)
-  const isSalesMember = user?.department_id && salesDeptIds.includes(user.department_id) && user?.role !== 'admin';
+  const isSalesMember = user?.department_id && salesDeptIds.includes(user.department_id) && !isAdmin;
 
   const { data: savedFilters = [] } = useQuery({
     queryKey: ['saved-filters', 'leads'],
@@ -251,7 +190,7 @@ export default function Leads() {
     await base44.entities.SavedFilter.create({
       ...filterData,
       created_by: user?.email,
-      is_global: user?.role === 'admin'
+      is_global: isAdmin
     });
     queryClient.invalidateQueries({ queryKey: ['saved-filters'] });
   };
@@ -684,7 +623,7 @@ export default function Leads() {
         )}
 
         {/* Leads Display - Table for Admin, Cards for Others */}
-        {user?.role === 'admin' ? (
+        {isAdmin ? (
           <Card className="bg-white/90 backdrop-blur-sm shadow-md border-slate-200">
             <CardContent className="p-0">
               <Table>
