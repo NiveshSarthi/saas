@@ -403,7 +403,7 @@ export default function CheckInOutWidget({ user, todayRecord, onUpdate }) {
               </div>
               <div className="flex items-center justify-center sm:justify-start gap-2 mt-2">
                 <Badge className={cn("bg-white/20 hover:bg-white/30 text-white border-0", !todayRecord && "animate-pulse")}>
-                  {todayRecord ? (todayRecord.status === 'checked_in' ? 'Running' : 'Completed') : 'Not Started'}
+                  {todayRecord ? (todayRecord.check_out ? 'Completed' : 'Running') : 'Not Started'}
                 </Badge>
                 {todayRecord?.location && (
                   <span className="text-xs text-indigo-200 flex items-center gap-1">
