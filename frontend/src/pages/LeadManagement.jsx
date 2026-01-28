@@ -142,6 +142,36 @@ export default function LeadManagement() {
     queryFn: () => base44.auth.me(),
   });
 
+  const { data: organization } = useQuery({
+    queryKey: ['organization', user?.organization_id],
+    queryFn: () => base44.entities.Organization.get(user.organization_id),
+    enabled: !!user?.organization_id
+  });
+
+  const { data: fbPages = [] } = useQuery({
+    queryKey: ['facebook-pages'],
+    queryFn: () => base44.entities.FacebookPageConnection.list('-created_date'),
+    staleTime: 30 * 60 * 1000,
+  });
+
+  const { data: users = [] } = useQuery({
+    queryKey: ['users'],
+    queryFn: () => base44.entities.User.list(),
+    staleTime: 5 * 60 * 1000,
+  });
+
+  const { data: departments = [] } = useQuery({
+    queryKey: ['departments'],
+    queryFn: () => base44.entities.Department.list(),
+    staleTime: 5 * 60 * 1000,
+  });
+
+  const { data: savedFilters = [] } = useQuery({
+    queryKey: ['saved-filters'],
+    queryFn: () => base44.entities.SavedFilter.list(),
+    staleTime: 5 * 60 * 1000,
+  });
+
   const { can, canAny, isAdmin: isAdminFunc } = usePermissions();
   const isAdmin = isAdminFunc();
 
