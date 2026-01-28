@@ -92,6 +92,11 @@ export default function UserManagement() {
   const queryClient = useQueryClient();
   const { can, isAdmin, user: permissionsUser } = usePermissions();
 
+  const { data: currentUser } = useQuery({
+    queryKey: ['current-user'],
+    queryFn: () => base44.auth.me(),
+  });
+
   const isHRDept = currentUser?.department_name?.toLowerCase().includes('hr') ||
     currentUser?.department_id === 'dept_hr';
   const isAdminDept = currentUser?.department_name?.toLowerCase().includes('admin') ||
@@ -133,10 +138,7 @@ export default function UserManagement() {
     queryFn: () => base44.entities.UserInvitation.list('-created_date', 1000),
   });
 
-  const { data: currentUser } = useQuery({
-    queryKey: ['current-user'],
-    queryFn: () => base44.auth.me(),
-  });
+
 
   const updateUserMutation = useMutation({
     mutationFn: async ({ userId, data, oldUser }) => {
