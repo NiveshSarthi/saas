@@ -2,6 +2,7 @@
 import mongoose from 'mongoose';
 import bcrypt from 'bcryptjs';
 import { User, Role, Department, Project, Group, TaskGroup, Sprint, Tag } from '../models/index.js';
+import { seedAttendanceSettings } from './attendance_settings_seed.js';
 import dotenv from 'dotenv';
 dotenv.config();
 
@@ -375,6 +376,10 @@ export const seedData = async () => {
         }
 
         console.log('Seeding complete');
+
+        // Seed Attendance Settings
+        await seedAttendanceSettings();
+
     } catch (error) {
         console.error('Seeding failed:', error);
         throw error;
