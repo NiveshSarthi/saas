@@ -858,6 +858,7 @@ export default function AttendancePage() {
                   onDateClick={handleMarkAttendance}
                   approvedLeaves={approvedLeaves}
                   isAdmin={isAdmin}
+                  currentUserEmail={user?.email}
                   holidays={workDays.filter(wd => wd.is_holiday)}
                 />
               )}
@@ -988,6 +989,7 @@ export default function AttendancePage() {
                     onDateClick={() => { }}
                     approvedLeaves={approvedLeaves}
                     isAdmin={false}
+                    currentUserEmail={user?.email}
                     holidays={workDays.filter(wd => wd.is_holiday)}
                   />
                 </CardContent>
