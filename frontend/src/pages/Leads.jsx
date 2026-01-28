@@ -86,6 +86,13 @@ export default function Leads() {
     queryFn: () => base44.auth.me(),
   });
 
+  const { data: allLeadsRaw = [] } = useQuery({
+    queryKey: ['leads'],
+    queryFn: () => base44.entities.Lead.list('-created_date', 5000),
+    enabled: !!user,
+    staleTime: 5000,
+  });
+
   // ...
 
   // Apply sales hierarchy permissions - show only assigned leads for non-admins
@@ -104,6 +111,9 @@ export default function Leads() {
 
   // ...
 
+  const visibleLeads = leads;
+
+  const salesDeptIds = ['dept_sales', 'dept_presales', 'dept_marketing'];
   const isSalesMember = user?.department_id && salesDeptIds.includes(user.department_id) && !isAdmin;
 
   const { data: savedFilters = [] } = useQuery({

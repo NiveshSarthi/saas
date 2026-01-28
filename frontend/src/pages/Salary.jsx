@@ -409,7 +409,7 @@ export default function SalaryPage() {
 
         return [
           s.employee_name,
-          userDetails?.designation || userDetails?.role || 'N/A', // Designation
+          userDetails?.job_title || userDetails?.designation || userDetails?.role || 'N/A', // Designation
           departmentName,
           userDetails?.joining_date ? format(new Date(userDetails.joining_date), 'yyyy-MM-dd') : 'N/A', // DOJ
           calc.totalDays,
@@ -484,9 +484,11 @@ export default function SalaryPage() {
 
     const tableData = filteredSalaries.map(s => {
       const calc = calculateEmployeeSalary(s.employee_email);
+      const user = allUsers.find(u => u.email === s.employee_email);
       return [
         s.employee_name,
-        // s.employee_email,
+        user?.job_title || user?.role || 'N/A', // Designation
+        user?.joining_date ? format(new Date(user.joining_date), 'yyyy-MM-dd') : 'N/A', // DOJ
         `${calc.paidDays}/${calc.totalDays}`,
         `Rs. ${calc.baseSalary.toLocaleString()}`,
         `Rs. ${calc.adjustments.toLocaleString()}`,
@@ -507,19 +509,21 @@ export default function SalaryPage() {
     doc.text(`Total Net Payroll: Rs. ${totalNet.toLocaleString()}`, 280, 20, { align: 'right' });
 
     autoTable(doc, {
-      head: [['Employee', 'Paid/Total Days', 'Base', 'Adjustments', 'Gross', 'Deductions', 'Net Pay', 'Status']],
+      head: [['Employee', 'Designation', 'DOJ', 'Paid/Total', 'Base', 'Incentive', 'Gross', 'Deductions', 'Net Pay', 'Status']],
       body: tableData,
       startY: 40,
-      styles: { fontSize: 9, cellPadding: 3 },
+      styles: { fontSize: 8, cellPadding: 2 }, // Reduced font size to fit columns
       headStyles: { fillColor: [79, 70, 229], textColor: 255, fontStyle: 'bold' },
       alternateRowStyles: { fillColor: [249, 250, 251] },
       columnStyles: {
-        0: { fontStyle: 'bold' },
-        6: { fontStyle: 'bold', halign: 'right' }, // Net Pay
-        2: { halign: 'right' },
-        3: { halign: 'right' },
+        0: { fontStyle: 'bold', cellWidth: 30 },
+        1: { cellWidth: 25 }, // Designation
+        2: { cellWidth: 20 }, // DOJ
+        8: { fontStyle: 'bold', halign: 'right' }, // Net Pay
         4: { halign: 'right' },
-        5: { halign: 'right' }
+        5: { halign: 'right' },
+        6: { halign: 'right' },
+        7: { halign: 'right' }
       }
     });
 
@@ -837,10 +841,15 @@ export default function SalaryPage() {
       }
     }, 0);
 
-    const gross = baseSalary + adjustments + (attendanceAdjustments > 0 ? attendanceAdjustments : 0);
+    // Sales Policy Components
+    const salesIncentive = salary?.sales_incentive || 0;
+    const salesReward = salary?.sales_reward || 0;
+    const salesMeta = salary?.sales_performance_meta || {};
 
-    // CTC 2: Including adjustments
-    const monthlyCTC2 = monthlyCTC1 + adjustments;
+    const gross = baseSalary + adjustments + salesIncentive + salesReward + (attendanceAdjustments > 0 ? attendanceAdjustments : 0);
+
+    // CTC 2: Including adjustments and sales incentives
+    const monthlyCTC2 = monthlyCTC1 + adjustments + salesIncentive + salesReward;
     const yearlyCTC2 = monthlyCTC2 * 12;
 
     // Statutory deductions
@@ -875,7 +884,8 @@ export default function SalaryPage() {
       totalDeductions, net, attendancePercentage, policy, hasPolicy: true,
       employeeAdjustments, monthlyCTC1, yearlyCTC1, monthlyCTC2, yearlyCTC2,
       attendanceAdjustments, dailyDetails, timesheetPenaltyDeduction, penaltyDetails,
-      employerPF, employerESI, employerLWF, exGratia, earnedBasic, earnedHra, earnedTa, earnedCea, earnedFi
+      employerPF, employerESI, employerLWF, exGratia, earnedBasic, earnedHra, earnedTa, earnedCea, earnedFi,
+      salesIncentive, salesReward, salesMeta
     };
   }, [allPolicies, salaries, attendanceRecords, selectedMonth, allAdjustments, gracePeriods]);
 
@@ -1465,6 +1475,60 @@ export default function SalaryPage() {
                             {/* Expanded Details */}
                             {isExpanded && (
                               <div className="space-y-6 p-6 bg-slate-50 rounded-2xl border border-slate-200 mb-6 animate-in slide-in-from-top-4 duration-200">
+
+                                {/* Sales Performance Section */}
+                                {calc.salesMeta && calc.salesMeta.role_type && calc.salesMeta.role_type !== 'none' && (
+                                  <div>
+                                    <h4 className="font-bold text-slate-700 mb-4 flex items-center gap-2 text-sm uppercase tracking-wide">
+                                      <TrendingUp className="w-4 h-4 text-emerald-600" />
+                                      Sales Performance ({calc.salesMeta.role_type === 'manager' ? 'Manager Policy' : 'Executive Policy'})
+                                    </h4>
+                                    <div className="grid grid-cols-2 md:grid-cols-4 gap-3 bg-emerald-50/50 p-4 rounded-xl border border-emerald-100">
+                                      {calc.salesMeta.role_type === 'manager' ? (
+                                        <>
+                                          <div className="bg-white p-3 rounded-lg border border-emerald-200">
+                                            <p className="text-[10px] text-slate-500 uppercase font-bold">Team Avg Sales</p>
+                                            <p className="text-lg font-bold text-slate-900">{calc.salesMeta.avg_sales_count?.toFixed(2) || 0}</p>
+                                            <p className="text-[10px] text-slate-400">Target: 3.0</p>
+                                          </div>
+                                          <div className="bg-white p-3 rounded-lg border border-emerald-200">
+                                            <p className="text-[10px] text-slate-500 uppercase font-bold">Team CV Volume</p>
+                                            <p className="text-lg font-bold text-slate-900">₹{(calc.salesMeta.team_sales_volume || 0).toLocaleString()}</p>
+                                          </div>
+                                        </>
+                                      ) : (
+                                        <>
+                                          <div className="bg-white p-3 rounded-lg border border-emerald-200">
+                                            <p className="text-[10px] text-slate-500 uppercase font-bold">Personal Sales</p>
+                                            <p className="text-lg font-bold text-slate-900">{calc.salesMeta.personal_sales_count || 0}</p>
+                                            <p className="text-[10px] text-slate-400">Target: 3</p>
+                                          </div>
+                                          <div className="bg-white p-3 rounded-lg border border-emerald-200">
+                                            <p className="text-[10px] text-slate-500 uppercase font-bold">Total CV Volume</p>
+                                            <p className="text-lg font-bold text-slate-900">₹{(calc.salesMeta.personal_sales_volume || 0).toLocaleString()}</p>
+                                          </div>
+                                        </>
+                                      )}
+
+                                      <div className="bg-white p-3 rounded-lg border border-emerald-200">
+                                        <p className="text-[10px] text-slate-500 uppercase font-bold">Incentive Applied</p>
+                                        <div className="flex justify-between items-end">
+                                          <p className="text-lg font-bold text-emerald-600">₹{(calc.salesIncentive || 0).toLocaleString()}</p>
+                                          <span className="text-xs font-bold bg-emerald-100 text-emerald-700 px-1.5 py-0.5 rounded">
+                                            {((calc.salesMeta.applied_incentive_rate || 0) * 100).toFixed(2)}%
+                                          </span>
+                                        </div>
+                                      </div>
+
+                                      <div className="bg-white p-3 rounded-lg border border-emerald-200">
+                                        <p className="text-[10px] text-slate-500 uppercase font-bold">Performance Reward</p>
+                                        <p className="text-lg font-bold text-emerald-600">₹{(calc.salesReward || 0).toLocaleString()}</p>
+                                        {calc.salesMeta.reward_applied && <span className="text-[10px] text-emerald-600 font-bold">Target Achieved!</span>}
+                                      </div>
+                                    </div>
+                                  </div>
+                                )}
+
                                 {/* Components */}
                                 <div>
                                   <h4 className="font-bold text-slate-700 mb-4 flex items-center gap-2 text-sm uppercase tracking-wide">
