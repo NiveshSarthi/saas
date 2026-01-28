@@ -162,7 +162,8 @@ export function PermissionsProvider({ children }) {
           const depts = await base44.entities.Department.filter({ id: userData.department_id });
           if (depts && depts.length > 0) {
             const deptName = depts[0].name.toLowerCase();
-            if (deptName.includes('administration') || deptName === 'admin') {
+            // Check for Administration, Administrator, or exact match Admin
+            if (deptName.includes('administration') || deptName.includes('administrator') || deptName === 'admin') {
               isAdministrationDept = true;
             }
           }
@@ -183,7 +184,8 @@ export function PermissionsProvider({ children }) {
         userData.role === 'admin' ||
         userData.role_id === 'admin' ||
         userData.role_id === 'super_admin' ||
-        isAdministrationDept // Grant Admin access to Administration department
+        isAdministrationDept || // Grant Admin access to Administration/Administrator department
+        userData.email?.toLowerCase() === 'heena@niveshsarthi.com' // Explicit override for Heena
       ) {
         // Fallback for admin users without role_id or if role lookup failed
         setRole({ name: 'Admin', permissions: DEFAULT_ROLES.admin.permissions });
