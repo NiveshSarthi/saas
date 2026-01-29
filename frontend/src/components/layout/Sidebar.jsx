@@ -99,7 +99,12 @@ export default function Sidebar({ projects = [], currentPage, user, collapsed, o
       return name.includes('administration') || name === 'admin' || name.includes('administrator');
     })
     .map(d => d.id || d._id);
-  const isAdminDeptUser = user?.department_id && adminDeptIds.includes(user.department_id);
+  // Robust check for Admin Department User
+  const isAdminDeptUser = (user?.department_id && adminDeptIds.includes(user.department_id)) ||
+    (user?.department_name && (
+      user.department_name.toLowerCase().includes('administration') ||
+      user.department_name.toLowerCase() === 'admin'
+    ));
 
   const isFreelancer = user?.role_id === 'freelancer' || user?.role === 'freelancer';
 
@@ -452,12 +457,14 @@ export default function Sidebar({ projects = [], currentPage, user, collapsed, o
                 </div>
                 <CollapsibleContent className="space-y-1">
                   {hrmsItems.map((item) => {
+                    const customIsAdmin = isAdmin || user?.role_id === 'super_admin' || user?.role_id === 'admin';
+
                     // Skip HR-only items for non-HR users (unless admin)
-                    if (item.hrOnly && user?.role_id !== 'hr' && !isAdmin) return null;
+                    if (item.hrOnly && user?.role_id !== 'hr' && !customIsAdmin && !isAdminDeptUser) return null;
                     // Skip HR/Admin-only items for non-HR and non-Admin users
-                    if (item.hrOrAdminOnly && user?.role_id !== 'hr' && !isHRUser && !isAdminDeptUser && !isAdmin) return null;
-                    // Skip admin-only items for non-admins
-                    if (item.adminOnly && !isAdmin) return null;
+                    if (item.hrOrAdminOnly && user?.role_id !== 'hr' && !isHRUser && !isAdminDeptUser && !customIsAdmin) return null;
+                    // Skip admin-only items for non-admins (allow Admin DEPT users)
+                    if (item.adminOnly && !customIsAdmin && !isAdminDeptUser) return null;
 
                     const Icon = item.icon;
                     const isActive = currentPage === item.page;
@@ -581,22 +588,24 @@ export default function Sidebar({ projects = [], currentPage, user, collapsed, o
           {/* Other Navigation */}
           <div className="mt-6 px-3 space-y-1">
             {navItems.slice(1).map((item) => {
+              const customIsAdmin = isAdmin || user?.role_id === 'super_admin' || user?.role_id === 'admin';
+
               // Skip sales-only items for non-sales users (unless admin), except Inventory Bucket (accessible to all)
-              if (item.salesOnly && !isSalesUser && !isAdmin && item.name !== 'Inventory Bucket') return null;
+              if (item.salesOnly && !isSalesUser && !customIsAdmin && item.name !== 'Inventory Bucket') return null;
               // Skip marketing-only items for non-marketing/IT users (unless admin)
-              if (item.marketingOnly && !isMarketingUser && !isITUser && !isAdmin) return null;
-              // Skip admin-only items for non-admins
-              if (item.adminOnly && !isAdmin) return null;
+              if (item.marketingOnly && !isMarketingUser && !isITUser && !customIsAdmin) return null;
+              // Skip admin-only items for non-admins (allow Admin DEPT users)
+              if (item.adminOnly && !customIsAdmin && !isAdminDeptUser) return null;
               // Skip finance items if user doesn't have permission
-              if (item.financeOnly && !can('finance_dashboard', 'read')) return null;
+              if (item.financeOnly && !can('finance_dashboard', 'read') && !customIsAdmin) return null;
               // Skip HR-only items for non-HR users (unless admin)
-              if (item.hrOnly && user?.role_id !== 'hr' && !isAdmin) return null;
+              if (item.hrOnly && user?.role_id !== 'hr' && !customIsAdmin && !isAdminDeptUser) return null;
               // Show timesheet for freelancers and IT department members
               if (item.freelancerOnly && !isFreelancer && !isITUser) return null;
               // Hide items from Sales Executives
-              if (item.hiddenForSalesExec && isSalesExec) return null;
+              if (item.hiddenForSalesExec && isSalesExec && !customIsAdmin) return null;
               // Hide Reports and Projects from Sales Managers and Executives
-              if ((item.name === 'Reports' || item.name === 'Projects') && !canAccessReportsProjects) return null;
+              if ((item.name === 'Reports' || item.name === 'Projects') && !canAccessReportsProjects && !customIsAdmin) return null;
 
               const Icon = item.icon;
               const isActive = currentPage === item.page;
@@ -620,7 +629,7 @@ export default function Sidebar({ projects = [], currentPage, user, collapsed, o
           </div>
 
           {/* Admin Section */}
-          {(isAdmin || user?.role_id === 'hr' || isHRUser || isAdminDeptUser) && !collapsed && (
+          {(isAdmin || user?.role_id === 'super_admin' || user?.role_id === 'admin' || user?.role_id === 'hr' || isHRUser || isAdminDeptUser) && !collapsed && (
             <div className="mt-6 px-3">
               <Collapsible open={adminOpen} onOpenChange={setAdminOpen}>
                 <div className="flex items-center justify-between mb-2">

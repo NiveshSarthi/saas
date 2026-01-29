@@ -110,25 +110,34 @@ export default function Recruitment() {
     fetchUser();
   }, []);
 
+  // Check for Access
+  const hasAccess = user && (
+    user.role_id === 'hr' ||
+    user.role === 'admin' ||
+    user.role_id === 'admin' ||
+    user.role_id === 'super_admin' ||
+    (user.department_id && user.department_name && (user.department_name.toLowerCase().includes('administration') || user.department_name.toLowerCase() === 'admin'))
+  );
+
   // Get all candidates
   const { data: candidates = [], isLoading } = useQuery({
     queryKey: ['candidates'],
     queryFn: () => base44.entities.Candidate.list('-created_at'),
-    enabled: user?.role_id === 'hr' || user?.role === 'admin',
+    enabled: !!hasAccess,
   });
 
   // Get all interviews
   const { data: interviews = [] } = useQuery({
     queryKey: ['interviews'],
     queryFn: () => base44.entities.Interview.list('-scheduled_date'),
-    enabled: user?.role_id === 'hr' || user?.role === 'admin',
+    enabled: !!hasAccess,
   });
 
   // Get all users for interviewer selection
   const { data: users = [] } = useQuery({
     queryKey: ['users-for-interviews'],
     queryFn: () => base44.entities.User.list(),
-    enabled: user?.role_id === 'hr' || user?.role === 'admin',
+    enabled: !!hasAccess,
   });
 
   // Create candidate mutation
@@ -412,7 +421,7 @@ export default function Recruitment() {
     );
   }
 
-  if (user.role_id !== 'hr' && user.role !== 'admin') {
+  if (!hasAccess) {
     return (
       <div className="p-6 lg:p-8 text-center">
         <h2 className="text-xl font-semibold text-slate-900">Access Restricted</h2>
