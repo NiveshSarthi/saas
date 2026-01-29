@@ -429,55 +429,72 @@ export default function SalaryPage() {
           const employerContribution = (calc.employerPF || 0) + (calc.employerESI || 0) + (calc.employerLWF || 0);
 
           // CTC Calculations
-          // CTC based on Net? (Net + deductions + employer contrib?) Usually CTC = Gross + Employer Contrib + ExGratia
           const ctcFinal = (calc.monthlyCTC2 || 0);
 
           return [
             s.employee_name,
-            userDetails?.job_title || userDetails?.designation || userDetails?.role || 'N/A', // Designation
+            userDetails?.job_title || userDetails?.designation || userDetails?.role || 'N/A',
             departmentName,
-            userDetails?.joining_date ? format(new Date(userDetails.joining_date), 'yyyy-MM-dd') : 'N/A', // DOJ
+            userDetails?.joining_date ? format(new Date(userDetails.joining_date), 'yyyy-MM-dd') : 'N/A',
             calc.totalDays,
             calc.effectivePresent,
             calc.weekoff,
             calc.paidLeave,
-            calc.absent, // Absent
+            calc.absent,
             calc.paidDays,
-            (calc.monthlyCTC1 || 0), // Policy Gross (Full Month Gross usually)
-            calc.absentDeduction, // Absent Deduction
-            calc.earnedBasic, // Basic
-            0, // DA (Assuming 0 as not separated in policy)
-            calc.earnedHra, // HRA
-            calc.earnedTa, // TA
-            calc.earnedCea, // CEA
-            calc.earnedFi, // FI
-            calc.gross, // Gross Salary (Earned)
-            (s.advance_recovery || 0), // Salary Advanced (Minus)
-            (calc.adjustments > 0 ? calc.adjustments : 0), // Performance Allowance (Addition) - assuming positive adjustments
-            calc.empESI, // ESI (Employee)
-            calc.empPF, // PF (Employee)
-            calc.lwf, // Labour Welfare Fund
-            calc.totalDeductions, // Employee Total Deduction
-            calc.net, // Net Salary In hand
-            calc.exGratia, // Gratuity
-            calc.employerESI, // ESI.1 (Employer)
-            calc.employerPF, // PF.1 (Employer)
-            calc.employerLWF, // LWF (Employer)
-            employerContribution, // Total Employer Contribution
-            (calc.net + calc.totalDeductions + employerContribution), // CTC (based on NetSalary) - Approx
-            employerContribution, // Employer Contribution (CTC)
-            (calc.monthlyCTC1 || 0), // CTC1
-            ctcFinal // CTC Final
+            (calc.monthlyCTC1 || 0),
+            calc.absentDeduction,
+            calc.earnedBasic,
+            0,
+            calc.earnedHra,
+            calc.earnedTa,
+            calc.earnedCea,
+            calc.earnedFi,
+            calc.gross,
+            (s.advance_recovery || 0),
+            (calc.adjustments > 0 ? calc.adjustments : 0),
+            calc.empESI,
+            calc.empPF,
+            calc.lwf,
+            calc.totalDeductions,
+            calc.net,
+            calc.exGratia,
+            calc.employerESI,
+            calc.employerPF,
+            calc.employerLWF,
+            employerContribution,
+            (calc.net + calc.totalDeductions + employerContribution),
+            employerContribution,
+            (calc.monthlyCTC1 || 0),
+            ctcFinal
           ];
         });
+
+      // Calculate Totals Row - ONLY for Base Salary, Earned Salary, and Net Pay
+      const totalRow = new Array(headers.length).fill('');
+      totalRow[0] = 'TOTAL';
+
+      // Target Indices: 10 (Policy Gross), 18 (Gross Salary), 25 (Net Salary)
+      const targetIndices = [10, 18, 25];
+
+      targetIndices.forEach(i => {
+        const total = rows.reduce((sum, row) => {
+          const val = parseFloat(row[i]);
+          return sum + (isNaN(val) ? 0 : val);
+        }, 0);
+        totalRow[i] = Math.round(total * 100) / 100;
+      });
 
       const csvContent = [
         headers.join(','),
         ...rows.map(row => row.map(cell => {
-          // Handle null/undefined and escape commas
           const val = (cell === null || cell === undefined) ? '' : cell;
           return `"${String(val).replace(/"/g, '""')}"`;
-        }).join(','))
+        }).join(',')),
+        totalRow.map(cell => {
+          const val = (cell === null || cell === undefined) ? '' : cell;
+          return `"${String(val).replace(/"/g, '""')}"`;
+        }).join(',')
       ].join('\n');
 
       const blob = new Blob([csvContent], { type: 'text/csv' });
@@ -532,8 +549,6 @@ export default function SalaryPage() {
 
       const rows = filteredSalaries
         .filter(s => {
-          // ALWAYS exclude users with no active policy from the export
-          // regardless of the UI view state, as per user request.
           const calc = calculateEmployeeSalary(s.employee_email);
           return calc.hasPolicy;
         })
@@ -590,24 +605,32 @@ export default function SalaryPage() {
           ];
         });
 
+      // Calculate Totals Row for Detailed Excel - ONLY for Base Total, Gross, and Net
+      const totalRowExcel = new Array(headerRow2.length).fill('');
+      totalRowExcel[1] = 'TOTAL';
+
+      // Target Indices: 13 (Base Total), 20 (Net Amount/Gross), 25 (Net Salary Payables)
+      const targetIndicesExcel = [13, 20, 25];
+
+      targetIndicesExcel.forEach(i => {
+        const total = rows.reduce((sum, row) => {
+          const val = parseFloat(row[i]);
+          return sum + (isNaN(val) ? 0 : val);
+        }, 0);
+        totalRowExcel[i] = Math.round(total * 100) / 100;
+      });
+
       // Combine all data
-      const data = [headerRow1, headerRow2, ...rows];
+      const data = [headerRow1, headerRow2, ...rows, totalRowExcel];
 
       // Create Workskeet
       const ws = XLSX.utils.aoa_to_sheet(data);
 
       // Define Merges
-      // s: start, e: end, r: row, c: col (0-indexed)
-      // Row 0 is headerRow1
       ws['!merges'] = [
         { s: { r: 0, c: 8 }, e: { r: 0, c: 13 } }, // BASE SALARY (6 cols)
         { s: { r: 0, c: 14 }, e: { r: 0, c: 20 } } // EARNED SALARY (7 cols)
       ];
-
-      // Optional: Center Align the merged headers
-      // Note: Cell styling usually requires pro version or other libraries, but alignment property might work in basic export if supported.
-      // Standard sheetjs free version doesn't export styles fully, but merging works.
-      // The text will be in the top-left cell of the merge region.
 
       // Create Workbook
       const wb = XLSX.utils.book_new();
