@@ -187,7 +187,7 @@ router.post('/invoke/reviewITTicket', async (req, res) => {
 
         if (action === 'approve') {
             ticket.head_approval_status = 'approved';
-            ticket.status = 'open';
+            ticket.status = new_assignee || ticket.assigned_to ? 'assigned' : 'open';
             if (new_assignee) {
                 const techUser = await User.findOne({ email: new_assignee });
                 ticket.assigned_to = new_assignee;
