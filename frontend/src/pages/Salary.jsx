@@ -30,6 +30,7 @@ import {
   AlertCircle,
   Zap,
   Eye,
+  EyeOff,
   Filter,
   ArrowUpRight,
   ArrowDownRight,
@@ -74,6 +75,7 @@ export default function SalaryPage() {
   const [reviewDialogOpen, setReviewDialogOpen] = useState(false);
   const [selectedPenalty, setSelectedPenalty] = useState(null);
   const [ticketReason, setTicketReason] = useState('');
+  const [hideNoPolicyUsers, setHideNoPolicyUsers] = useState(false);
 
   const approveRequestMutation = useMutation({
     mutationFn: async (id) => {
@@ -413,56 +415,61 @@ export default function SalaryPage() {
         'CTC (based on NetSalary)', 'Employer Contribution (CTC)', 'CTC1', 'CTC Final'
       ];
 
-      const rows = filteredSalaries.map(s => {
-        const calc = calculateEmployeeSalary(s.employee_email);
-        const userDetails = usersList.find(u => u.email === s.employee_email);
-        const departmentName = departments.find(d => d.id === userDetails?.department_id)?.name || 'N/A';
+      const rows = filteredSalaries
+        .filter(s => {
+          const calc = calculateEmployeeSalary(s.employee_email);
+          return calc.hasPolicy;
+        })
+        .map(s => {
+          const calc = calculateEmployeeSalary(s.employee_email);
+          const userDetails = usersList.find(u => u.email === s.employee_email);
+          const departmentName = departments.find(d => d.id === userDetails?.department_id)?.name || 'N/A';
 
-        // Employer Contributions
-        const employerContribution = (calc.employerPF || 0) + (calc.employerESI || 0) + (calc.employerLWF || 0);
+          // Employer Contributions
+          const employerContribution = (calc.employerPF || 0) + (calc.employerESI || 0) + (calc.employerLWF || 0);
 
-        // CTC Calculations
-        // CTC based on Net? (Net + deductions + employer contrib?) Usually CTC = Gross + Employer Contrib + ExGratia
-        const ctcFinal = (calc.monthlyCTC2 || 0);
+          // CTC Calculations
+          // CTC based on Net? (Net + deductions + employer contrib?) Usually CTC = Gross + Employer Contrib + ExGratia
+          const ctcFinal = (calc.monthlyCTC2 || 0);
 
-        return [
-          s.employee_name,
-          userDetails?.job_title || userDetails?.designation || userDetails?.role || 'N/A', // Designation
-          departmentName,
-          userDetails?.joining_date ? format(new Date(userDetails.joining_date), 'yyyy-MM-dd') : 'N/A', // DOJ
-          calc.totalDays,
-          calc.effectivePresent,
-          calc.weekoff,
-          calc.paidLeave,
-          calc.absent, // Absent
-          calc.paidDays,
-          (calc.monthlyCTC1 || 0), // Policy Gross (Full Month Gross usually)
-          calc.absentDeduction, // Absent Deduction
-          calc.earnedBasic, // Basic
-          0, // DA (Assuming 0 as not separated in policy)
-          calc.earnedHra, // HRA
-          calc.earnedTa, // TA
-          calc.earnedCea, // CEA
-          calc.earnedFi, // FI
-          calc.gross, // Gross Salary (Earned)
-          (s.advance_recovery || 0), // Salary Advanced (Minus)
-          (calc.adjustments > 0 ? calc.adjustments : 0), // Performance Allowance (Addition) - assuming positive adjustments
-          calc.empESI, // ESI (Employee)
-          calc.empPF, // PF (Employee)
-          calc.lwf, // Labour Welfare Fund
-          calc.totalDeductions, // Employee Total Deduction
-          calc.net, // Net Salary In hand
-          calc.exGratia, // Gratuity
-          calc.employerESI, // ESI.1 (Employer)
-          calc.employerPF, // PF.1 (Employer)
-          calc.employerLWF, // LWF (Employer)
-          employerContribution, // Total Employer Contribution
-          (calc.net + calc.totalDeductions + employerContribution), // CTC (based on NetSalary) - Approx
-          employerContribution, // Employer Contribution (CTC)
-          (calc.monthlyCTC1 || 0), // CTC1
-          ctcFinal // CTC Final
-        ];
-      });
+          return [
+            s.employee_name,
+            userDetails?.job_title || userDetails?.designation || userDetails?.role || 'N/A', // Designation
+            departmentName,
+            userDetails?.joining_date ? format(new Date(userDetails.joining_date), 'yyyy-MM-dd') : 'N/A', // DOJ
+            calc.totalDays,
+            calc.effectivePresent,
+            calc.weekoff,
+            calc.paidLeave,
+            calc.absent, // Absent
+            calc.paidDays,
+            (calc.monthlyCTC1 || 0), // Policy Gross (Full Month Gross usually)
+            calc.absentDeduction, // Absent Deduction
+            calc.earnedBasic, // Basic
+            0, // DA (Assuming 0 as not separated in policy)
+            calc.earnedHra, // HRA
+            calc.earnedTa, // TA
+            calc.earnedCea, // CEA
+            calc.earnedFi, // FI
+            calc.gross, // Gross Salary (Earned)
+            (s.advance_recovery || 0), // Salary Advanced (Minus)
+            (calc.adjustments > 0 ? calc.adjustments : 0), // Performance Allowance (Addition) - assuming positive adjustments
+            calc.empESI, // ESI (Employee)
+            calc.empPF, // PF (Employee)
+            calc.lwf, // Labour Welfare Fund
+            calc.totalDeductions, // Employee Total Deduction
+            calc.net, // Net Salary In hand
+            calc.exGratia, // Gratuity
+            calc.employerESI, // ESI.1 (Employer)
+            calc.employerPF, // PF.1 (Employer)
+            calc.employerLWF, // LWF (Employer)
+            employerContribution, // Total Employer Contribution
+            (calc.net + calc.totalDeductions + employerContribution), // CTC (based on NetSalary) - Approx
+            employerContribution, // Employer Contribution (CTC)
+            (calc.monthlyCTC1 || 0), // CTC1
+            ctcFinal // CTC Final
+          ];
+        });
 
       const csvContent = [
         headers.join(','),
@@ -523,58 +530,65 @@ export default function SalaryPage() {
         'Net Salary Payables' // (Index 25)
       ];
 
-      const rows = filteredSalaries.map(s => {
-        const calc = calculateEmployeeSalary(s.employee_email);
-        const policy = calc.policy || {};
-        const user = allUsers.find(u => u.email === s.employee_email) || {};
+      const rows = filteredSalaries
+        .filter(s => {
+          // ALWAYS exclude users with no active policy from the export
+          // regardless of the UI view state, as per user request.
+          const calc = calculateEmployeeSalary(s.employee_email);
+          return calc.hasPolicy;
+        })
+        .map(s => {
+          const calc = calculateEmployeeSalary(s.employee_email);
+          const policy = calc.policy || {};
+          const user = allUsers.find(u => u.email === s.employee_email) || {};
 
-        const baseOther = (policy.other_allowance || 0) +
-          (policy.travelling_allowance || 0) +
-          (policy.children_education_allowance || 0) +
-          (policy.fixed_incentive || 0) +
-          (policy.employer_incentive || 0);
+          const baseOther = (policy.other_allowance || 0) +
+            (policy.travelling_allowance || 0) +
+            (policy.children_education_allowance || 0) +
+            (policy.fixed_incentive || 0) +
+            (policy.employer_incentive || 0);
 
-        const earnedOther = (calc.earnedOther || 0) +
-          (calc.earnedTa || 0) +
-          (calc.earnedCea || 0) +
-          (calc.earnedFi || 0) +
-          (calc.empIncentive || 0);
+          const earnedOther = (calc.earnedOther || 0) +
+            (calc.earnedTa || 0) +
+            (calc.earnedCea || 0) +
+            (calc.earnedFi || 0) +
+            (calc.empIncentive || 0);
 
-        const baseTotal = (policy.basic_salary || 0) + (policy.hra || 0) + (policy.conveyance_allowance || 0) + (policy.special_allowance || 0) + baseOther;
+          const baseTotal = (policy.basic_salary || 0) + (policy.hra || 0) + (policy.conveyance_allowance || 0) + (policy.special_allowance || 0) + baseOther;
 
-        return [
-          '',
-          s.employee_name,
-          user.job_title || user.designation || 'N/A',
-          user.joining_date ? format(new Date(user.joining_date), 'yyyy-MM-dd') : 'N/A',
-          calc.totalDays,
-          calc.originalPaidLeave || 0,
-          calc.unpaidAbsent || 0,
-          calc.paidDays,
-          // Base
-          policy.basic_salary || 0,
-          policy.hra || 0,
-          policy.conveyance_allowance || 0,
-          policy.special_allowance || 0,
-          baseOther,
-          baseTotal,
-          // Earned
-          calc.earnedBasic,
-          calc.earnedHra,
-          calc.earnedConv,
-          calc.earnedSpecial,
-          earnedOther,
-          calc.positiveAdjustments, // Performance Allowance
-          calc.gross, // Gross
-          // Deductions
-          calc.empESI,
-          calc.empPF,
-          calc.lwf,
-          calc.negativeAdjustments, // Advance Deduction
-          // Net
-          calc.net
-        ];
-      });
+          return [
+            '',
+            s.employee_name,
+            user.job_title || user.designation || 'N/A',
+            user.joining_date ? format(new Date(user.joining_date), 'yyyy-MM-dd') : 'N/A',
+            calc.totalDays,
+            calc.originalPaidLeave || 0,
+            calc.unpaidAbsent || 0,
+            calc.paidDays,
+            // Base
+            policy.basic_salary || 0,
+            policy.hra || 0,
+            policy.conveyance_allowance || 0,
+            policy.special_allowance || 0,
+            baseOther,
+            baseTotal,
+            // Earned
+            calc.earnedBasic,
+            calc.earnedHra,
+            calc.earnedConv,
+            calc.earnedSpecial,
+            earnedOther,
+            calc.positiveAdjustments, // Performance Allowance
+            calc.gross, // Gross
+            // Deductions
+            calc.empESI,
+            calc.empPF,
+            calc.lwf,
+            calc.negativeAdjustments, // Advance Deduction
+            // Net
+            calc.net
+          ];
+        });
 
       // Combine all data
       const data = [headerRow1, headerRow2, ...rows];
@@ -1240,9 +1254,17 @@ export default function SalaryPage() {
         salary.employee_name?.toLowerCase().includes(searchQuery.toLowerCase()) ||
         salary.employee_email?.toLowerCase().includes(searchQuery.toLowerCase());
       const matchesStatus = statusFilter === 'all' || salary.status === statusFilter;
-      return matchesSearch && matchesStatus;
+
+      // Filter by Policy existence if toggle is active
+      let matchesPolicy = true;
+      if (hideNoPolicyUsers) {
+        const calc = calculateEmployeeSalary(salary.employee_email);
+        if (!calc.hasPolicy) matchesPolicy = false;
+      }
+
+      return matchesSearch && matchesStatus && matchesPolicy;
     });
-  }, [salaries, searchQuery, statusFilter]);
+  }, [salaries, searchQuery, statusFilter, hideNoPolicyUsers]);
 
   // Calculate totals
   const totals = useMemo(() => {
@@ -1483,6 +1505,19 @@ export default function SalaryPage() {
                       <SelectItem value="compact">Compact</SelectItem>
                     </SelectContent>
                   </Select>
+
+                  {/* Hide No Policy Toggle */}
+                  <Button
+                    variant={hideNoPolicyUsers ? "default" : "outline"}
+                    onClick={() => setHideNoPolicyUsers(!hideNoPolicyUsers)}
+                    className={`h-12 px-4 rounded-xl border font-semibold transition-all ${hideNoPolicyUsers
+                      ? 'bg-indigo-600 text-white border-indigo-600 hover:bg-indigo-700'
+                      : 'bg-slate-50 border-slate-200 text-slate-600 hover:bg-slate-100'
+                      }`}
+                  >
+                    {hideNoPolicyUsers ? <EyeOff className="w-4 h-4 mr-2" /> : <Eye className="w-4 h-4 mr-2" />}
+                    {hideNoPolicyUsers ? "Hidden No-Policy" : "Show All Users"}
+                  </Button>
 
                   {/* Actions */}
                   <div className="flex gap-2 ml-auto">
