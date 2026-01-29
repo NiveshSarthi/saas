@@ -1124,7 +1124,7 @@ const itTicketSchema = new mongoose.Schema({
     assigned_to_name: String,
     status: {
         type: String,
-        enum: ['pending_approval', 'open', 'in_progress', 'on_hold', 'resolved', 'closed', 'rejected'],
+        enum: ['pending_approval', 'approved', 'assigned', 'open', 'in_progress', 'on_hold', 'resolved', 'closed', 'rejected'],
         default: 'pending_approval'
     },
     head_approval_status: {
