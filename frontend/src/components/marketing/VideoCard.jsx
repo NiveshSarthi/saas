@@ -1,7 +1,8 @@
 import React from 'react';
 import { Badge } from '@/components/ui/badge';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
-import { Video, Trash2, ExternalLink } from 'lucide-react';
+import { Video, Trash2, ExternalLink, CheckSquare, Square } from 'lucide-react';
+import { Checkbox } from '@/components/ui/checkbox';
 
 // Editing level labels
 const EDITING_LEVELS = {
@@ -10,7 +11,17 @@ const EDITING_LEVELS = {
     'A+': { label: 'Highest', color: 'bg-purple-100 text-purple-700' }
 };
 
-export default function VideoCard({ video, categoryColor, category, users, onClick, isAdmin }) {
+export default function VideoCard({
+    video,
+    categoryColor,
+    category,
+    users,
+    onClick,
+    isAdmin,
+    isSelected,
+    onToggleSelection,
+    selectionModeActive
+}) {
     // Get user initials
     const getInitials = (email) => {
         if (!email) return '?';
@@ -32,9 +43,23 @@ export default function VideoCard({ video, categoryColor, category, users, onCli
     return (
         <div
             onClick={onClick}
-            className="bg-white rounded-lg shadow-sm border hover:shadow-md transition-all cursor-pointer group overflow-hidden"
+            className={`bg-white rounded-lg shadow-sm border hover:shadow-md transition-all cursor-pointer group overflow-hidden relative ${isSelected ? 'ring-2 ring-indigo-500 border-indigo-200 bg-indigo-50/30' : ''}`}
             style={{ borderLeftWidth: '4px', borderLeftColor: categoryColor }}
         >
+            {/* Selection Checkbox - Visible on hover, or if selected, or if selection mode is active */}
+            <div
+                className={`absolute top-2 right-2 z-20 transition-opacity duration-200 ${isSelected || selectionModeActive ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'}`}
+                onClick={(e) => {
+                    e.stopPropagation();
+                    onToggleSelection();
+                }}
+            >
+                <Checkbox
+                    checked={isSelected}
+                    className={`h-4 w-4 rounded shadow-sm border-slate-300 data-[state=checked]:bg-indigo-600 data-[state=checked]:border-indigo-600`}
+                />
+            </div>
+
             <div className="p-3">
                 {/* Header */}
                 <div className="flex items-start justify-between gap-2 mb-2">

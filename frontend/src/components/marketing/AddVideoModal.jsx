@@ -52,22 +52,7 @@ export default function AddVideoModal({
             toast.error('Category is required');
             return;
         }
-        if (!formData.assigned_director) {
-            toast.error('Director is required');
-            return;
-        }
-        if (!formData.assigned_cameraman) {
-            toast.error('Cameraman is required');
-            return;
-        }
-        if (!formData.assigned_editor) {
-            toast.error('Editor is required');
-            return;
-        }
-        if (!formData.assigned_manager) {
-            toast.error('Manager is required');
-            return;
-        }
+        // Optional: assigned_director, assigned_cameraman, assigned_editor, assigned_manager are now optional
 
         setIsSubmitting(true);
         try {
@@ -117,7 +102,7 @@ export default function AddVideoModal({
                         Add New Video
                     </DialogTitle>
                     <DialogDescription>
-                        Create a new video in the Shoot stage. All required fields must be filled.
+                        Create a new video in the Shoot stage.
                     </DialogDescription>
                 </DialogHeader>
 
@@ -209,12 +194,12 @@ export default function AddVideoModal({
                     <div className="space-y-3">
                         <div className="flex items-center gap-2 text-sm font-medium text-slate-700">
                             <Users className="w-4 h-4" />
-                            Team Assignment *
+                            Team Assignment
                         </div>
 
                         <div className="grid grid-cols-2 gap-4">
                             <div className="space-y-2">
-                                <Label>Director *</Label>
+                                <Label>Director</Label>
                                 <Select
                                     value={formData.assigned_director}
                                     onValueChange={(v) => setFormData({ ...formData, assigned_director: v })}
@@ -233,7 +218,7 @@ export default function AddVideoModal({
                             </div>
 
                             <div className="space-y-2">
-                                <Label>Cameraman *</Label>
+                                <Label>Cameraman</Label>
                                 <Select
                                     value={formData.assigned_cameraman}
                                     onValueChange={(v) => setFormData({ ...formData, assigned_cameraman: v })}
@@ -252,7 +237,7 @@ export default function AddVideoModal({
                             </div>
 
                             <div className="space-y-2">
-                                <Label>Editor *</Label>
+                                <Label>Editor</Label>
                                 <Select
                                     value={formData.assigned_editor}
                                     onValueChange={(v) => setFormData({ ...formData, assigned_editor: v })}
@@ -271,7 +256,7 @@ export default function AddVideoModal({
                             </div>
 
                             <div className="space-y-2">
-                                <Label>Manager *</Label>
+                                <Label>Manager</Label>
                                 <Select
                                     value={formData.assigned_manager}
                                     onValueChange={(v) => setFormData({ ...formData, assigned_manager: v })}

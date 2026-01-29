@@ -11,7 +11,8 @@ import {
     TableRow
 } from '@/components/ui/table';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { ExternalLink, ArrowUpDown, Eye, Trash2 } from 'lucide-react';
+import { ExternalLink, ArrowUpDown, Eye, Trash2, CheckSquare, Square } from 'lucide-react';
+import { Checkbox } from '@/components/ui/checkbox';
 
 // Status labels with colors
 const STATUS_CONFIG = {
@@ -36,7 +37,10 @@ export default function VideoListView({
     categories,
     users,
     onEditVideo,
-    isAdmin
+    isAdmin,
+    selectedVideoIds = [],
+    onToggleVideo,
+    onSelectAll
 }) {
     const [sortField, setSortField] = useState('created_at');
     const [sortDirection, setSortDirection] = useState('desc');
@@ -130,6 +134,12 @@ export default function VideoListView({
                 <Table>
                     <TableHeader>
                         <TableRow className="bg-slate-50">
+                            <TableHead className="w-[50px]">
+                                <Checkbox
+                                    checked={sortedVideos.length > 0 && selectedVideoIds.length >= sortedVideos.length}
+                                    onCheckedChange={onSelectAll}
+                                />
+                            </TableHead>
                             <SortableHeader field="title">Title</SortableHeader>
                             <TableHead>Category</TableHead>
                             <TableHead>Status</TableHead>
@@ -156,9 +166,16 @@ export default function VideoListView({
                                 return (
                                     <TableRow
                                         key={video.id || video._id}
-                                        className="hover:bg-slate-50 cursor-pointer"
+                                        className={`hover:bg-slate-50 cursor-pointer transition-colors ${selectedVideoIds.includes(video.id || video._id) ? 'bg-slate-100/80 shadow-inner' : ''}`}
                                         onClick={() => onEditVideo(video)}
                                     >
+                                        {/* Selection */}
+                                        <TableCell onClick={(e) => e.stopPropagation()}>
+                                            <Checkbox
+                                                checked={selectedVideoIds.includes(video.id || video._id)}
+                                                onCheckedChange={() => onToggleVideo(video.id || video._id)}
+                                            />
+                                        </TableCell>
                                         {/* Title */}
                                         <TableCell>
                                             <div

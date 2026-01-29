@@ -57,7 +57,17 @@ const getDragStyle = (style, snapshot) => {
     };
 };
 
-export default function VideoKanban({ videos, categories, users, onEditVideo, user, refetch, isAdmin }) {
+export default function VideoKanban({
+    videos,
+    categories,
+    users,
+    onEditVideo,
+    user,
+    refetch,
+    isAdmin,
+    selectedVideoIds = [],
+    onToggleVideo
+}) {
     const [collapsedColumns, setCollapsedColumns] = useState({});
     const [hiddenColumns, setHiddenColumns] = useState({ posted: true });
     const [urlPrompt, setUrlPrompt] = useState(null);
@@ -262,8 +272,8 @@ export default function VideoKanban({ videos, categories, users, onEditVideo, us
                                                     ref={provided.innerRef}
                                                     {...provided.droppableProps}
                                                     className={`min-h-[120px] space-y-2 transition-all duration-200 rounded-lg p-1 ${snapshot.isDraggingOver
-                                                            ? 'bg-indigo-50/70 ring-2 ring-indigo-200 ring-inset'
-                                                            : ''
+                                                        ? 'bg-indigo-50/70 ring-2 ring-indigo-200 ring-inset'
+                                                        : ''
                                                         }`}
                                                 >
                                                     {columnVideos.map((video, index) => (
@@ -279,8 +289,8 @@ export default function VideoKanban({ videos, categories, users, onEditVideo, us
                                                                     {...provided.dragHandleProps}
                                                                     style={getDragStyle(provided.draggableProps.style, snapshot)}
                                                                     className={`transition-transform duration-150 ${snapshot.isDragging
-                                                                            ? 'rotate-[1deg] scale-[1.02] cursor-grabbing opacity-95'
-                                                                            : 'cursor-grab hover:scale-[1.01]'
+                                                                        ? 'rotate-[1deg] scale-[1.02] cursor-grabbing opacity-95'
+                                                                        : 'cursor-grab hover:scale-[1.01]'
                                                                         }`}
                                                                 >
                                                                     <VideoCard
@@ -290,6 +300,9 @@ export default function VideoKanban({ videos, categories, users, onEditVideo, us
                                                                         users={users}
                                                                         onClick={() => onEditVideo(video)}
                                                                         isAdmin={isAdmin}
+                                                                        isSelected={selectedVideoIds.includes(video.id || video._id)}
+                                                                        onToggleSelection={() => onToggleVideo(video.id || video._id)}
+                                                                        selectionModeActive={selectedVideoIds.length > 0}
                                                                     />
                                                                 </div>
                                                             )}
