@@ -514,14 +514,13 @@ export default function SalaryPage() {
   const exportDetailedCSVMutation = useMutation({
     mutationFn: async () => {
       // Prepare Header Rows for Excel
-      // Row 1: Group Headers
-      // We want 'BASE SALARY' at col 8 (index 8) to merge 8-13 (6 cols)
-      // We want 'EARNED SALARY' at col 14 (index 14) to merge 14-20 (7 cols)
+      // We want 'BASE SALARY' at col 9 (index 9) to merge 9-14 (6 cols)
+      // We want 'EARNED SALARY' at col 15 (index 15) to merge 15-21 (7 cols)
       const headerRow1 = [
-        '', '', '', '', '', '', '', '', // 0-7 empty
-        'BASE SALARY', '', '', '', '', '', // 8 is Base Salary, 9-13 empty
-        'EARNED SALARY', '', '', '', '', '', '', // 14 is Earned Salary, 15-20 empty
-        'DEDUCTIONS', '', '', '', // 21-24 Deductions
+        '', '', '', '', '', '', '', '', '', // 0-8 empty
+        'BASE SALARY', '', '', '', '', '', // 9 is Base Salary, 10-14 empty
+        'EARNED SALARY', '', '', '', '', '', '', // 15 is Earned Salary, 16-21 empty
+        'DEDUCTIONS', '', '', '', // 22-25 Deductions
         'NET PAY'
       ];
 
@@ -530,21 +529,22 @@ export default function SalaryPage() {
         '', // 0
         'Name', // 1
         'Designation', // 2
-        'DOJ', // 3
-        'Base Days', // 4
-        'Leave Taken', // 5
-        'Leave Deduction Days', // 6
-        'Effective days', // 7
-        // Base Salary Group (8-13)
+        'Department', // 3 (NEW)
+        'DOJ', // 4
+        'Base Days', // 5
+        'Leave Taken', // 6
+        'Leave Deduction Days', // 7
+        'Effective days', // 8
+        // Base Salary Group (9-14)
         'Minimum Wages (BASIC+DA)', 'HRA', 'Conveyance', 'Special Allowance', 'Other Allowance', 'Total',
-        // Earned Salary Group (14-20)
+        // Earned Salary Group (15-21)
         'Minimum Wages (BASIC+DA)', 'HRA', 'Conveyance', 'Special Allowance', 'Other Allowance',
-        'Performance Allowance', // NEW (Index 19)
-        'Net Amount', // Gross (Index 20)
+        'Performance Allowance', // Index 20
+        'Net Amount', // Gross (Index 21)
         // Deductions & Payables
         'ESI@.75%', 'EPF', 'LWF',
-        'Advance Deduction', // NEW (Index 24)
-        'Net Salary Payables' // (Index 25)
+        'Advance Deduction', // Index 25
+        'Net Salary Payables' // (Index 26)
       ];
 
       const rows = filteredSalaries
@@ -571,10 +571,14 @@ export default function SalaryPage() {
 
           const baseTotal = (policy.basic_salary || 0) + (policy.hra || 0) + (policy.conveyance_allowance || 0) + (policy.special_allowance || 0) + baseOther;
 
+          const dept = departments.find(d => d.id === user.department_id || d._id === user.department_id);
+          const deptName = dept?.name || 'N/A';
+
           return [
             '',
             s.employee_name,
             user.job_title || user.designation || 'N/A',
+            deptName,
             user.joining_date ? format(new Date(user.joining_date), 'yyyy-MM-dd') : 'N/A',
             calc.totalDays,
             calc.originalPaidLeave || 0,
@@ -609,8 +613,8 @@ export default function SalaryPage() {
       const totalRowExcel = new Array(headerRow2.length).fill('');
       totalRowExcel[1] = 'TOTAL';
 
-      // Target Indices: 13 (Base Total), 20 (Net Amount/Gross), 25 (Net Salary Payables)
-      const targetIndicesExcel = [13, 20, 25];
+      // Target Indices: 14 (Base Total), 21 (Net Amount/Gross), 26 (Net Salary Payables)
+      const targetIndicesExcel = [14, 21, 26];
 
       targetIndicesExcel.forEach(i => {
         const total = rows.reduce((sum, row) => {
@@ -628,8 +632,9 @@ export default function SalaryPage() {
 
       // Define Merges
       ws['!merges'] = [
-        { s: { r: 0, c: 8 }, e: { r: 0, c: 13 } }, // BASE SALARY (6 cols)
-        { s: { r: 0, c: 14 }, e: { r: 0, c: 20 } } // EARNED SALARY (7 cols)
+        { s: { r: 0, c: 9 }, e: { r: 0, c: 14 } }, // BASE SALARY (6 cols)
+        { s: { r: 0, c: 15 }, e: { r: 0, c: 21 } }, // EARNED SALARY (7 cols)
+        { s: { r: 0, c: 22 }, e: { r: 0, c: 25 } }  // DEDUCTIONS (4 cols)
       ];
 
       // Create Workbook
