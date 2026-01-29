@@ -1,6 +1,7 @@
 import React, { useState, useMemo } from 'react';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
+import * as XLSX from 'xlsx';
 import { base44 } from '@/api/base44Client';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { format } from 'date-fns';
@@ -469,67 +470,329 @@ export default function SalaryPage() {
     onError: (e) => toast.error('Export failed: ' + e.message)
   });
 
-  const handleExportPDF = () => {
-    const doc = new jsPDF('l', 'mm', 'a4'); // Landscape
-
-    // Header
-    doc.setFontSize(22);
-    doc.setTextColor(40, 40, 40);
-    doc.text('Payroll Report', 14, 20);
-
-    doc.setFontSize(10);
-    doc.setTextColor(100);
-    doc.text(`Period: ${selectedMonth}`, 14, 28);
-    doc.text(`Generated: ${new Date().toLocaleDateString()}`, 14, 33);
-
-    const tableData = filteredSalaries.map(s => {
-      const calc = calculateEmployeeSalary(s.employee_email);
-      const user = allUsers.find(u => u.email === s.employee_email);
-      return [
-        s.employee_name,
-        user?.job_title || user?.role || 'N/A', // Designation
-        user?.joining_date ? format(new Date(user.joining_date), 'yyyy-MM-dd') : 'N/A', // DOJ
-        `${calc.paidDays}/${calc.totalDays}`,
-        `Rs. ${calc.baseSalary.toLocaleString()}`,
-        `Rs. ${calc.adjustments.toLocaleString()}`,
-        `Rs. ${calc.gross.toLocaleString()}`,
-        `-Rs. ${calc.totalDeductions.toLocaleString()}`,
-        `Rs. ${calc.net.toLocaleString()}`,
-        s.status.toUpperCase()
+  const exportDetailedCSVMutation = useMutation({
+    mutationFn: async () => {
+      // Prepare Header Rows for Excel
+      // Row 1: Group Headers
+      // We want 'BASE SALARY' at col 8 (index 8) to merge 8-13 (6 cols)
+      // We want 'EARNED SALARY' at col 14 (index 14) to merge 14-19 (6 cols)
+      const headerRow1 = [
+        '', '', '', '', '', '', '', '', // 0-7 empty
+        'BASE SALARY', '', '', '', '', '', // 8 is Base Salary, 9-13 empty
+        'EARNED SALARY', '', '', '', '', '', // 14 is Earned Salary, 15-19 empty
+        'DEDUCTIONS', '', '', // 20-22? No, just Deductions or rest
+        'NET PAY'
       ];
-    });
 
-    // Calculate Totals
-    const totalNet = filteredSalaries.reduce((sum, s) => {
-      const calc = calculateEmployeeSalary(s.employee_email);
-      return sum + (calc.net || 0);
-    }, 0);
+      // Row 2: Detailed Headers
+      const headerRow2 = [
+        '', // 0
+        'Name', // 1
+        'Designation', // 2
+        'DOJ', // 3
+        'Base Days', // 4
+        'Leave Taken', // 5
+        'Leave Deduction Days', // 6
+        'Effective days', // 7
+        // Base Salary Group (8-13)
+        'Minimum Wages (BASIC+DA)', 'HRA', 'Conveyance', 'Special Allowance', 'Other Allowance', 'Total',
+        // Earned Salary Group (14-19)
+        'Minimum Wages (BASIC+DA)', 'HRA', 'Conveyance', 'Special Allowance', 'Other Allowance', 'Net Amount',
+        // Deductions & Payables
+        'ESI@.75%', 'EPF', 'LWF', 'Net Salary Payables'
+      ];
+
+      const rows = filteredSalaries.map(s => {
+        const calc = calculateEmployeeSalary(s.employee_email);
+        const policy = calc.policy || {};
+        const user = allUsers.find(u => u.email === s.employee_email) || {};
+
+        const baseOther = (policy.other_allowance || 0) +
+          (policy.travelling_allowance || 0) +
+          (policy.children_education_allowance || 0) +
+          (policy.fixed_incentive || 0) +
+          (policy.employer_incentive || 0);
+
+        const earnedOther = (calc.earnedOther || 0) +
+          (calc.earnedTa || 0) +
+          (calc.earnedCea || 0) +
+          (calc.earnedFi || 0) +
+          (calc.empIncentive || 0);
+
+        const baseTotal = (policy.basic_salary || 0) + (policy.hra || 0) + (policy.conveyance_allowance || 0) + (policy.special_allowance || 0) + baseOther;
+
+        return [
+          '',
+          s.employee_name,
+          user.job_title || user.designation || 'N/A',
+          user.joining_date ? format(new Date(user.joining_date), 'yyyy-MM-dd') : 'N/A',
+          calc.totalDays,
+          calc.originalPaidLeave || 0,
+          calc.unpaidAbsent || 0,
+          calc.paidDays,
+          // Base
+          policy.basic_salary || 0,
+          policy.hra || 0,
+          policy.conveyance_allowance || 0,
+          policy.special_allowance || 0,
+          baseOther,
+          baseTotal,
+          // Earned
+          calc.earnedBasic,
+          calc.earnedHra,
+          calc.earnedConv,
+          calc.earnedSpecial,
+          earnedOther,
+          calc.gross,
+          // Deductions
+          calc.empESI,
+          calc.empPF,
+          calc.lwf,
+          // Net
+          calc.net
+        ];
+      });
+
+      // Combine all data
+      const data = [headerRow1, headerRow2, ...rows];
+
+      // Create Workskeet
+      const ws = XLSX.utils.aoa_to_sheet(data);
+
+      // Define Merges
+      // s: start, e: end, r: row, c: col (0-indexed)
+      // Row 0 is headerRow1
+      ws['!merges'] = [
+        { s: { r: 0, c: 8 }, e: { r: 0, c: 13 } }, // BASE SALARY (6 cols)
+        { s: { r: 0, c: 14 }, e: { r: 0, c: 19 } } // EARNED SALARY (6 cols) or Net Amt is 6th
+      ];
+
+      // Optional: Center Align the merged headers
+      // Note: Cell styling usually requires pro version or other libraries, but alignment property might work in basic export if supported.
+      // Standard sheetjs free version doesn't export styles fully, but merging works.
+      // The text will be in the top-left cell of the merge region.
+
+      // Create Workbook
+      const wb = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(wb, ws, "Salary Register");
+
+      // Write and Download
+      XLSX.writeFile(wb, `salary_register_${selectedMonth}.xlsx`);
+    },
+    onSuccess: () => toast.success('Salary Register (Excel) exported successfully'),
+    onError: (e) => toast.error('Export failed: ' + e.message)
+  });
+
+  const numberToWords = (n) => {
+    if (n < 0) return false;
+    const single = ['', 'One', 'Two', 'Three', 'Four', 'Five', 'Six', 'Seven', 'Eight', 'Nine'];
+    const double = ['Ten', 'Eleven', 'Twelve', 'Thirteen', 'Fourteen', 'Fifteen', 'Sixteen', 'Seventeen', 'Eighteen', 'Nineteen'];
+    const tens = ['', '', 'Twenty', 'Thirty', 'Forty', 'Fifty', 'Sixty', 'Seventy', 'Eighty', 'Ninety'];
+    const formatTenth = (n) => {
+      const s = n.toString();
+      let word = '';
+      if (s[0] === '0') return '';
+      if (parseInt(s) < 10) return single[parseInt(s)];
+      if (parseInt(s) < 20) return double[parseInt(s) - 10];
+      word += tens[parseInt(s[0])];
+      if (s[1] !== '0') word += ' ' + single[parseInt(s[1])];
+      return word;
+    };
+    const convert = (n) => {
+      if (n < 100) return formatTenth(n);
+      if (n < 1000) return single[Math.floor(n / 100)] + ' Hundred ' + (n % 100 !== 0 ? convert(n % 100) : '');
+      if (n < 100000) return convert(Math.floor(n / 1000)) + ' Thousand ' + (n % 1000 !== 0 ? convert(n % 1000) : '');
+      if (n < 10000000) return convert(Math.floor(n / 100000)) + ' Lakh ' + (n % 100000 !== 0 ? convert(n % 100000) : '');
+      return convert(Math.floor(n / 10000000)) + ' Crore ' + (n % 10000000 !== 0 ? convert(n % 10000000) : '');
+    };
+    return (convert(n) + ' Only').trim();
+  };
+
+  const downloadPayslip = (salary) => {
+    const calc = calculateEmployeeSalary(salary.employee_email);
+    const user = allUsers.find(u => u.email === salary.employee_email) || {};
+    const policy = calc.policy || {};
+
+    const doc = new jsPDF('p', 'mm', 'a4');
+
+    // 1. Header Section
+    // Outer Border
+    doc.rect(5, 5, 200, 287); // Page Border
+
+    // Header Content
+    doc.setFontSize(16);
+    doc.setFont('helvetica', 'bold');
+    doc.text('Nivesh Sarthi', 105, 15, { align: 'center' }); // Company Name
+
+    doc.setFontSize(9);
+    doc.setFont('helvetica', 'normal');
+    const address = "628~630, 6th Floor, Puri 81 Business Hub, Sector 81, Faridabad";
+    doc.text(address, 105, 20, { align: 'center' });
+
     doc.setFontSize(12);
-    doc.setTextColor(0, 0, 0);
-    doc.text(`Total Net Payroll: Rs. ${totalNet.toLocaleString()}`, 280, 20, { align: 'right' });
+    doc.setFont('helvetica', 'bold');
+    const monthStr = format(new Date(selectedMonth), 'MMMM yyyy');
+    doc.text(`Payslip for the month of ${monthStr}`, 105, 28, { align: 'center' });
+
+    doc.line(5, 32, 205, 32); // Separator line
+
+    // 2. Employee Details Table
+    // Left Column Data
+    const leftData = [
+      ['Name:', `${salary.employee_name} [${user.employee_id || salary.id.slice(0, 6)}]`],
+      ['Join Date:', user.joining_date ? format(new Date(user.joining_date), 'dd MMM yyyy') : 'N/A'],
+      ['Designation:', user.job_title || user.designation || 'N/A'],
+      ['Department:', departments.find(d => d.id === user.department_id)?.name || 'N/A'],
+      ['Location:', user.location || 'Faridabad'],
+      ['Effective Work Days:', calc.paidDays],
+      ['Days In Month:', calc.totalDays],
+      ['Leaving Date:', user.leaving_date ? format(new Date(user.leaving_date), 'dd MMM yyyy') : '']
+    ];
+
+    const rightData = [
+      ['Bank Name:', user.bank_name || 'HDFC Bank'],
+      ['Bank Account No:', user.account_number || 'XXXXXXXXXX'],
+      ['PF No:', user.pf_account_number || ''],
+      ['UAN:', user.uan || ''],
+      ['ESI No:', user.esi_number || ''],
+      ['PAN No:', user.pan_number || ''],
+      ['LOP:', calc.unpaidAbsent] // Loss of Pay days
+    ];
+
+    // Render Grid using autoTable for alignment
+    // We create a merged data array for 2 columns -> 4 visual columns
+    const gridData = [];
+    const maxRows = Math.max(leftData.length, rightData.length);
+    for (let i = 0; i < maxRows; i++) {
+      const left = leftData[i] || ['', ''];
+      const right = rightData[i] || ['', ''];
+      gridData.push([left[0], left[1], right[0], right[1]]);
+    }
 
     autoTable(doc, {
-      head: [['Employee', 'Designation', 'DOJ', 'Paid/Total', 'Base', 'Incentive', 'Gross', 'Deductions', 'Net Pay', 'Status']],
-      body: tableData,
-      startY: 40,
-      styles: { fontSize: 8, cellPadding: 2 }, // Reduced font size to fit columns
-      headStyles: { fillColor: [79, 70, 229], textColor: 255, fontStyle: 'bold' },
-      alternateRowStyles: { fillColor: [249, 250, 251] },
+      startY: 33,
+      head: [],
+      body: gridData,
+      theme: 'plain',
+      styles: { fontSize: 9, cellPadding: 1.5, lineColor: 10, lineWidth: 0 },
       columnStyles: {
-        0: { fontStyle: 'bold', cellWidth: 30 },
-        1: { cellWidth: 25 }, // Designation
-        2: { cellWidth: 20 }, // DOJ
-        8: { fontStyle: 'bold', halign: 'right' }, // Net Pay
-        4: { halign: 'right' },
-        5: { halign: 'right' },
-        6: { halign: 'right' },
-        7: { halign: 'right' }
-      }
+        0: { fontStyle: 'normal', cellWidth: 35 },
+        1: { fontStyle: 'bold', cellWidth: 55 }, // Name/Value
+        2: { fontStyle: 'normal', cellWidth: 35 },
+        3: { fontStyle: 'bold', cellWidth: 'auto' }
+      },
+      margin: { left: 10, right: 10 }
     });
 
-    doc.save(`payroll-report-${selectedMonth}.pdf`);
-    toast.success('PDF exported successfully');
+    const finalY = doc.lastAutoTable.finalY + 5;
+    doc.line(5, finalY, 205, finalY); // Line after details
+
+    // 3. Earnings & Deductions Table
+
+    // Construct Rows
+    // Logic: Align Earnings and Deductions side by side.
+    const earningsList = [
+      { label: 'BASIC', full: policy.basic_salary, actual: calc.earnedBasic },
+      { label: 'HRA', full: policy.hra, actual: calc.earnedHra },
+      { label: 'CHILDREN EDUCATION ALLOWANCE', full: policy.children_education_allowance, actual: calc.earnedCea },
+      { label: 'FIXED INCENTIVE', full: policy.fixed_incentive, actual: calc.earnedFi },
+      { label: 'SPECIAL ALLOWANCE', full: policy.special_allowance, actual: calc.earnedSpecial },
+      { label: 'CONVEYANCE', full: policy.conveyance_allowance, actual: calc.earnedConv },
+      { label: 'OTHER ALLOWANCE', full: policy.other_allowance, actual: calc.earnedOther },
+      // Add others if > 0
+      ...(calc.earnedTa > 0 ? [{ label: 'TRAVELLING ALLOWANCE', full: policy.travelling_allowance, actual: calc.earnedTa }] : []),
+      ...(calc.empIncentive > 0 ? [{ label: 'EMPLOYER INCENTIVE', full: policy.employer_incentive, actual: calc.empIncentive }] : []),
+      ...(calc.salesIncentive > 0 ? [{ label: 'SALES INCENTIVE', full: 0, actual: calc.salesIncentive }] : []),
+      ...(calc.salesReward > 0 ? [{ label: 'PERFORMANCE REWARD', full: 0, actual: calc.salesReward }] : []),
+      // Adjustments (Positive)
+      ...(calc.adjustments > 0 ? [{ label: 'ADJUSTMENTS (BONUS/ETC)', full: 0, actual: calc.adjustments }] : [])
+    ].filter(e => (e.full > 0 || e.actual > 0)); // Filter empty
+
+    const deductionsList = [
+      { label: 'PF', amount: calc.empPF },
+      { label: 'ESI', amount: calc.empESI },
+      { label: 'LWF', amount: calc.lwf },
+      { label: 'PROFESSIONAL TAX', amount: salary.other_deductions }, // Mapping 'other_deductions' to generic or PT
+      { label: 'SALARY ADVANCE', amount: salary.advance_recovery },
+      { label: 'LATE PENALTY', amount: calc.latePenalty },
+      { label: 'ABSENT DEDUCTION', amount: calc.absentDeduction },
+      { label: 'ATTENDANCE PENALTY', amount: calc.attendancePenalty },
+      { label: 'TIMESHEET PENALTY', amount: calc.timesheetPenaltyDeduction }
+    ].filter(d => d.amount > 0);
+
+    const maxTableRows = Math.max(earningsList.length, deductionsList.length);
+    const tableBody = [];
+
+    // Totals for Footer
+    let totalFullEarnings = 0;
+    let totalActualEarnings = 0;
+    let totalDeductionsCalc = 0;
+
+    for (let i = 0; i < maxTableRows; i++) {
+      const earn = earningsList[i] || { label: '', full: '', actual: '' };
+      const ded = deductionsList[i] || { label: '', amount: '' };
+
+      tableBody.push([
+        earn.label,
+        earn.full ? earn.full.toFixed(2) : '',
+        earn.actual ? earn.actual.toFixed(2) : '',
+        ded.label,
+        ded.amount ? ded.amount.toFixed(2) : ''
+      ]);
+
+      if (earn.full) totalFullEarnings += Number(earn.full);
+      if (earn.actual) totalActualEarnings += Number(earn.actual);
+      if (ded.amount) totalDeductionsCalc += Number(ded.amount);
+    }
+
+    // Total Row
+    const totalRow = [
+      'Total Earnings: Rs.',
+      totalFullEarnings.toFixed(2),
+      totalActualEarnings.toFixed(2),
+      'Total Deductions: Rs.',
+      totalDeductionsCalc.toFixed(2)
+    ];
+
+    autoTable(doc, {
+      startY: finalY, // Start right after the line
+      head: [['Earnings', 'Full', 'Actual', 'Deductions', 'Actual']],
+      body: tableBody,
+      foot: [totalRow],
+      theme: 'grid', // Grid theme for borders
+      styles: { fontSize: 9, cellPadding: 2, lineColor: 10, lineWidth: 0.1 },
+      headStyles: { fillColor: [255, 255, 255], textColor: 0, fontStyle: 'bold', lineWidth: 0.1, lineColor: 10 },
+      footStyles: { fillColor: [255, 255, 255], textColor: 0, fontStyle: 'bold', lineWidth: 0.1, lineColor: 10 },
+      columnStyles: {
+        0: { cellWidth: 55 }, // Earnings Label
+        1: { cellWidth: 25, halign: 'right' },
+        2: { cellWidth: 25, halign: 'right' },
+        3: { cellWidth: 55 }, // Deductions Label
+        4: { cellWidth: 25, halign: 'right' }
+      },
+      margin: { left: 10, right: 10 }
+    });
+
+    const tableFinalY = doc.lastAutoTable.finalY + 10;
+
+    // 4. Net Pay Section
+    doc.setFontSize(10);
+    doc.setFont('helvetica', 'bold');
+    doc.text(`Net Pay for the month ( Total Earnings - Total Deductions):       ${calc.net.toFixed(2)}`, 15, tableFinalY);
+
+    doc.setFont('helvetica', 'italic');
+    doc.text(`(Rupees ${numberToWords(Math.round(calc.net))} Only)`, 15, tableFinalY + 6);
+
+    // 5. Footer
+    doc.setFontSize(9);
+    doc.setFont('helvetica', 'normal');
+    doc.text('This is a system generated payslip and does not require signature.', 105, 280, { align: 'center' });
+    doc.line(5, 275, 205, 275);
+
+    doc.save(`Payslip_${salary.employee_name}_${selectedMonth}.pdf`);
   };
+
+
 
   const applyRetroactiveIncentivesMutation = useMutation({
     mutationFn: async () => {
@@ -584,7 +847,7 @@ export default function SalaryPage() {
     const expectedCheckOutStart = 17; // 5:00 PM
     const expectedCheckOutEnd = 18; // 6:00 PM
 
-    const dailySalary = policy ? ((policy.basic_salary || 0) + (policy.hra || 0) + (policy.travelling_allowance || 0) + (policy.children_education_allowance || 0) + (policy.fixed_incentive || 0) + (policy.employer_incentive || 0)) / totalDays : 0;
+    const dailySalary = policy ? ((policy.basic_salary || 0) + (policy.hra || 0) + (policy.conveyance_allowance || 0) + (policy.special_allowance || 0) + (policy.other_allowance || 0) + (policy.travelling_allowance || 0) + (policy.children_education_allowance || 0) + (policy.fixed_incentive || 0) + (policy.employer_incentive || 0)) / totalDays : 0;
 
     // --- Timesheet Penalty Calculation ---
     const penaltyDates = new Set();
@@ -768,8 +1031,14 @@ export default function SalaryPage() {
     const unpaidAbsent = Math.max(0, absent - 1);
     const effectivePresent = present + paidAbsent;
 
+
+    // Only one leave is paid, rest are treated as absent (unpaid)
+    const effectivePaidLeave = Math.min(paidLeave, 1);
+
     // Calculate paid days
-    const paidDays = present + weekoff + holiday + paidLeave + paidAbsent + (halfDay * 0.5);
+    // Note: paidAbsent allows 1 unauthorized absence to be paid (existing rule). 
+    // effectivePaidLeave allows only 1 authorized leave to be paid (new rule).
+    const paidDays = present + weekoff + holiday + effectivePaidLeave + paidAbsent + (halfDay * 0.5);
 
     // Not marked days (Original Total - Effective Records) OR (Total - Original Records)?
     // "remove that daily attendance" implies they essentially become "Not Marked" or just Gone.
@@ -790,30 +1059,40 @@ export default function SalaryPage() {
     // Calculate base salary components (pro-rated)
     const basicPerDay = (policy.basic_salary || 0) / totalDays;
     const hraPerDay = (policy.hra || 0) / totalDays;
+    const convPerDay = (policy.conveyance_allowance || 0) / totalDays;
+    const specialPerDay = (policy.special_allowance || 0) / totalDays;
+    const otherPerDay = (policy.other_allowance || 0) / totalDays;
     const taPerDay = (policy.travelling_allowance || 0) / totalDays;
     const ceaPerDay = (policy.children_education_allowance || 0) / totalDays;
     const fiPerDay = (policy.fixed_incentive || 0) / totalDays;
 
     const earnedBasic = Math.round(basicPerDay * paidDays);
     const earnedHra = Math.round(hraPerDay * paidDays);
+    const earnedConv = Math.round(convPerDay * paidDays);
+    const earnedSpecial = Math.round(specialPerDay * paidDays);
+    const earnedOther = Math.round(otherPerDay * paidDays);
     const earnedTa = Math.round(taPerDay * paidDays);
     const earnedCea = Math.round(ceaPerDay * paidDays);
     const earnedFi = Math.round(fiPerDay * paidDays);
     const empIncentive = policy.employer_incentive || 0;
 
-    const baseSalary = earnedBasic + earnedHra + earnedTa + earnedCea + earnedFi + empIncentive;
+    const baseSalary = earnedBasic + earnedHra + earnedConv + earnedSpecial + earnedOther + earnedTa + earnedCea + earnedFi + empIncentive;
 
     // CTC 1: Based on salary policy only (full month salary, not pro-rated, including employer contributions)
     const fullMonthGross = (policy.basic_salary || 0) + (policy.hra || 0) +
+      (policy.conveyance_allowance || 0) + (policy.special_allowance || 0) + (policy.other_allowance || 0) +
       (policy.travelling_allowance || 0) + (policy.children_education_allowance || 0) +
       (policy.fixed_incentive || 0) + (policy.employer_incentive || 0);
 
     // Employer contributions for CTC calculation
+    // PF is calculated on Basic Salary (capped at 15000 standard limit usually for 1800 max)
+    const pfBasis = Math.min((policy.basic_salary || 0), 15000);
     const employerPF = (policy.employer_pf_percentage > 0)
-      ? Math.round(fullMonthGross * (policy.employer_pf_percentage / 100))
+      ? Math.round(pfBasis * (policy.employer_pf_percentage / 100))
       : (policy.employer_pf_fixed || 0);
 
-    const employerESI = (policy.employer_esi_percentage > 0)
+    // ESI is only applicable if Gross <= 21000
+    const employerESI = (fullMonthGross <= 21000 && policy.employer_esi_percentage > 0)
       ? Math.round(fullMonthGross * (policy.employer_esi_percentage / 100))
       : (policy.employer_esi_fixed || 0);
 
@@ -821,15 +1100,30 @@ export default function SalaryPage() {
 
     const exGratia = (policy.ex_gratia_percentage > 0)
       ? Math.round((policy.basic_salary || 0) * (policy.ex_gratia_percentage / 100))
-      : (policy.ex_gratia_fixed || 0);
+      : (policy.ex_gratia_fixed || policy.bonus_amount || 0);
 
-    const monthlyCTC1 = fullMonthGross + employerPF + employerESI + employerLWF + exGratia;
+    const monthlyCTC1 = fullMonthGross + employerPF + employerESI + employerLWF + exGratia + (policy.pf_admin_charges || 0) + (policy.gratuity_amount || 0);
+
+    console.log('CTC Breakdown:', {
+      fullMonthGross,
+      employerPF,
+      employerESI,
+      employerLWF,
+      exGratia,
+      pf_admin: policy.pf_admin_charges,
+      gratuity: policy.gratuity_amount,
+      total: monthlyCTC1
+    });
+
     const yearlyCTC1 = monthlyCTC1 * 12;
 
     // Adjustments from SalaryAdjustment entity
     const employeeAdjustments = adjustmentsArr.filter(adj =>
       adj.employee_email === employeeEmail && adj.status === 'approved'
     );
+
+    // Rounding helper
+    const round2 = (num) => Math.round((num + Number.EPSILON) * 100) / 100;
 
     const adjustments = employeeAdjustments.reduce((total, adj) => {
       if (adj.adjustment_type === 'penalty_waiver') return total;
@@ -846,7 +1140,7 @@ export default function SalaryPage() {
     const salesReward = salary?.sales_reward || 0;
     const salesMeta = salary?.sales_performance_meta || {};
 
-    const gross = baseSalary + adjustments + salesIncentive + salesReward + (attendanceAdjustments > 0 ? attendanceAdjustments : 0);
+    const gross = round2(baseSalary + adjustments + salesIncentive + salesReward + (attendanceAdjustments > 0 ? attendanceAdjustments : 0));
 
     // CTC 2: Including adjustments and sales incentives
     const monthlyCTC2 = monthlyCTC1 + adjustments + salesIncentive + salesReward;
@@ -862,29 +1156,34 @@ export default function SalaryPage() {
     const lwf = (policy.labour_welfare_employee || 0) * (paidDays / totalDays);
 
     // Other deductions
-    const latePenalty = late * (policy.late_penalty_per_minute || 0) * 10;
-    const absentDeduction = unpaidAbsent > 0 ? Math.round((earnedBasic + earnedHra + earnedTa + earnedCea + earnedFi) / paidDays * unpaidAbsent) : 0;
+    const latePenalty = round2(late * (policy.late_penalty_per_minute || 0) * 10);
+    // Absent deduction should be 0 because we already reduced 'paidDays' which reduces 'baseSalary'. 
+    // Adding it here would be double deduction.
+    const absentDeduction = 0;
 
     // Attendance penalty (from daily adjustments e.g. late check-in bracket)
-    const attendancePenalty = attendanceAdjustments < 0 ? Math.abs(attendanceAdjustments) : 0;
+    const attendancePenalty = attendanceAdjustments < 0 ? Math.abs(round2(attendanceAdjustments)) : 0;
+    // Note: timesheetPenaltyDeduction is explicitly based on dailySalary (float). Round it.
+    const roundedTimesheetPenalty = round2(timesheetPenaltyDeduction);
 
-    const totalDeductions = empPF + empESI + lwf + latePenalty + absentDeduction +
-      (salary?.advance_recovery || 0) + (salary?.other_deductions || 0) + timesheetPenaltyDeduction + attendancePenalty;
+    const totalDeductions = round2(empPF + empESI + lwf + latePenalty + absentDeduction +
+      (salary?.advance_recovery || 0) + (salary?.other_deductions || 0) + roundedTimesheetPenalty + attendancePenalty);
 
-    const net = gross - totalDeductions;
+    const net = round2(gross - totalDeductions);
 
     // Attendance percentage
     const attendancePercentage = totalDays > 0 ? Math.round((paidDays / totalDays) * 100) : 0;
 
     return {
-      totalDays, present, absent, unpaidAbsent, effectivePresent, halfDay, paidLeave,
+      totalDays, present, absent, unpaidAbsent: unpaidAbsent + (paidLeave - effectivePaidLeave),
+      effectivePresent, halfDay, paidLeave: effectivePaidLeave, originalPaidLeave: paidLeave,
       weekoff, holiday, late, paidDays, notMarked,
-      baseSalary, earnedBasic, earnedHra, earnedTa, earnedCea, earnedFi, empIncentive,
+      baseSalary, earnedBasic, earnedHra, earnedConv, earnedSpecial, earnedOther, earnedTa, earnedCea, earnedFi, empIncentive,
       adjustments, gross, empPF, empESI, lwf, latePenalty, absentDeduction,
       totalDeductions, net, attendancePercentage, policy, hasPolicy: true,
       employeeAdjustments, monthlyCTC1, yearlyCTC1, monthlyCTC2, yearlyCTC2,
       attendanceAdjustments, dailyDetails, timesheetPenaltyDeduction, penaltyDetails,
-      employerPF, employerESI, employerLWF, exGratia, earnedBasic, earnedHra, earnedTa, earnedCea, earnedFi,
+      employerPF, employerESI, employerLWF, exGratia,
       salesIncentive, salesReward, salesMeta
     };
   }, [allPolicies, salaries, attendanceRecords, selectedMonth, allAdjustments, gracePeriods]);
@@ -1216,15 +1515,16 @@ export default function SalaryPage() {
                       <Download className="w-4 h-4" />
                       Export CSV
                     </Button>
+                    <Button
+                      variant="outline"
+                      onClick={() => exportDetailedCSVMutation.mutate()}
+                      className="gap-2 bg-slate-50 border-slate-200 text-slate-600 hover:bg-slate-100 h-12 rounded-xl font-semibold hover:text-emerald-600 transition-colors"
+                    >
+                      <Download className="w-4 h-4" />
+                      Export Register
+                    </Button>
                   </div>
-                  <Button
-                    variant="outline"
-                    onClick={handleExportPDF}
-                    className="gap-2 bg-slate-50 border-slate-200 text-slate-600 hover:bg-slate-100 h-12 rounded-xl font-semibold hover:text-blue-600 transition-colors"
-                  >
-                    <FileText className="w-4 h-4" />
-                    Export PDF
-                  </Button>
+
                 </div>
 
                 {/* Bulk Actions */}
@@ -1538,14 +1838,32 @@ export default function SalaryPage() {
                                   <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
                                     {calc.earnedBasic > 0 && (
                                       <div className="flex justify-between items-center bg-white p-3 rounded-lg border border-slate-200">
-                                        <span className="text-slate-500 text-sm">Basic</span>
+                                        <span className="text-slate-500 text-sm">Earned Basic</span>
                                         <span className="font-bold text-slate-900">₹{calc.earnedBasic.toLocaleString()}</span>
                                       </div>
                                     )}
                                     {calc.earnedHra > 0 && (
                                       <div className="flex justify-between items-center bg-white p-3 rounded-lg border border-slate-200">
-                                        <span className="text-slate-500 text-sm">HRA</span>
+                                        <span className="text-slate-500 text-sm">Earned HRA</span>
                                         <span className="font-bold text-slate-900">₹{calc.earnedHra.toLocaleString()}</span>
+                                      </div>
+                                    )}
+                                    {calc.earnedConv > 0 && (
+                                      <div className="flex justify-between items-center bg-white p-3 rounded-lg border border-slate-200">
+                                        <span className="text-slate-500 text-sm">Earned Conv.</span>
+                                        <span className="font-bold text-slate-900">₹{calc.earnedConv.toLocaleString()}</span>
+                                      </div>
+                                    )}
+                                    {calc.earnedSpecial > 0 && (
+                                      <div className="flex justify-between items-center bg-white p-3 rounded-lg border border-slate-200">
+                                        <span className="text-slate-500 text-sm">Earned Special</span>
+                                        <span className="font-bold text-slate-900">₹{calc.earnedSpecial.toLocaleString()}</span>
+                                      </div>
+                                    )}
+                                    {calc.earnedOther > 0 && (
+                                      <div className="flex justify-between items-center bg-white p-3 rounded-lg border border-slate-200">
+                                        <span className="text-slate-500 text-sm">Earned Other</span>
+                                        <span className="font-bold text-slate-900">₹{calc.earnedOther.toLocaleString()}</span>
                                       </div>
                                     )}
                                     {calc.earnedTa > 0 && (
@@ -1704,12 +2022,11 @@ export default function SalaryPage() {
                               <Button
                                 variant="outline"
                                 size="sm"
-                                onClick={() => generateSlipMutation.mutate(salary.id)}
-                                disabled={generateSlipMutation.isPending}
+                                onClick={() => downloadPayslip(salary)}
                                 className="bg-slate-50 border-slate-200 text-slate-600 hover:bg-slate-100 hover:text-indigo-600 rounded-lg"
                               >
-                                <FileText className="w-4 h-4 mr-2" />
-                                Slip
+                                <Download className="w-4 h-4 mr-2" />
+                                Payslip
                               </Button>
                               <Button
                                 variant="outline"
@@ -1869,6 +2186,7 @@ export default function SalaryPage() {
                 policies.map((policy) => {
                   const user = allUsers.find(u => u.email === policy.user_email);
                   const monthlyGross = (policy.basic_salary || 0) + (policy.hra || 0) +
+                    (policy.conveyance_allowance || 0) + (policy.special_allowance || 0) + (policy.other_allowance || 0) +
                     (policy.travelling_allowance || 0) + (policy.children_education_allowance || 0) +
                     (policy.fixed_incentive || 0);
 
@@ -2077,7 +2395,9 @@ function DailyAttendanceDetails({ dailyDetails, employeeAdjustments = [], salary
     status: adj.adjustment_type,
     checkIn: null,
     checkOut: null,
-    adjustment: adj.adjustment_type === 'penalty' || adj.adjustment_type === 'deduction' ? -Math.abs(adj.amount) : adj.amount,
+    adjustment: ['bonus', 'incentive', 'reimbursement', 'allowance'].includes(adj.adjustment_type)
+      ? Math.abs(adj.amount)
+      : -Math.abs(adj.amount),
     reason: adj.description || `${adj.adjustment_type} adjustment`,
     isAdjustment: true
   }));

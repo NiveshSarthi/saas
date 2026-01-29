@@ -1,165 +1,219 @@
 import React, { useState, useEffect } from 'react';
 import { base44 } from '@/api/base44Client';
-import { useMutation, useQueryClient, useQuery } from '@tanstack/react-query';
+import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Switch } from '@/components/ui/switch';
+import { Separator } from '@/components/ui/separator';
 import { toast } from 'sonner';
 
 export default function SalaryPolicyForm({ isOpen, onClose, policy, allUsers }) {
   const queryClient = useQueryClient();
 
+  // We use 'basic_salary' to store the combined "Basic + DA" value entered by user.
+  // 'da' field is kept 0 or internal.
   const [formData, setFormData] = useState({
     user_email: '',
     salary_type: 'per_day',
-    basic_salary: '',
-    hra: '',
-    da: '',
-    travelling_allowance: '',
-    children_education_allowance: '',
-    fixed_incentive: '',
-    monthly_salary: '',
-    per_day_salary: '',
-    per_hour_salary: '',
-    employee_pf_percentage: '',
+
+    // Earnings
+    basic_salary: '', // Stores Basic + DA Combined Input
+    da: 0,
+    hra: '', // calculated
+    conveyance_allowance: '',
+    special_allowance: 1000,
+    other_allowance: '',
+
+    // Deductions
+    employee_pf_percentage: 12,
     employee_pf_fixed: '',
-    employee_esi_percentage: '',
+    employee_esi_percentage: 0.75,
     employee_esi_fixed: '',
-    labour_welfare_employee: '',
-    employer_pf_percentage: '',
-    employer_pf_fixed: '',
-    employer_esi_percentage: '',
-    employer_esi_fixed: '',
-    labour_welfare_employer: '',
-    ex_gratia_percentage: '',
-    ex_gratia_fixed: '',
-    employer_incentive: '',
+    labour_welfare_employee: 50,
+    professional_tax: 0, // Default 0
+
+    // Employer Contributions
+    employer_pf_percentage: 12,
+    employer_esi_percentage: 3.25,
+    pf_admin_charges: '',
+    bonus_amount: '',
+    gratuity_amount: '',
+    labour_welfare_employer: 50,
+
+    // Other settings
     late_penalty_enabled: false,
     late_penalty_per_minute: '',
-    half_day_threshold_hours: 4,
-    full_day_threshold_hours: 6,
-    weekend_paid: false,
     is_active: true
   });
 
-  const { data: leaveTypes = [] } = useQuery({
-    queryKey: ['leave-types'],
-    queryFn: () => base44.entities.LeaveType.list(),
-  });
+  // Auto-calculation Effect
+  useEffect(() => {
+    const basicCombined = Number(formData.basic_salary) || 0;
 
-  // Calculate gross salary in real-time
-  const calculatedGross = React.useMemo(() => {
-    const basic = Number(formData.basic_salary) || 0;
+    // Formulas based on User Request:
+    // 1. HRA = 50% of (Basic + DA)
+    const hra = Math.round(basicCombined * 0.50);
+
+    // 2. Conveyance = 15% of (Basic + DA)
+    const conveyance = Math.round(basicCombined * 0.15);
+
+    // 3. Special Allowance = 1000 (Fixed)
+    const special = 1000;
+
+    // 4. Other Allowance = ((Basic + DA) * 35%) - Special Allowance
+    const otherRaw = (basicCombined * 0.35) - special;
+    const other = Math.max(0, Math.round(otherRaw)); // Clamp to 0 if negative
+
+    const gross = basicCombined + hra + conveyance + special + other;
+
+    // 5. PF: 12% of (Basic + DA) OR Max 1800
+    // Handled in calculateValues generally, but good to ensure inputs consistent.
+
+    // 6. ESIC Logic (Gross <= 21000)
+    // Updated threshold from 15472 -> 21000
+    let newEsiEmpPct = 0.75;
+    let newEsiEmplrPct = 3.25;
+
+    if (gross > 21000) {
+      newEsiEmpPct = 0;
+      newEsiEmplrPct = 0;
+    }
+
+    // 7. Bonus: 8.33% of max(Basic+DA, 7000)
+    const bonusBase = Math.max(basicCombined, 7000);
+    const bonus = Math.round(bonusBase * 0.0833);
+
+    // 8. Gratuity: 4.81% of (Basic + DA)
+    const gratuity = Math.round(basicCombined * 0.0481);
+
+    // 9. LWF Employee: 0.20% Max 34
+    const lwfRaw = gross * 0.002;
+    const lwf = Math.min(Math.round(lwfRaw), 34);
+
+    // 10. LWF Employer: 0.40% Max 68
+    const lwfEmplrRaw = gross * 0.004;
+    const lwfEmplr = Math.min(Math.round(lwfEmplrRaw), 68);
+
+    setFormData(prev => {
+      // Prevent infinite loop by checking current values
+      if (prev.hra === hra &&
+        prev.conveyance_allowance === conveyance &&
+        prev.special_allowance === special &&
+        prev.other_allowance === other &&
+        prev.bonus_amount === bonus &&
+        prev.gratuity_amount === gratuity &&
+        prev.employee_esi_percentage === newEsiEmpPct &&
+        prev.labour_welfare_employee === lwf &&
+        prev.labour_welfare_employer === lwfEmplr) {
+        return prev;
+      }
+
+      return {
+        ...prev,
+        da: 0, // Ensure DA is 0 as it's merged
+        hra: hra,
+        conveyance_allowance: conveyance,
+        special_allowance: special,
+        other_allowance: other,
+        bonus_amount: bonus,
+        gratuity_amount: gratuity,
+        employee_esi_percentage: newEsiEmpPct,
+        employer_esi_percentage: newEsiEmplrPct,
+        labour_welfare_employee: lwf,
+        labour_welfare_employer: lwfEmplr
+      };
+    });
+
+  }, [formData.basic_salary]); // Only depend on basic_salary input
+
+
+  // Calculation Helpers for Render
+  const calculateValues = () => {
+    const basicCombined = Number(formData.basic_salary) || 0;
     const hra = Number(formData.hra) || 0;
-    const da = Number(formData.da) || 0;
-    const ta = Number(formData.travelling_allowance) || 0;
-    const cea = Number(formData.children_education_allowance) || 0;
-    const fi = Number(formData.fixed_incentive) || 0;
-    return basic + hra + da + ta + cea + fi;
-  }, [formData.basic_salary, formData.hra, formData.da, formData.travelling_allowance, formData.children_education_allowance, formData.fixed_incentive]);
+    const conv = Number(formData.conveyance_allowance) || 0;
+    const special = Number(formData.special_allowance) || 0;
+    const other = Number(formData.other_allowance) || 0;
+
+    const gross = basicCombined + hra + conv + special + other;
+
+    // PF: 12% of BasicCombined OR MAX 1800
+    const pfBase = basicCombined;
+    let pfEmp = Math.round(pfBase * (Number(formData.employee_pf_percentage) / 100));
+    let pfEmplr = Math.round(pfBase * (Number(formData.employer_pf_percentage) / 100));
+
+    // Apply 1800 Cap
+    pfEmp = Math.min(pfEmp, 1800);
+    pfEmplr = Math.min(pfEmplr, 1800);
+
+    const pfAdmin = Math.round(pfBase * 0.01); // 1% of Basic+DA (No Cap)
+
+    // ESIC: Use Math.ceil (ROUNDUP)
+    const esiEmp = Math.ceil(gross * (Number(formData.employee_esi_percentage) / 100));
+    const esiEmplr = Math.ceil(gross * (Number(formData.employer_esi_percentage) / 100));
+
+    // Deductions
+    const pt = Number(formData.professional_tax) || 0;
+    const lwfEmp = Number(formData.labour_welfare_employee) || 0;
+
+    const totalDed = pfEmp + esiEmp + pt + lwfEmp;
+    const netSalary = gross - totalDed;
+
+    // Employer Liability
+    const lwfEmplr = Number(formData.labour_welfare_employer) || 0;
+    const bonus = Number(formData.bonus_amount) || 0;
+    const gratuity = Number(formData.gratuity_amount) || 0;
+
+    const ctc = gross + pfEmplr + esiEmplr + lwfEmplr + bonus + gratuity + pfAdmin;
+    const statutoryCost = pfEmplr + esiEmplr + lwfEmplr + bonus + gratuity + pfAdmin;
+
+    return { gross, pfEmp, pfEmplr, pfAdmin, esiEmp, esiEmplr, totalDed, netSalary, ctc, statutoryCost };
+  };
+
+  const calcs = calculateValues();
 
   useEffect(() => {
     if (policy) {
+      // Load existing policy
+      const loadedBasic = (policy.basic_salary || 0) + (policy.da || 0);
+
       setFormData({
-        user_email: policy.user_email || '',
-        salary_type: policy.salary_type || 'per_day',
-        basic_salary: policy.basic_salary || '',
-        hra: policy.hra || '',
-        da: policy.da || '',
-        travelling_allowance: policy.travelling_allowance || '',
-        children_education_allowance: policy.children_education_allowance || '',
-        fixed_incentive: policy.fixed_incentive || '',
-        monthly_salary: policy.monthly_salary || '',
-        per_day_salary: policy.per_day_salary || '',
-        per_hour_salary: policy.per_hour_salary || '',
-        employee_pf_percentage: policy.employee_pf_percentage || '',
-        employee_pf_fixed: policy.employee_pf_fixed || '',
-        employee_esi_percentage: policy.employee_esi_percentage || '',
-        employee_esi_fixed: policy.employee_esi_fixed || '',
-        labour_welfare_employee: policy.labour_welfare_employee || '',
-        employer_pf_percentage: policy.employer_pf_percentage || '',
-        employer_pf_fixed: policy.employer_pf_fixed || '',
-        employer_esi_percentage: policy.employer_esi_percentage || '',
-        employer_esi_fixed: policy.employer_esi_fixed || '',
-        labour_welfare_employer: policy.labour_welfare_employer || '',
-        ex_gratia_percentage: policy.ex_gratia_percentage || '',
-        ex_gratia_fixed: policy.ex_gratia_fixed || '',
-        employer_incentive: policy.employer_incentive || '',
-        late_penalty_enabled: policy.late_penalty_enabled || false,
-        late_penalty_per_minute: policy.late_penalty_per_minute || '',
-        half_day_threshold_hours: policy.half_day_threshold_hours || 4,
-        full_day_threshold_hours: policy.full_day_threshold_hours || 6,
-        weekend_paid: policy.weekend_paid || false,
-        is_active: policy.is_active !== false
-      });
-    } else {
-      setFormData({
-        user_email: '',
-        salary_type: 'per_day',
-        basic_salary: '',
-        hra: '',
-        da: '',
-        travelling_allowance: '',
-        children_education_allowance: '',
-        fixed_incentive: '',
-        monthly_salary: '',
-        per_day_salary: '',
-        per_hour_salary: '',
-        employee_pf_percentage: '',
-        employee_pf_fixed: '',
-        employee_esi_percentage: '',
-        employee_esi_fixed: '',
-        labour_welfare_employee: '',
-        employer_pf_percentage: '',
-        employer_pf_fixed: '',
-        employer_esi_percentage: '',
-        employer_esi_fixed: '',
-        labour_welfare_employer: '',
-        ex_gratia_percentage: '',
-        ex_gratia_fixed: '',
-        employer_incentive: '',
-        late_penalty_enabled: false,
-        late_penalty_per_minute: '',
-        half_day_threshold_hours: 4,
-        full_day_threshold_hours: 6,
-        weekend_paid: false,
-        is_active: true
+        ...policy,
+        basic_salary: loadedBasic,
+        da: 0,
+        conveyance_allowance: policy.conveyance_allowance || 0,
+        special_allowance: policy.special_allowance || 1000,
+        other_allowance: policy.other_allowance || 0,
+        professional_tax: policy.professional_tax || 0,
+        bonus_amount: policy.bonus_amount || 0,
+        gratuity_amount: policy.gratuity_amount || 0,
+        pf_admin_charges: policy.pf_admin_charges || 0,
       });
     }
   }, [policy, isOpen]);
 
   const saveMutation = useMutation({
     mutationFn: async (data) => {
+      // Ensure we send numbers
       const cleanData = {
         ...data,
-        basic_salary: parseFloat(data.basic_salary) || 0,
-        hra: parseFloat(data.hra) || 0,
-        da: parseFloat(data.da) || 0,
-        travelling_allowance: parseFloat(data.travelling_allowance) || 0,
-        children_education_allowance: parseFloat(data.children_education_allowance) || 0,
-        fixed_incentive: parseFloat(data.fixed_incentive) || 0,
-        monthly_salary: parseFloat(data.monthly_salary) || 0,
-        per_day_salary: parseFloat(data.per_day_salary) || 0,
-        per_hour_salary: parseFloat(data.per_hour_salary) || 0,
-        employee_pf_percentage: parseFloat(data.employee_pf_percentage) || 0,
-        employee_pf_fixed: parseFloat(data.employee_pf_fixed) || 0,
-        employee_esi_percentage: parseFloat(data.employee_esi_percentage) || 0,
-        employee_esi_fixed: parseFloat(data.employee_esi_fixed) || 0,
-        labour_welfare_employee: parseFloat(data.labour_welfare_employee) || 0,
-        employer_pf_percentage: parseFloat(data.employer_pf_percentage) || 0,
-        employer_pf_fixed: parseFloat(data.employer_pf_fixed) || 0,
-        employer_esi_percentage: parseFloat(data.employer_esi_percentage) || 0,
-        employer_esi_fixed: parseFloat(data.employer_esi_fixed) || 0,
-        labour_welfare_employer: parseFloat(data.labour_welfare_employer) || 0,
-        ex_gratia_percentage: parseFloat(data.ex_gratia_percentage) || 0,
-        ex_gratia_fixed: parseFloat(data.ex_gratia_fixed) || 0,
-        employer_incentive: parseFloat(data.employer_incentive) || 0,
-        late_penalty_per_minute: parseFloat(data.late_penalty_per_minute) || 0,
-        half_day_threshold_hours: parseFloat(data.half_day_threshold_hours) || 4,
-        full_day_threshold_hours: parseFloat(data.full_day_threshold_hours) || 6
+        basic_salary: Number(data.basic_salary),
+        da: 0,
+        hra: Number(data.hra),
+        conveyance_allowance: Number(data.conveyance_allowance),
+        special_allowance: Number(data.special_allowance),
+        other_allowance: Number(data.other_allowance),
+        professional_tax: Number(data.professional_tax),
+        pf_admin_charges: Number(data.pf_admin_charges) || calcs.pfAdmin,
+        bonus_amount: Number(data.bonus_amount),
+        gratuity_amount: Number(data.gratuity_amount),
+        // Ensure ESIC percentages are sent correctly as calculated
+        employee_esi_percentage: data.employee_esi_percentage,
+        employer_esi_percentage: data.employer_esi_percentage,
+        monthly_salary: calcs.gross, // Save calculated gross as monthly_salary
       };
 
       if (policy?.id) {
@@ -170,465 +224,223 @@ export default function SalaryPolicyForm({ isOpen, onClose, policy, allUsers }) 
     },
     onSuccess: () => {
       queryClient.invalidateQueries(['salary-policies']);
-      toast.success(policy?.id ? 'Policy updated' : 'Policy created');
+      toast.success('Policy saved successfully');
       onClose();
     },
-    onError: (error) => {
-      toast.error('Failed: ' + error.message);
-    }
+    onError: (err) => toast.error(err.message)
   });
 
   const handleSubmit = (e) => {
     e.preventDefault();
-
-    if (!formData.user_email) {
-      toast.error('Please select an employee');
+    if (!formData.basic_salary) {
+      toast.error("Basic Salary + DA value is required");
       return;
     }
-
-    if (!formData.basic_salary || parseFloat(formData.basic_salary) <= 0) {
-      toast.error('Please enter basic salary');
-      return;
-    }
-
     saveMutation.mutate(formData);
   };
 
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
-      <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+      <DialogContent className="max-w-4xl max-h-[95vh] overflow-y-auto w-full">
         <DialogHeader>
           <DialogTitle>{policy?.id ? 'Edit' : 'Create'} Salary Policy</DialogTitle>
         </DialogHeader>
 
-        <form onSubmit={handleSubmit} className="space-y-4">
-          {/* Employee Selection */}
-          <div>
-            <Label>Employee *</Label>
-            <Select
-              value={formData.user_email}
-              onValueChange={(value) => setFormData({ ...formData, user_email: value })}
-              disabled={!!policy?.id}
-            >
-              <SelectTrigger>
-                <SelectValue placeholder="Select employee" />
-              </SelectTrigger>
-              <SelectContent className="max-h-[300px]">
-                {allUsers?.map(user => (
-                  <SelectItem key={user.email} value={user.email}>
-                    {user.full_name} ({user.email})
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
-
-          {/* Salary Type */}
-          <div>
-            <Label>Salary Type *</Label>
-            <Select
-              value={formData.salary_type}
-              onValueChange={(value) => setFormData({ ...formData, salary_type: value })}
-            >
-              <SelectTrigger>
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="per_day">Per Day</SelectItem>
-                <SelectItem value="fixed_monthly">Fixed Monthly</SelectItem>
-                <SelectItem value="per_hour">Per Hour</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
-
-          {/* Earnings Section */}
-          <div className="p-4 bg-green-50 rounded-lg space-y-3">
-            <h3 className="font-semibold text-green-900">💰 Earnings (Monthly)</h3>
-
-            <div className="grid grid-cols-2 gap-3">
-              <div>
-                <Label>Basic Salary (₹) *</Label>
-                <Input
-                  type="number"
-                  placeholder="15000"
-                  value={formData.basic_salary}
-                  onChange={(e) => setFormData({ ...formData, basic_salary: e.target.value })}
-                />
-              </div>
-              <div>
-                <Label>HRA (₹)</Label>
-                <Input
-                  type="number"
-                  placeholder="5000"
-                  value={formData.hra}
-                  onChange={(e) => setFormData({ ...formData, hra: e.target.value })}
-                />
-              </div>
-              <div>
-                <Label>DA (₹)</Label>
-                <Input
-                  type="number"
-                  placeholder="3000"
-                  value={formData.da}
-                  onChange={(e) => setFormData({ ...formData, da: e.target.value })}
-                />
-              </div>
-              <div>
-                <Label>Travelling Allowance (₹)</Label>
-                <Input
-                  type="number"
-                  placeholder="2000"
-                  value={formData.travelling_allowance}
-                  onChange={(e) => setFormData({ ...formData, travelling_allowance: e.target.value })}
-                />
-              </div>
-              <div>
-                <Label>Children Education Allowance (₹)</Label>
-                <Input
-                  type="number"
-                  placeholder="1000"
-                  value={formData.children_education_allowance}
-                  onChange={(e) => setFormData({ ...formData, children_education_allowance: e.target.value })}
-                />
-              </div>
-              <div>
-                <Label>Fixed Incentive (₹)</Label>
-                <Input
-                  type="number"
-                  placeholder="3000"
-                  value={formData.fixed_incentive}
-                  onChange={(e) => setFormData({ ...formData, fixed_incentive: e.target.value })}
-                />
-              </div>
-            </div>
-            <p className="text-xs text-green-700 mt-2 font-semibold">
-              Gross = Basic + HRA + DA + TA + CEA + Fixed Incentive = ₹{calculatedGross.toLocaleString()}
-            </p>
-          </div>
-
-          {/* Employee Deductions Section */}
-          <div className="p-4 bg-red-50 rounded-lg space-y-3">
-            <h3 className="font-semibold text-red-900">📉 Employee Deductions</h3>
-
-            <div className="grid grid-cols-2 gap-3">
-              <div>
-                <Label>PF (%) or Fixed (₹)</Label>
-                <div className="flex gap-2">
-                  <Input
-                    type="number"
-                    placeholder="12%"
-                    value={formData.employee_pf_percentage}
-                    onChange={(e) => setFormData({ ...formData, employee_pf_percentage: e.target.value })}
-                  />
-                  <Input
-                    type="number"
-                    placeholder="₹"
-                    value={formData.employee_pf_fixed}
-                    onChange={(e) => setFormData({ ...formData, employee_pf_fixed: e.target.value })}
-                  />
-                </div>
-              </div>
-              <div>
-                <Label>ESI (%) or Fixed (₹)</Label>
-                <div className="flex gap-2">
-                  <Input
-                    type="number"
-                    placeholder="0.75%"
-                    value={formData.employee_esi_percentage}
-                    onChange={(e) => setFormData({ ...formData, employee_esi_percentage: e.target.value })}
-                  />
-                  <Input
-                    type="number"
-                    placeholder="₹"
-                    value={formData.employee_esi_fixed}
-                    onChange={(e) => setFormData({ ...formData, employee_esi_fixed: e.target.value })}
-                  />
-                </div>
-              </div>
-              <div>
-                <Label>Labour Welfare Fund (₹)</Label>
-                <Input
-                  type="number"
-                  placeholder="50"
-                  value={formData.labour_welfare_employee}
-                  onChange={(e) => setFormData({ ...formData, labour_welfare_employee: e.target.value })}
-                />
-              </div>
-            </div>
-            <p className="text-xs text-red-700 mt-2 font-semibold">
-              Total Deductions = PF: ₹{(
-                (Number(formData.employee_pf_percentage) > 0 ? (calculatedGross * Number(formData.employee_pf_percentage) / 100) : Number(formData.employee_pf_fixed)) || 0
-              ).toLocaleString()} + ESI: ₹{(
-                (Number(formData.employee_esi_percentage) > 0 ? (calculatedGross * Number(formData.employee_esi_percentage) / 100) : Number(formData.employee_esi_fixed)) || 0
-              ).toLocaleString()} + LWF: ₹{(Number(formData.labour_welfare_employee) || 0).toLocaleString()} = ₹{(
-                (Number(formData.employee_pf_percentage) > 0 ? (calculatedGross * Number(formData.employee_pf_percentage) / 100) : Number(formData.employee_pf_fixed)) +
-                (Number(formData.employee_esi_percentage) > 0 ? (calculatedGross * Number(formData.employee_esi_percentage) / 100) : Number(formData.employee_esi_fixed)) +
-                (Number(formData.labour_welfare_employee) || 0)
-              ).toLocaleString()}
-            </p>
-          </div>
-
-          {/* Employer Contributions Section */}
-          <div className="p-4 bg-blue-50 rounded-lg space-y-3">
-            <h3 className="font-semibold text-blue-900">🏢 Employer Contributions</h3>
-
-            <div className="grid grid-cols-2 gap-3">
-              <div>
-                <Label>Employer PF (%) or Fixed (₹)</Label>
-                <div className="flex gap-2">
-                  <Input
-                    type="number"
-                    placeholder="12%"
-                    value={formData.employer_pf_percentage}
-                    onChange={(e) => setFormData({ ...formData, employer_pf_percentage: e.target.value })}
-                  />
-                  <Input
-                    type="number"
-                    placeholder="₹"
-                    value={formData.employer_pf_fixed}
-                    onChange={(e) => setFormData({ ...formData, employer_pf_fixed: e.target.value })}
-                  />
-                </div>
-              </div>
-              <div>
-                <Label>Employer ESI (%) or Fixed (₹)</Label>
-                <div className="flex gap-2">
-                  <Input
-                    type="number"
-                    placeholder="3.25%"
-                    value={formData.employer_esi_percentage}
-                    onChange={(e) => setFormData({ ...formData, employer_esi_percentage: e.target.value })}
-                  />
-                  <Input
-                    type="number"
-                    placeholder="₹"
-                    value={formData.employer_esi_fixed}
-                    onChange={(e) => setFormData({ ...formData, employer_esi_fixed: e.target.value })}
-                  />
-                </div>
-              </div>
-              <div>
-                <Label>Labour Welfare Fund (₹)</Label>
-                <Input
-                  type="number"
-                  placeholder="50"
-                  value={formData.labour_welfare_employer}
-                  onChange={(e) => setFormData({ ...formData, labour_welfare_employer: e.target.value })}
-                />
-              </div>
-              <div>
-                <Label>Gratuity (%) or Fixed (₹)</Label>
-                <div className="flex gap-2">
-                  <Input
-                    type="number"
-                    placeholder="5%"
-                    value={formData.ex_gratia_percentage}
-                    onChange={(e) => setFormData({ ...formData, ex_gratia_percentage: e.target.value })}
-                  />
-                  <Input
-                    type="number"
-                    placeholder="₹"
-                    value={formData.ex_gratia_fixed}
-                    onChange={(e) => setFormData({ ...formData, ex_gratia_fixed: e.target.value })}
-                  />
-                </div>
-              </div>
-              <div>
-                <Label>Employer Incentive (₹)</Label>
-                <Input
-                  type="number"
-                  placeholder="2000"
-                  value={formData.employer_incentive}
-                  onChange={(e) => setFormData({ ...formData, employer_incentive: e.target.value })}
-                />
-              </div>
-            </div>
-            <p className="text-xs text-blue-700 mt-2 font-semibold">
-              Total Employer Contributions = PF: ₹{(
-                Math.round(Number(formData.employer_pf_percentage) > 0 ? (calculatedGross * Number(formData.employer_pf_percentage) / 100) : Number(formData.employer_pf_fixed)) || 0
-              ).toLocaleString()} + ESI: ₹{(
-                Math.round(Number(formData.employer_esi_percentage) > 0 ? (calculatedGross * Number(formData.employer_esi_percentage) / 100) : Number(formData.employer_esi_fixed)) || 0
-              ).toLocaleString()} + LWF: ₹{(Number(formData.labour_welfare_employer) || 0).toLocaleString()} + Gratuity: ₹{(
-                Math.round(Number(formData.ex_gratia_percentage) > 0 ? (Number(formData.basic_salary) * Number(formData.ex_gratia_percentage) / 100) : Number(formData.ex_gratia_fixed)) || 0
-              ).toLocaleString()} + Incentive: ₹{(Number(formData.employer_incentive) || 0).toLocaleString()} = ₹{(
-                Math.round(Number(formData.employer_pf_percentage) > 0 ? (calculatedGross * Number(formData.employer_pf_percentage) / 100) : Number(formData.employer_pf_fixed)) +
-                Math.round(Number(formData.employer_esi_percentage) > 0 ? (calculatedGross * Number(formData.employer_esi_percentage) / 100) : Number(formData.employer_esi_fixed)) +
-                (Number(formData.labour_welfare_employer) || 0) +
-                Math.round(Number(formData.ex_gratia_percentage) > 0 ? (Number(formData.basic_salary) * Number(formData.ex_gratia_percentage) / 100) : Number(formData.ex_gratia_fixed)) +
-                (Number(formData.employer_incentive) || 0)
-              ).toLocaleString()}
-            </p>
-          </div>
-
-          {/* CTC Calculation */}
-          <div className="p-4 bg-purple-50 rounded-lg space-y-2 border-2 border-purple-200">
-            <h3 className="font-semibold text-purple-900">💼 Cost to Company (CTC)</h3>
-
-            <div className="space-y-2 text-sm">
-              <div className="flex justify-between">
-                <span className="text-slate-700">Policy Gross (Basic+HRA+DA+TA+CEA+FI):</span>
-                <span className="font-semibold text-lg text-purple-900">₹{calculatedGross.toLocaleString()}</span>
-              </div>
-              <div className="text-xs text-purple-600 italic mb-2">
-                ✓ Employer Incentive is separate and added to employer contributions below
-              </div>
-              <div className="border-t border-purple-300 pt-2"></div>
-              <div className="flex justify-between">
-                <span className="text-slate-700">Employer Contributions (PF+ESI+LWF+Gratuity+Incentive):</span>
-                <span className="font-semibold">₹{(
-                  Math.round(Number(formData.employer_pf_percentage) > 0 ? (calculatedGross * Number(formData.employer_pf_percentage) / 100) : Number(formData.employer_pf_fixed)) +
-                  Math.round(Number(formData.employer_esi_percentage) > 0 ? (calculatedGross * Number(formData.employer_esi_percentage) / 100) : Number(formData.employer_esi_fixed)) +
-                  (Number(formData.labour_welfare_employer) || 0) +
-                  Math.round(Number(formData.ex_gratia_percentage) > 0 ? (Number(formData.basic_salary) * Number(formData.ex_gratia_percentage) / 100) : Number(formData.ex_gratia_fixed)) +
-                  (Number(formData.employer_incentive) || 0)
-                ).toLocaleString()}</span>
-              </div>
-              <div className="border-t border-purple-300 pt-2 mt-2"></div>
-              <div className="flex justify-between text-base">
-                <span className="font-bold text-purple-900">Monthly CTC-1 (Policy Based):</span>
-                <span className="font-bold text-purple-900">₹{(
-                  calculatedGross +
-                  Math.round(Number(formData.employer_pf_percentage) > 0 ? (calculatedGross * Number(formData.employer_pf_percentage) / 100) : Number(formData.employer_pf_fixed)) +
-                  Math.round(Number(formData.employer_esi_percentage) > 0 ? (calculatedGross * Number(formData.employer_esi_percentage) / 100) : Number(formData.employer_esi_fixed)) +
-                  (Number(formData.labour_welfare_employer) || 0) +
-                  Math.round(Number(formData.ex_gratia_percentage) > 0 ? (Number(formData.basic_salary) * Number(formData.ex_gratia_percentage) / 100) : Number(formData.ex_gratia_fixed)) +
-                  (Number(formData.employer_incentive) || 0)
-                ).toLocaleString()}</span>
-              </div>
-              <div className="flex justify-between text-lg">
-                <span className="font-bold text-purple-900">Annual CTC-1:</span>
-                <span className="font-bold text-purple-900">₹{((
-                  calculatedGross +
-                  Math.round(Number(formData.employer_pf_percentage) > 0 ? (calculatedGross * Number(formData.employer_pf_percentage) / 100) : Number(formData.employer_pf_fixed)) +
-                  Math.round(Number(formData.employer_esi_percentage) > 0 ? (calculatedGross * Number(formData.employer_esi_percentage) / 100) : Number(formData.employer_esi_fixed)) +
-                  (Number(formData.labour_welfare_employer) || 0) +
-                  Math.round(Number(formData.ex_gratia_percentage) > 0 ? (Number(formData.basic_salary) * Number(formData.ex_gratia_percentage) / 100) : Number(formData.ex_gratia_fixed)) +
-                  (Number(formData.employer_incentive) || 0)
-                ) * 12).toLocaleString()}</span>
-              </div>
-            </div>
-          </div>
-
-          {/* Old Salary Fields for backwards compatibility */}
-          {formData.salary_type === 'per_day' && (
-            <div>
-              <Label>Per Day Salary (₹) (Optional - for per-day calculation)</Label>
-              <Input
-                type="number"
-                placeholder="1000"
-                value={formData.per_day_salary}
-                onChange={(e) => setFormData({ ...formData, per_day_salary: e.target.value })}
-              />
-            </div>
-          )}
-
-          {formData.salary_type === 'fixed_monthly' && (
-            <div>
-              <Label>Total Monthly Salary (₹) (Auto-calculated from components)</Label>
-              <Input
-                type="number"
-                placeholder="30000"
-                value={calculatedGross}
-                disabled
-                className="bg-slate-100 font-semibold"
-              />
-            </div>
-          )}
-
-          {formData.salary_type === 'per_hour' && (
-            <div>
-              <Label>Per Hour Salary (₹) (Optional)</Label>
-              <Input
-                type="number"
-                placeholder="125"
-                value={formData.per_hour_salary}
-                onChange={(e) => setFormData({ ...formData, per_hour_salary: e.target.value })}
-              />
-            </div>
-          )}
-
-          {/* Late Penalty */}
-          <div className="flex items-center justify-between p-4 bg-slate-50 rounded-lg">
-            <div>
-              <Label>Enable Late Penalty</Label>
-              <p className="text-xs text-slate-500">Deduct amount for late arrivals</p>
-            </div>
-            <Switch
-              checked={formData.late_penalty_enabled}
-              onCheckedChange={(checked) => setFormData({ ...formData, late_penalty_enabled: checked })}
-            />
-          </div>
-
-          {formData.late_penalty_enabled && (
-            <div>
-              <Label>Penalty Per Minute (₹)</Label>
-              <Input
-                type="number"
-                placeholder="5"
-                value={formData.late_penalty_per_minute}
-                onChange={(e) => setFormData({ ...formData, late_penalty_per_minute: e.target.value })}
-              />
-            </div>
-          )}
-
-          {/* Half Day Rules */}
+        <form onSubmit={handleSubmit} className="space-y-6">
           <div className="grid grid-cols-2 gap-4">
             <div>
-              <Label>Half Day Threshold (Hours)</Label>
-              <Input
-                type="number"
-                step="0.5"
-                value={formData.half_day_threshold_hours}
-                onChange={(e) => setFormData({ ...formData, half_day_threshold_hours: e.target.value })}
-              />
-              <p className="text-xs text-slate-500 mt-1">Below this = half day</p>
+              <Label>Employee *</Label>
+              <Select value={formData.user_email} onValueChange={v => setFormData({ ...formData, user_email: v })} disabled={!!policy?.id}>
+                <SelectTrigger><SelectValue placeholder="Select Employee" /></SelectTrigger>
+                <SelectContent>
+                  {allUsers?.map(u => <SelectItem key={u.email} value={u.email}>{u.full_name}</SelectItem>)}
+                </SelectContent>
+              </Select>
             </div>
             <div>
-              <Label>Full Day Threshold (Hours)</Label>
-              <Input
-                type="number"
-                step="0.5"
-                value={formData.full_day_threshold_hours}
-                onChange={(e) => setFormData({ ...formData, full_day_threshold_hours: e.target.value })}
-              />
-              <p className="text-xs text-slate-500 mt-1">Above this = full day</p>
+              <Label>Salary Type</Label>
+              <Select value={formData.salary_type} onValueChange={v => setFormData({ ...formData, salary_type: v })}>
+                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="per_day">Per Day</SelectItem>
+                  <SelectItem value="fixed_monthly">Fixed Monthly</SelectItem>
+                </SelectContent>
+              </Select>
             </div>
           </div>
 
-          {/* Weekend Paid */}
-          <div className="flex items-center justify-between p-4 bg-slate-50 rounded-lg">
-            <div>
-              <Label>Weekend Paid</Label>
-              <p className="text-xs text-slate-500">Pay for week-off days</p>
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+
+            {/* SECTION 1: GROSS WAGE */}
+            <div className="bg-slate-50 p-4 rounded border">
+              <h3 className="font-bold text-lg mb-3 border-b pb-2 text-slate-700">1. Total Gross Wage</h3>
+
+              <div className="space-y-3">
+                <div>
+                  <Label className="text-green-700 font-bold">Minimum Wages (BASIC + DA) *</Label>
+                  <Input
+                    placeholder="Enter Amount"
+                    type="number"
+                    value={formData.basic_salary}
+                    onChange={e => setFormData({ ...formData, basic_salary: e.target.value })}
+                    className="text-lg font-semibold"
+                  />
+                </div>
+
+                <div>
+                  <Label>HRA (Auto 50%)</Label>
+                  <Input value={formData.hra} readOnly className="bg-slate-100" />
+                </div>
+
+                <div>
+                  <Label>Conveyance (15%)</Label>
+                  <Input value={formData.conveyance_allowance} readOnly className="bg-slate-100" />
+                </div>
+
+                <div>
+                  <Label className="text-red-500">Special Allowance (Fixed 1000)</Label>
+                  <Input value={formData.special_allowance} readOnly className="bg-slate-100" />
+                </div>
+
+                <div>
+                  <Label>Other Allowance (35% - Special)</Label>
+                  <Input value={formData.other_allowance} readOnly className="bg-slate-100" />
+                </div>
+
+                <div className="bg-slate-200 p-2 rounded flex justify-between items-center font-bold text-lg">
+                  <span>Total Gross Wage:</span>
+                  <span>₹{calcs.gross.toLocaleString()}</span>
+                </div>
+              </div>
             </div>
-            <Switch
-              checked={formData.weekend_paid}
-              onCheckedChange={(checked) => setFormData({ ...formData, weekend_paid: checked })}
-            />
+
+            {/* SECTION 2: DEDUCTIONS */}
+            <div className="bg-red-50 p-4 rounded border">
+              <h3 className="font-bold text-lg mb-3 border-b pb-2 text-red-800">2. Employee Deductions</h3>
+
+              <div className="space-y-3">
+                <div className="flex justify-between items-center text-sm">
+                  <Label>PF Contribution (12%)</Label>
+                  <span className="font-mono">₹{calcs.pfEmp}</span>
+                </div>
+
+                <div className="flex justify-between items-center text-sm">
+                  <Label>ESIC (0.75% of Gross)</Label>
+                  {formData.employee_esi_percentage === 0 && <span className="text-xs text-slate-500">(Gross {'>'} 21000)</span>}
+                  <span className="font-mono">₹{calcs.esiEmp}</span>
+                </div>
+
+                <div className="flex justify-between items-center text-sm">
+                  <Label>LWF</Label>
+                  <div className="w-20">
+                    <Input
+                      type="number"
+                      className="h-8"
+                      value={formData.labour_welfare_employee}
+                      onChange={e => setFormData({ ...formData, labour_welfare_employee: e.target.value })}
+                    />
+                  </div>
+                </div>
+
+                <div className="flex justify-between items-center text-sm">
+                  <Label>Professional Tax</Label>
+                  <div className="w-20">
+                    <Input
+                      type="number"
+                      className="h-8"
+                      value={formData.professional_tax}
+                      onChange={e => setFormData({ ...formData, professional_tax: e.target.value })}
+                    />
+                  </div>
+                </div>
+
+                <Separator className="bg-red-200" />
+
+                <div className="flex justify-between items-center font-bold text-red-900">
+                  <span>Total Deductions:</span>
+                  <span>₹{calcs.totalDed.toLocaleString()}</span>
+                </div>
+
+                <div className="bg-green-600 text-white p-3 rounded mt-4 text-center shadow-lg">
+                  <div className="text-sm opacity-90">Net Salary in Hand</div>
+                  <div className="text-3xl font-bold">₹{calcs.netSalary.toLocaleString()}</div>
+                </div>
+              </div>
+            </div>
+
+            {/* SECTION 3: EMPLOYER LIABILITY */}
+            <div className="bg-blue-50 p-4 rounded border">
+              <h3 className="font-bold text-lg mb-3 border-b pb-2 text-blue-800">3. Employer Liability</h3>
+
+              <div className="space-y-3">
+                <div className="flex justify-between items-center text-sm">
+                  <Label>PF 12% on Basic+DA</Label>
+                  <span className="font-mono">₹{calcs.pfEmplr}</span>
+                </div>
+
+                <div className="flex justify-between items-center text-sm">
+                  <Label>PF Admin Charges (1%)</Label>
+                  <span className="font-mono">₹{calcs.pfAdmin}</span>
+                </div>
+
+                <div className="flex justify-between items-center text-sm">
+                  <Label>ESIC (3.25% of Gross)</Label>
+                  <span className="font-mono">₹{calcs.esiEmplr}</span>
+                </div>
+
+                <div className="flex justify-between items-center text-sm">
+                  <Label>LWF (Employer)</Label>
+                  <Input
+                    type="number"
+                    className="h-8 w-20"
+                    value={formData.labour_welfare_employer}
+                    onChange={e => setFormData({ ...formData, labour_welfare_employer: e.target.value })}
+                  />
+                </div>
+
+                <div className="flex justify-between items-center text-sm">
+                  <Label>Bonus (8.33%)</Label>
+                  <Input
+                    type="number"
+                    className="h-8 w-24"
+                    value={formData.bonus_amount}
+                    onChange={e => setFormData({ ...formData, bonus_amount: e.target.value })}
+                  />
+                </div>
+
+                <div className="flex justify-between items-center text-sm">
+                  <Label>Gratuity (4.81%)</Label>
+                  <Input
+                    type="number"
+                    className="h-8 w-24"
+                    value={formData.gratuity_amount}
+                    onChange={e => setFormData({ ...formData, gratuity_amount: e.target.value })}
+                  />
+                </div>
+
+                <div className="flex justify-between items-center text-sm font-semibold text-blue-800">
+                  <Label>Statutory Cost</Label>
+                  <span className="font-mono">₹{calcs.statutoryCost.toLocaleString()}</span>
+                </div>
+
+                <Separator className="bg-blue-200" />
+
+                <div className="flex justify-between items-center font-bold text-blue-900">
+                  <span>CTC (Cost to Company):</span>
+                  <span>₹{calcs.ctc.toLocaleString()}</span>
+                </div>
+              </div>
+            </div>
           </div>
 
-          {/* Active */}
-          <div className="flex items-center justify-between p-4 bg-slate-50 rounded-lg">
-            <div>
-              <Label>Active</Label>
-              <p className="text-xs text-slate-500">Is this policy currently active</p>
-            </div>
-            <Switch
-              checked={formData.is_active}
-              onCheckedChange={(checked) => setFormData({ ...formData, is_active: checked })}
-            />
-          </div>
-
-          <div className="flex justify-end gap-3 pt-4">
-            <Button type="button" variant="outline" onClick={onClose}>
-              Cancel
-            </Button>
+          <div className="flex justify-end gap-3 pt-4 border-t">
+            <Button type="button" variant="outline" onClick={onClose}>Cancel</Button>
             <Button type="submit" disabled={saveMutation.isPending}>
               {saveMutation.isPending ? 'Saving...' : 'Save Policy'}
             </Button>
           </div>
         </form>
       </DialogContent>
-    </Dialog>
+    </Dialog >
   );
 }
