@@ -99,7 +99,12 @@ export default function Sidebar({ projects = [], currentPage, user, collapsed, o
       return name.includes('administration') || name === 'admin' || name.includes('administrator');
     })
     .map(d => d.id || d._id);
-  const isAdminDeptUser = user?.department_id && adminDeptIds.includes(user.department_id);
+  // Robust check for Admin Department User
+  const isAdminDeptUser = (user?.department_id && adminDeptIds.includes(user.department_id)) ||
+    (user?.department_name && (
+      user.department_name.toLowerCase().includes('administration') ||
+      user.department_name.toLowerCase() === 'admin'
+    ));
 
   const isFreelancer = user?.role_id === 'freelancer' || user?.role === 'freelancer';
 
@@ -453,11 +458,11 @@ export default function Sidebar({ projects = [], currentPage, user, collapsed, o
                 <CollapsibleContent className="space-y-1">
                   {hrmsItems.map((item) => {
                     // Skip HR-only items for non-HR users (unless admin)
-                    if (item.hrOnly && user?.role_id !== 'hr' && !isAdmin) return null;
+                    if (item.hrOnly && user?.role_id !== 'hr' && !isAdmin && !isAdminDeptUser) return null;
                     // Skip HR/Admin-only items for non-HR and non-Admin users
                     if (item.hrOrAdminOnly && user?.role_id !== 'hr' && !isHRUser && !isAdminDeptUser && !isAdmin) return null;
-                    // Skip admin-only items for non-admins
-                    if (item.adminOnly && !isAdmin) return null;
+                    // Skip admin-only items for non-admins (allow Admin DEPT users)
+                    if (item.adminOnly && !isAdmin && !isAdminDeptUser) return null;
 
                     const Icon = item.icon;
                     const isActive = currentPage === item.page;
@@ -585,12 +590,12 @@ export default function Sidebar({ projects = [], currentPage, user, collapsed, o
               if (item.salesOnly && !isSalesUser && !isAdmin && item.name !== 'Inventory Bucket') return null;
               // Skip marketing-only items for non-marketing/IT users (unless admin)
               if (item.marketingOnly && !isMarketingUser && !isITUser && !isAdmin) return null;
-              // Skip admin-only items for non-admins
-              if (item.adminOnly && !isAdmin) return null;
+              // Skip admin-only items for non-admins (allow Admin DEPT users)
+              if (item.adminOnly && !isAdmin && !isAdminDeptUser) return null;
               // Skip finance items if user doesn't have permission
               if (item.financeOnly && !can('finance_dashboard', 'read')) return null;
               // Skip HR-only items for non-HR users (unless admin)
-              if (item.hrOnly && user?.role_id !== 'hr' && !isAdmin) return null;
+              if (item.hrOnly && user?.role_id !== 'hr' && !isAdmin && !isAdminDeptUser) return null;
               // Show timesheet for freelancers and IT department members
               if (item.freelancerOnly && !isFreelancer && !isITUser) return null;
               // Hide items from Sales Executives
