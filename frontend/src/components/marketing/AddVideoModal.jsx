@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
@@ -21,8 +21,30 @@ export default function AddVideoModal({
     onSubmit,
     categories = [],
     users = [],
+    departments = [],
     currentUser
 }) {
+    const marketingDept = departments.find(d => d.name.toLowerCase() === 'marketing');
+    const marketingDeptId = marketingDept?.id || marketingDept?._id;
+
+    const directors = useMemo(() => {
+        if (!marketingDeptId) return users;
+        return users.filter(u => u.department_id === marketingDeptId);
+    }, [users, marketingDeptId]);
+
+    const managers = useMemo(() => {
+        if (!marketingDeptId) return users;
+        return users.filter(u => u.department_id === marketingDeptId);
+    }, [users, marketingDeptId]);
+
+    const cameramen = useMemo(() => {
+        return users.filter(u => u.job_title?.toLowerCase() === 'cameraman');
+    }, [users]);
+
+    const editors = useMemo(() => {
+        return users.filter(u => u.job_title?.toLowerCase() === 'editor');
+    }, [users]);
+
     const [formData, setFormData] = useState({
         title: '',
         description: '',
@@ -208,7 +230,7 @@ export default function AddVideoModal({
                                         <SelectValue placeholder="Select director" />
                                     </SelectTrigger>
                                     <SelectContent>
-                                        {users.map(user => (
+                                        {directors.map(user => (
                                             <SelectItem key={user.email} value={user.email}>
                                                 {user.full_name || user.email}
                                             </SelectItem>
@@ -227,7 +249,7 @@ export default function AddVideoModal({
                                         <SelectValue placeholder="Select cameraman" />
                                     </SelectTrigger>
                                     <SelectContent>
-                                        {users.map(user => (
+                                        {cameramen.map(user => (
                                             <SelectItem key={user.email} value={user.email}>
                                                 {user.full_name || user.email}
                                             </SelectItem>
@@ -246,7 +268,7 @@ export default function AddVideoModal({
                                         <SelectValue placeholder="Select editor" />
                                     </SelectTrigger>
                                     <SelectContent>
-                                        {users.map(user => (
+                                        {editors.map(user => (
                                             <SelectItem key={user.email} value={user.email}>
                                                 {user.full_name || user.email}
                                             </SelectItem>
@@ -265,7 +287,7 @@ export default function AddVideoModal({
                                         <SelectValue placeholder="Select manager" />
                                     </SelectTrigger>
                                     <SelectContent>
-                                        {users.map(user => (
+                                        {managers.map(user => (
                                             <SelectItem key={user.email} value={user.email}>
                                                 {user.full_name || user.email}
                                             </SelectItem>

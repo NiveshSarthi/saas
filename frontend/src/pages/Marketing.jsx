@@ -515,6 +515,7 @@ export default function MarketingPage() {
         onSubmit={createVideoMutation.mutate}
         categories={categories}
         users={usersFromEntity}
+        departments={departments}
         currentUser={user}
       />
 
@@ -525,6 +526,7 @@ export default function MarketingPage() {
         video={selectedVideo}
         categories={categories}
         users={usersFromEntity}
+        departments={departments}
         currentUser={user}
         isAdmin={isAdmin()}
         onRefetch={refetchVideos}
