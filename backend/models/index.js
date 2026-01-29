@@ -1121,6 +1121,7 @@ const itTicketSchema = new mongoose.Schema({
     created_by_name: String,
     department_id: String,
     assigned_to: String, // Technician email
+    assigned_to_name: String,
     status: {
         type: String,
         enum: ['pending_approval', 'open', 'in_progress', 'on_hold', 'resolved', 'closed', 'rejected'],
