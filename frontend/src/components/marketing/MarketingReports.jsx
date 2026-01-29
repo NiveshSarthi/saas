@@ -59,37 +59,39 @@ export default function MarketingReports({ tasks = [], videos = [], categories =
     }));
 
     // 2. Process new Video entities
-    const processedVideos = videos.map(v => {
-      const category = categories.find(c => c.id === v.category_id || c._id === v.category_id);
+    const processedVideos = videos
+      .filter(v => !v.is_deleted)
+      .map(v => {
+        const category = categories.find(c => c.id === v.category_id || c._id === v.category_id);
 
-      // Standardize status for the report labels
-      // Report statuses: editing, review, revision, compliance, compliance_revision, approved, published, tracking, closed, trash
-      // Video statuses: shoot, editing, review, revision, approval, posting, posted, trash
-      let standardizedStatus = v.status;
-      if (v.status === 'shoot') standardizedStatus = 'editing'; // Initial stage
-      if (v.status === 'approval') standardizedStatus = 'approved';
-      if (v.status === 'posting') standardizedStatus = 'approved';
-      if (v.status === 'posted') standardizedStatus = 'published';
+        // Standardize status for the report labels
+        // Report statuses: editing, review, revision, compliance, compliance_revision, approved, published, tracking, closed, trash
+        // Video statuses: shoot, editing, review, revision, approval, posting, posted, trash
+        let standardizedStatus = v.status;
+        if (v.status === 'shoot') standardizedStatus = 'editing'; // Initial stage
+        if (v.status === 'approval') standardizedStatus = 'approved';
+        if (v.status === 'posting') standardizedStatus = 'approved';
+        if (v.status === 'posted') standardizedStatus = 'published';
 
-      return {
-        ...v,
-        id: v.id || v._id,
-        source_type: 'video',
-        campaign_name: v.title, // Use title as campaign name for videos
-        task_type: 'video',
-        status: standardizedStatus,
-        video_subcategory: category?.name?.toLowerCase().includes('awareness') ? 'awareness_video' :
-          category?.name?.toLowerCase().includes('campaign') ? 'campaign_video' :
-            category?.name?.toLowerCase().includes('egc') ? 'egc_videos' : 'awareness_video', // Default or guess
-        created_date: v.created_at || v.updated_at || new Date().toISOString(),
-        updated_date: v.updated_at || v.created_at || new Date().toISOString(),
-        assignee_email: v.assigned_editor, // Map editor as primary assignee for simplified reporting
-        reviewer_email: v.assigned_manager,
-        compliance_email: v.assigned_director,
-        publisher_email: v.assigned_manager,
-        analytics_email: v.assigned_director
-      };
-    });
+        return {
+          ...v,
+          id: v.id || v._id,
+          source_type: 'video',
+          campaign_name: v.title, // Use title as campaign name for videos
+          task_type: 'video',
+          status: standardizedStatus,
+          video_subcategory: category?.name?.toLowerCase().includes('awareness') ? 'awareness_video' :
+            category?.name?.toLowerCase().includes('campaign') ? 'campaign_video' :
+              category?.name?.toLowerCase().includes('egc') ? 'egc_videos' : 'awareness_video', // Default or guess
+          created_date: v.created_at || v.updated_at || new Date().toISOString(),
+          updated_date: v.updated_at || v.created_at || new Date().toISOString(),
+          assignee_email: v.assigned_editor, // Map editor as primary assignee for simplified reporting
+          reviewer_email: v.assigned_manager,
+          compliance_email: v.assigned_director,
+          publisher_email: v.assigned_manager,
+          analytics_email: v.assigned_director
+        };
+      });
 
     return [...processedTasks, ...processedVideos];
   }, [tasks, videos, categories]);
