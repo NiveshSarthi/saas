@@ -35,7 +35,7 @@ const PRIORITY_COLORS = {
   critical: 'bg-red-100 text-red-700',
 };
 
-export default function TeamTickets({ user, isAdmin, isITHead }) {
+export default function TeamTickets({ user, isAdmin, isITHead, itUsers = [] }) {
   const [searchQuery, setSearchQuery] = useState('');
   const [filterStatus, setFilterStatus] = useState('all');
   const [filterPriority, setFilterPriority] = useState('all');
@@ -48,13 +48,6 @@ export default function TeamTickets({ user, isAdmin, isITHead }) {
     queryFn: () => base44.entities.ITTicket.list('-created_at', 500),
   });
 
-  const { data: itUsers = [] } = useQuery({
-    queryKey: ['it-users'],
-    queryFn: async () => {
-      const response = await base44.functions.invoke('getDashboardUsers');
-      return response.data?.users?.filter(u => u.department_id === user?.department_id) || [];
-    },
-  });
 
   const assignMutation = useMutation({
     mutationFn: async ({ ticketId, assignToEmail, assignToName }) => {
