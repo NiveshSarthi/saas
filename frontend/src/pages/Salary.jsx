@@ -475,12 +475,12 @@ export default function SalaryPage() {
       // Prepare Header Rows for Excel
       // Row 1: Group Headers
       // We want 'BASE SALARY' at col 8 (index 8) to merge 8-13 (6 cols)
-      // We want 'EARNED SALARY' at col 14 (index 14) to merge 14-19 (6 cols)
+      // We want 'EARNED SALARY' at col 14 (index 14) to merge 14-20 (7 cols)
       const headerRow1 = [
         '', '', '', '', '', '', '', '', // 0-7 empty
         'BASE SALARY', '', '', '', '', '', // 8 is Base Salary, 9-13 empty
-        'EARNED SALARY', '', '', '', '', '', // 14 is Earned Salary, 15-19 empty
-        'DEDUCTIONS', '', '', // 20-22? No, just Deductions or rest
+        'EARNED SALARY', '', '', '', '', '', '', // 14 is Earned Salary, 15-20 empty
+        'DEDUCTIONS', '', '', '', // 21-24 Deductions
         'NET PAY'
       ];
 
@@ -496,10 +496,14 @@ export default function SalaryPage() {
         'Effective days', // 7
         // Base Salary Group (8-13)
         'Minimum Wages (BASIC+DA)', 'HRA', 'Conveyance', 'Special Allowance', 'Other Allowance', 'Total',
-        // Earned Salary Group (14-19)
-        'Minimum Wages (BASIC+DA)', 'HRA', 'Conveyance', 'Special Allowance', 'Other Allowance', 'Net Amount',
+        // Earned Salary Group (14-20)
+        'Minimum Wages (BASIC+DA)', 'HRA', 'Conveyance', 'Special Allowance', 'Other Allowance',
+        'Performance Allowance', // NEW (Index 19)
+        'Net Amount', // Gross (Index 20)
         // Deductions & Payables
-        'ESI@.75%', 'EPF', 'LWF', 'Net Salary Payables'
+        'ESI@.75%', 'EPF', 'LWF',
+        'Advance Deduction', // NEW (Index 24)
+        'Net Salary Payables' // (Index 25)
       ];
 
       const rows = filteredSalaries.map(s => {
@@ -543,11 +547,13 @@ export default function SalaryPage() {
           calc.earnedConv,
           calc.earnedSpecial,
           earnedOther,
-          calc.gross,
+          calc.positiveAdjustments, // Performance Allowance
+          calc.gross, // Gross
           // Deductions
           calc.empESI,
           calc.empPF,
           calc.lwf,
+          calc.negativeAdjustments, // Advance Deduction
           // Net
           calc.net
         ];
@@ -564,7 +570,7 @@ export default function SalaryPage() {
       // Row 0 is headerRow1
       ws['!merges'] = [
         { s: { r: 0, c: 8 }, e: { r: 0, c: 13 } }, // BASE SALARY (6 cols)
-        { s: { r: 0, c: 14 }, e: { r: 0, c: 19 } } // EARNED SALARY (6 cols) or Net Amt is 6th
+        { s: { r: 0, c: 14 }, e: { r: 0, c: 20 } } // EARNED SALARY (7 cols)
       ];
 
       // Optional: Center Align the merged headers
@@ -1125,22 +1131,29 @@ export default function SalaryPage() {
     // Rounding helper
     const round2 = (num) => Math.round((num + Number.EPSILON) * 100) / 100;
 
-    const adjustments = employeeAdjustments.reduce((total, adj) => {
-      if (adj.adjustment_type === 'penalty_waiver') return total;
+    let positiveAdjustments = 0;
+    let negativeAdjustments = 0;
+
+    employeeAdjustments.forEach(adj => {
+      if (adj.adjustment_type === 'penalty_waiver') return;
 
       if (['bonus', 'incentive', 'reimbursement', 'allowance'].includes(adj.adjustment_type)) {
-        return total + (adj.amount || 0);
+        positiveAdjustments += (adj.amount || 0);
       } else {
-        return total - Math.abs(adj.amount || 0);
+        // All others are negative (advance_deduction, penalty, deduction, other)
+        negativeAdjustments += Math.abs(adj.amount || 0);
       }
-    }, 0);
+    });
 
     // Sales Policy Components
     const salesIncentive = salary?.sales_incentive || 0;
     const salesReward = salary?.sales_reward || 0;
     const salesMeta = salary?.sales_performance_meta || {};
 
-    const gross = round2(baseSalary + adjustments + salesIncentive + salesReward + (attendanceAdjustments > 0 ? attendanceAdjustments : 0));
+    const adjustments = positiveAdjustments - negativeAdjustments;
+
+    // Gross should only include EARNINGS (Positive Adjustments)
+    const gross = round2(baseSalary + positiveAdjustments + salesIncentive + salesReward + (attendanceAdjustments > 0 ? attendanceAdjustments : 0));
 
     // CTC 2: Including adjustments and sales incentives
     const monthlyCTC2 = monthlyCTC1 + adjustments + salesIncentive + salesReward;
@@ -1166,8 +1179,9 @@ export default function SalaryPage() {
     // Note: timesheetPenaltyDeduction is explicitly based on dailySalary (float). Round it.
     const roundedTimesheetPenalty = round2(timesheetPenaltyDeduction);
 
+    // Total Deductions should include NEGATIVE Adjustments (Advance, Penalty from Adjustments)
     const totalDeductions = round2(empPF + empESI + lwf + latePenalty + absentDeduction +
-      (salary?.advance_recovery || 0) + (salary?.other_deductions || 0) + roundedTimesheetPenalty + attendancePenalty);
+      (salary?.advance_recovery || 0) + (salary?.other_deductions || 0) + roundedTimesheetPenalty + attendancePenalty + negativeAdjustments);
 
     const net = round2(gross - totalDeductions);
 
@@ -1179,7 +1193,7 @@ export default function SalaryPage() {
       effectivePresent, halfDay, paidLeave: effectivePaidLeave, originalPaidLeave: paidLeave,
       weekoff, holiday, late, paidDays, notMarked,
       baseSalary, earnedBasic, earnedHra, earnedConv, earnedSpecial, earnedOther, earnedTa, earnedCea, earnedFi, empIncentive,
-      adjustments, gross, empPF, empESI, lwf, latePenalty, absentDeduction,
+      adjustments, positiveAdjustments, negativeAdjustments, gross, empPF, empESI, lwf, latePenalty, absentDeduction,
       totalDeductions, net, attendancePercentage, policy, hasPolicy: true,
       employeeAdjustments, monthlyCTC1, yearlyCTC1, monthlyCTC2, yearlyCTC2,
       attendanceAdjustments, dailyDetails, timesheetPenaltyDeduction, penaltyDetails,
