@@ -144,9 +144,26 @@ export default function SalaryPage() {
   }, []);
 
   React.useEffect(() => {
-    if (user && Array.isArray(departments) && departments.length > 0) {
-      const hrDept = departments.find(d => d.name?.toLowerCase().includes('hr'));
-      setIsHRMember(user.role === 'admin' || (user.department_id && hrDept && user.department_id === hrDept.id));
+    if (user) {
+      const isSuperAdmin = user.role_id === 'super_admin';
+      const isAdminRole = user.role === 'admin' || user.role_id === 'admin';
+
+      // If user is clearly an admin via role, grant access immediately
+      if (isSuperAdmin || isAdminRole) {
+        setIsHRMember(true);
+        return;
+      }
+
+      // Check Departments
+      if (Array.isArray(departments) && departments.length > 0) {
+        const hrDept = departments.find(d => d.name?.toLowerCase().includes('hr') || d.name?.toLowerCase().includes('human resource'));
+        const adminDept = departments.find(d => d.name?.toLowerCase().includes('administration') || d.name?.toLowerCase() === 'admin');
+
+        const isHRDept = user.department_id && hrDept && user.department_id === hrDept.id;
+        const isAdminDept = user.department_id && adminDept && user.department_id === adminDept.id;
+
+        setIsHRMember(isHRDept || isAdminDept);
+      }
     }
   }, [user, departments]);
 
