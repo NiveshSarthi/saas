@@ -38,10 +38,21 @@ export default function LeaveManagementPage() {
   });
 
   useEffect(() => {
-    if (user && departments.length > 0) {
-      const hrDept = departments.find(d => d.name?.toLowerCase().includes('hr'));
-      const isHR = user.department_id && hrDept && user.department_id === hrDept.id;
-      setIsAdmin(user.role === 'admin' || isHR);
+    if (user) {
+      const isSuperAdmin = user.role_id === 'super_admin';
+      const isAdminRole = user.role === 'admin' || user.role_id === 'admin';
+
+      let isAllowedDept = false;
+      if (departments.length > 0) {
+        const hrDept = departments.find(d => d.name?.toLowerCase().includes('hr') || d.name?.toLowerCase().includes('human resource'));
+        const adminDept = departments.find(d => d.name?.toLowerCase().includes('administration') || d.name?.toLowerCase() === 'admin');
+
+        const isHR = user.department_id && hrDept && user.department_id === hrDept.id;
+        const isAdminDept = user.department_id && adminDept && user.department_id === adminDept.id;
+        isAllowedDept = isHR || isAdminDept;
+      }
+
+      setIsAdmin(isSuperAdmin || isAdminRole || isAllowedDept);
     }
   }, [user, departments]);
 

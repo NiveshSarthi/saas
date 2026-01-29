@@ -92,11 +92,21 @@ export default function HRDashboard() {
 
   const dateRange = getDateRange();
 
+  // Check for Access
+  // Allow HR, Admin, Super Admin, and Admin Dept members
+  const hasAccess = user && (
+    user.role_id === 'hr' ||
+    user.role === 'admin' ||
+    user.role_id === 'admin' ||
+    user.role_id === 'super_admin' ||
+    (user.department_id && user.department_name && (user.department_name.toLowerCase().includes('administration') || user.department_name.toLowerCase() === 'admin'))
+  );
+
   // Get all users for attendance tracking
   const { data: users = [] } = useQuery({
     queryKey: ['users-for-hr'],
     queryFn: () => base44.entities.User.list(),
-    enabled: user?.role_id === 'hr' || user?.role === 'admin',
+    enabled: !!hasAccess,
   });
 
   // Get attendance records for the selected period
@@ -105,21 +115,21 @@ export default function HRDashboard() {
     queryFn: () => base44.entities.Attendance.filter({
       created_at: { $gte: dateRange.start.toISOString(), $lte: dateRange.end.toISOString() }
     }),
-    enabled: user?.role_id === 'hr' || user?.role === 'admin',
+    enabled: !!hasAccess,
   });
 
   // Get pending timesheets
   const { data: pendingTimesheets = [] } = useQuery({
     queryKey: ['pending-timesheets'],
     queryFn: () => base44.entities.Timesheet.filter({ status: 'submitted' }),
-    enabled: user?.role_id === 'hr' || user?.role === 'admin',
+    enabled: !!hasAccess,
   });
 
   // Get freelancers for timesheet tracking
   const { data: freelancers = [] } = useQuery({
     queryKey: ['freelancers-for-hr'],
     queryFn: () => base44.entities.User.filter({ role: 'freelancer' }),
-    enabled: user?.role_id === 'hr' || user?.role === 'admin',
+    enabled: !!hasAccess,
   });
 
   // Calculate attendance statistics
@@ -189,7 +199,7 @@ export default function HRDashboard() {
     );
   }
 
-  if (user.role_id !== 'hr' && user.role !== 'admin') {
+  if (!hasAccess) {
     return (
       <div className="p-6 lg:p-8 text-center">
         <h2 className="text-xl font-semibold text-slate-900">Access Restricted</h2>
