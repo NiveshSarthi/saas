@@ -31,7 +31,21 @@ export default function MyTickets({ user }) {
 
   const { data: tickets = [], isLoading } = useQuery({
     queryKey: ['my-tickets', user?.email],
-    queryFn: () => base44.entities.ITTicket.filter({ created_by_email: user?.email }, '-created_date'),
+    queryFn: async () => {
+      const [created, assigned] = await Promise.all([
+        base44.entities.ITTicket.filter({ created_by_email: user?.email }, '-created_at'),
+        base44.entities.ITTicket.filter({ assigned_to: user?.email }, '-created_at')
+      ]);
+
+      // Merge and remove duplicates
+      const all = [...created, ...assigned];
+      const unique = all.filter((t, index, self) =>
+        index === self.findIndex((temp) => temp.id === t.id)
+      );
+
+      // Sort by date descending
+      return unique.sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
+    },
     enabled: !!user?.email,
   });
 
@@ -95,8 +109,8 @@ export default function MyTickets({ user }) {
       {/* Tickets List */}
       <div className="grid gap-4">
         {filteredTickets.map(ticket => (
-          <Card 
-            key={ticket.id} 
+          <Card
+            key={ticket.id}
             className={cn(
               "cursor-pointer hover:shadow-md transition-shadow",
               ticket.sla_breached && "border-red-300"
@@ -121,7 +135,7 @@ export default function MyTickets({ user }) {
                   )}
                 </div>
                 <span className="text-xs text-slate-500">
-                  {new Date(ticket.created_date).toLocaleDateString()}
+                  {new Date(ticket.created_at).toLocaleDateString()}
                 </span>
               </div>
               <CardTitle className="text-lg mt-2">{ticket.title}</CardTitle>
