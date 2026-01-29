@@ -521,7 +521,7 @@ export default function CustomDateRangeReport({
                   <p className="text-4xl font-black text-red-900">{metrics.complianceIssues.missingPunches}</p>
                 </div>
                 <div className="p-4 bg-orange-50 rounded-xl border-2 border-orange-200">
-                  <p className="text-sm font-bold text-orange-700 uppercase mb-2">Excessive Late (>5)</p>
+                  <p className="text-sm font-bold text-orange-700 uppercase mb-2">Excessive Late (&gt;5)</p>
                   <p className="text-4xl font-black text-orange-900">{metrics.complianceIssues.lateExcessive}</p>
                 </div>
                 <div className="p-4 bg-yellow-50 rounded-xl border-2 border-yellow-200">
