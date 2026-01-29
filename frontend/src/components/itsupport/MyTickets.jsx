@@ -25,7 +25,7 @@ const PRIORITY_COLORS = {
   critical: 'bg-red-100 text-red-700',
 };
 
-export default function MyTickets({ user }) {
+export default function MyTickets({ user, isITMember, isAdmin, itUsers = [] }) {
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedTicket, setSelectedTicket] = useState(null);
 
@@ -165,6 +165,9 @@ export default function MyTickets({ user }) {
           open={!!selectedTicket}
           onOpenChange={(open) => !open && setSelectedTicket(null)}
           user={user}
+          isITMember={isITMember}
+          isAdmin={isAdmin}
+          itUsers={itUsers}
         />
       )}
     </div>

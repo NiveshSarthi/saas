@@ -37,6 +37,15 @@ export default function ITSupport() {
   const isITHead = itDepts.some(d => d.manager_email === user?.email);
   const isITOrAdmin = isITMember || isAdmin || isITHead;
 
+  const { data: itUsers = [] } = useQuery({
+    queryKey: ['it-users', itDeptIds],
+    queryFn: async () => {
+      const response = await base44.functions.invoke('getDashboardUsers');
+      return response.data?.users?.filter(u => itDeptIds.includes(u.department_id)) || [];
+    },
+    enabled: itDeptIds.length > 0,
+  });
+
   return (
     <div className="min-h-screen bg-slate-50 p-6">
       <div className="max-w-7xl mx-auto">
@@ -62,12 +71,12 @@ export default function ITSupport() {
           </TabsList>
 
           <TabsContent value="my-tickets">
-            <MyTickets user={user} />
+            <MyTickets user={user} isITMember={isITMember} isAdmin={isAdmin} itUsers={itUsers} />
           </TabsContent>
 
           {isITOrAdmin && (
             <TabsContent value="team-tickets">
-              <TeamTickets user={user} isAdmin={isAdmin} isITHead={isITHead} />
+              <TeamTickets user={user} isAdmin={isAdmin} isITHead={isITHead} itUsers={itUsers} />
             </TabsContent>
           )}
 
