@@ -45,6 +45,7 @@ export default function MarketingPage() {
   const [isLoadingAuth, setIsLoadingAuth] = useState(true);
   const [categoryFilter, setCategoryFilter] = useState('all');
   const [statusFilter, setStatusFilter] = useState('all');
+  const [selectedVideoIds, setSelectedVideoIds] = useState([]);
 
   // Auth Check
   useEffect(() => {
@@ -196,6 +197,59 @@ export default function MarketingPage() {
   const handleCloseDetailModal = () => {
     setIsDetailModalOpen(false);
     setSelectedVideo(null);
+  };
+
+  const handleBulkMove = async (targetStatus) => {
+    if (selectedVideoIds.length === 0) return;
+
+    const count = selectedVideoIds.length;
+    const toastId = toast.loading(`Moving ${count} items to ${targetStatus}...`);
+
+    try {
+      // Loop and update each video
+      // Note: In a production environment, a specialized bulk-update API endpoint would be better,
+      // but here we use the existing update entity logic.
+      const promises = selectedVideoIds.map(async (id) => {
+        const video = videos.find(v => (v.id || v._id) === id);
+        const fromStatus = video?.status;
+
+        await base44.entities.Video.update(id, {
+          status: targetStatus,
+          updated_at: new Date()
+        });
+
+        // Log individual activity
+        await base44.entities.VideoLog.create({
+          video_id: id,
+          action: 'status_changed',
+          user_email: user?.email,
+          user_name: user?.full_name || user?.email,
+          details: { from: fromStatus, to: targetStatus, batch: true }
+        });
+      });
+
+      await Promise.all(promises);
+
+      toast.success(`Successfully moved ${count} items`, { id: toastId });
+      setSelectedVideoIds([]);
+      refetchVideos();
+    } catch (error) {
+      console.error("Bulk move failed", error);
+      toast.error("Failed to move some items", { id: toastId });
+    }
+  };
+
+  const toggleVideoSelection = (videoId) => {
+    setSelectedVideoIds(prev =>
+      prev.includes(videoId)
+        ? prev.filter(id => id !== videoId)
+        : [...prev, videoId]
+    );
+  };
+
+  const selectAllFiltered = () => {
+    const allIds = filteredVideos.map(v => v.id || v._id);
+    setSelectedVideoIds(allIds);
   };
 
   if (isLoadingAuth) {
@@ -424,6 +478,8 @@ export default function MarketingPage() {
                 user={user}
                 refetch={refetchVideos}
                 isAdmin={isAdmin()}
+                selectedVideoIds={selectedVideoIds}
+                onToggleVideo={toggleVideoSelection}
               />
             )}
             {viewMode === 'list' && (
@@ -433,6 +489,9 @@ export default function MarketingPage() {
                 users={usersFromEntity}
                 onEditVideo={handleEditVideo}
                 isAdmin={isAdmin()}
+                selectedVideoIds={selectedVideoIds}
+                onToggleVideo={toggleVideoSelection}
+                onSelectAll={selectAllFiltered}
               />
             )}
           </div>
@@ -470,6 +529,46 @@ export default function MarketingPage() {
         isAdmin={isAdmin()}
         onRefetch={refetchVideos}
       />
+
+      {/* Bulk Action Bar */}
+      {selectedVideoIds.length > 0 && (
+        <div className="fixed bottom-8 left-1/2 -translate-x-1/2 z-50 animate-in slide-in-from-bottom-8 duration-300">
+          <div className="bg-slate-900 text-white rounded-2xl shadow-2xl px-6 py-4 flex items-center gap-6 border border-slate-700/50 backdrop-blur-xl bg-opacity-95">
+            <div className="flex items-center gap-3 pr-6 border-r border-slate-700">
+              <div className="w-8 h-8 rounded-full bg-indigo-500 flex items-center justify-center font-bold text-sm">
+                {selectedVideoIds.length}
+              </div>
+              <span className="text-sm font-medium text-slate-300">Items selected</span>
+            </div>
+
+            <div className="flex items-center gap-4">
+              <Select onValueChange={handleBulkMove}>
+                <SelectTrigger className="w-48 bg-slate-800 border-slate-700 text-white h-10 rounded-xl">
+                  <SelectValue placeholder="Move to stage..." />
+                </SelectTrigger>
+                <SelectContent className="bg-slate-800 border-slate-700 text-white">
+                  <SelectItem value="shoot">Shoot</SelectItem>
+                  <SelectItem value="editing">Editing</SelectItem>
+                  <SelectItem value="review">Review</SelectItem>
+                  <SelectItem value="revision">Revision</SelectItem>
+                  <SelectItem value="approval">Approval</SelectItem>
+                  <SelectItem value="posting">Posting</SelectItem>
+                  <SelectItem value="posted">Posted</SelectItem>
+                  <SelectItem value="trash">Trash</SelectItem>
+                </SelectContent>
+              </Select>
+
+              <Button
+                variant="ghost"
+                onClick={() => setSelectedVideoIds([])}
+                className="text-slate-400 hover:text-white hover:bg-slate-800"
+              >
+                Deselect All
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
