@@ -166,7 +166,7 @@ export default function TeamTickets({ user, isAdmin, isITHead }) {
                   )}
                 </div>
                 <span className="text-xs text-slate-500">
-                  {new Date(ticket.created_date).toLocaleDateString()}
+                  {new Date(ticket.created_at).toLocaleDateString()}
                 </span>
               </div>
             </CardHeader>

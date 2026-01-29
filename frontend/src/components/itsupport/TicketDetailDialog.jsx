@@ -45,13 +45,13 @@ export default function TicketDetailDialog({ ticket, open, onOpenChange, user, i
 
   const { data: comments = [] } = useQuery({
     queryKey: ['ticket-comments', ticket?.id],
-    queryFn: () => base44.entities.ITTicketComment.filter({ ticket_id: ticket.id }, '-created_date'),
+    queryFn: () => base44.entities.ITTicketComment.filter({ ticket_id: ticket.id }, '-created_at'),
     enabled: !!ticket?.id,
   });
 
   const { data: activities = [] } = useQuery({
     queryKey: ['ticket-activities', ticket?.id],
-    queryFn: () => base44.entities.ITTicketActivity.filter({ ticket_id: ticket.id }, '-created_date'),
+    queryFn: () => base44.entities.ITTicketActivity.filter({ ticket_id: ticket.id }, '-created_at'),
     enabled: !!ticket?.id,
   });
 
@@ -184,7 +184,7 @@ export default function TicketDetailDialog({ ticket, open, onOpenChange, user, i
                     <div className="flex items-center justify-between mb-1">
                       <span className="text-sm font-medium">{c.author_email}</span>
                       <span className="text-xs text-slate-500">
-                        {new Date(c.created_date).toLocaleString()}
+                        {new Date(c.created_at).toLocaleString()}
                       </span>
                     </div>
                     <p className="text-sm text-slate-700">{c.comment}</p>
@@ -417,7 +417,7 @@ export default function TicketDetailDialog({ ticket, open, onOpenChange, user, i
                         {activity.new_value}
                       </div>
                       <div className="ml-4 text-slate-400">
-                        {new Date(activity.created_date).toLocaleString()}
+                        {new Date(activity.created_at).toLocaleString()}
                       </div>
                     </div>
                   ))}
