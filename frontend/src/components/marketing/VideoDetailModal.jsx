@@ -1,5 +1,4 @@
-// @ts-nocheck
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { base44 } from '@/api/base44Client';
 import { sendAssignmentNotification, MODULES } from '@/components/utils/notificationService';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
@@ -39,10 +38,23 @@ export default function VideoDetailModal({
     video,
     categories = [],
     users = [],
+    departments = [],
     currentUser,
     isAdmin,
     onRefetch
 }) {
+    const marketingDept = (departments || []).find(d => d.name.toLowerCase() === 'marketing');
+    const marketingDeptId = marketingDept?.id || marketingDept?._id;
+
+    const roleFilteredUsers = useMemo(() => {
+        return {
+            assigned_director: marketingDeptId ? users.filter(u => u.department_id === marketingDeptId) : users,
+            assigned_cameraman: users.filter(u => u.job_title?.toLowerCase() === 'cameraman'),
+            assigned_editor: users.filter(u => u.job_title?.toLowerCase() === 'editor'),
+            assigned_manager: marketingDeptId ? users.filter(u => u.department_id === marketingDeptId) : users,
+        };
+    }, [users, marketingDeptId]);
+
     const queryClient = useQueryClient();
     const [activeTab, setActiveTab] = useState('details');
     const [formData, setFormData] = useState({});
@@ -558,7 +570,7 @@ export default function VideoDetailModal({
                                                     <SelectValue placeholder={`Select ${label.toLowerCase()}`} />
                                                 </SelectTrigger>
                                                 <SelectContent>
-                                                    {users.map(user => (
+                                                    {(roleFilteredUsers[key] || users).map(user => (
                                                         <SelectItem key={user.email} value={user.email}>
                                                             {user.full_name || user.email}
                                                         </SelectItem>
