@@ -1110,6 +1110,60 @@ const siteVisitSchema = new mongoose.Schema({
     updated_at: { type: Date, default: Date.now }
 });
 
+const itTicketSchema = new mongoose.Schema({
+    ticket_id: { type: String, required: true, unique: true },
+    title: { type: String, required: true },
+    description: { type: String, required: true },
+    category: { type: String, required: true },
+    priority: { type: String, required: true },
+    asset_id: String,
+    created_by_email: { type: String, required: true },
+    created_by_name: String,
+    department_id: String,
+    assigned_to: String, // Technician email
+    status: {
+        type: String,
+        enum: ['pending_approval', 'open', 'in_progress', 'on_hold', 'resolved', 'closed', 'rejected'],
+        default: 'pending_approval'
+    },
+    head_approval_status: {
+        type: String,
+        enum: ['pending', 'approved', 'rejected'],
+        default: 'pending'
+    },
+    head_rejection_reason: String,
+    sla_hours: Number,
+    sla_due_at: Date,
+    sla_breached: { type: Boolean, default: false },
+    resolved_at: Date,
+    resolution_notes: String,
+    created_at: { type: Date, default: Date.now },
+    updated_at: { type: Date, default: Date.now }
+});
+
+const itSLAConfigSchema = new mongoose.Schema({
+    priority: { type: String, required: true, unique: true },
+    sla_hours: { type: Number, required: true }
+});
+
+const itTicketActivitySchema = new mongoose.Schema({
+    ticket_id: { type: String, required: true },
+    action: { type: String, required: true },
+    old_value: String,
+    new_value: String,
+    performed_by: { type: String, required: true },
+    created_at: { type: Date, default: Date.now }
+});
+
+const itTicketCommentSchema = new mongoose.Schema({
+    ticket_id: { type: String, required: true },
+    comment: { type: String, required: true },
+    author_email: { type: String, required: true },
+    author_name: String,
+    is_internal: { type: Boolean, default: false },
+    created_at: { type: Date, default: Date.now }
+});
+
 export const SiteVisit = mongoose.model('SiteVisit', siteVisitSchema);
 
 export const ChartOfAccount = mongoose.model('ChartOfAccount', chartOfAccountSchema);
@@ -1118,3 +1172,8 @@ export const Client = mongoose.model('Client', clientSchema);
 export const Invoice = mongoose.model('Invoice', invoiceSchema);
 export const Bill = mongoose.model('Bill', billSchema);
 export const Transaction = mongoose.model('Transaction', transactionSchema);
+
+export const ITTicket = mongoose.model('ITTicket', itTicketSchema);
+export const ITSLAConfig = mongoose.model('ITSLAConfig', itSLAConfigSchema);
+export const ITTicketActivity = mongoose.model('ITTicketActivity', itTicketActivitySchema);
+export const ITTicketComment = mongoose.model('ITTicketComment', itTicketCommentSchema);

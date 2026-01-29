@@ -71,6 +71,15 @@ const connectDB = async () => {
     // Try connecting to local/provided URI first
     await mongoose.connect(mongoUri, { serverSelectionTimeoutMS: 2000 });
     console.log(`Connected to MongoDB at ${mongoUri}`);
+
+    // Perform a one-time seed for IT Support if needed (SLA configs missing)
+    try {
+      const { ITTicket } = await import('./models/index.js');
+      const { seedITSupportData } = await import('./seeds/it_support_seed.js');
+      await seedITSupportData();
+    } catch (seedErr) {
+      console.error('Initial IT seed failed:', seedErr);
+    }
   } catch (err) {
     console.warn(`Local MongoDB connection failed: ${err.message}`);
     console.log('Starting In-Memory MongoDB...');
