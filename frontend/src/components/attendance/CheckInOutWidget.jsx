@@ -132,8 +132,8 @@ export default function CheckInOutWidget({ user, todayRecord, onUpdate }) {
   }, [settings, workDays]);
 
   const canCheckIn = React.useMemo(() => {
-    // 1. If no record for today yet -> Allow
-    if (!todayRecord) return true;
+    // 1. If no record for today yet OR record exists but no check-in time (zombie record) -> Allow
+    if (!todayRecord || !todayRecord.check_in) return true;
 
     // 2. Safety check for active session (already checked in but not out)
     if (todayRecord.status === 'checked_in' && !todayRecord.check_out) return false;
@@ -404,8 +404,8 @@ export default function CheckInOutWidget({ user, todayRecord, onUpdate }) {
                 <span className="text-xl sm:text-2xl font-medium ml-2 text-indigo-200">{format(currentTime, 'a')}</span>
               </div>
               <div className="flex items-center justify-center sm:justify-start gap-2 mt-2">
-                <Badge className={cn("bg-white/20 hover:bg-white/30 text-white border-0", !todayRecord && "animate-pulse")}>
-                  {todayRecord ? (todayRecord.check_out ? 'Completed' : 'Running') : 'Not Started'}
+                <Badge className={cn("bg-white/20 hover:bg-white/30 text-white border-0", (!todayRecord || !todayRecord.check_in) && "animate-pulse")}>
+                  {todayRecord && todayRecord.check_in ? (todayRecord.check_out ? 'Completed' : 'Running') : 'Not Started'}
                 </Badge>
                 {todayRecord?.location && (
                   <span className="text-xs text-indigo-200 flex items-center gap-1">
