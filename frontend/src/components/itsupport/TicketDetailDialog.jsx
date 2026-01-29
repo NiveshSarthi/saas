@@ -137,7 +137,7 @@ export default function TicketDetailDialog({ ticket, open, onOpenChange, user, i
     updateStatusMutation.mutate({ status: 'resolved', resolution: resolutionSummary });
   };
 
-  const canResolve = isITMember && ['assigned', 'in_progress'].includes(ticket.status);
+  const canResolve = isITMember && ['open', 'assigned', 'in_progress'].includes(ticket.status) && ticket.assigned_to;
   const canClose = ticket.status === 'resolved';
   const canReopen = ticket.status === 'closed' && !isITMember;
 
@@ -341,7 +341,7 @@ export default function TicketDetailDialog({ ticket, open, onOpenChange, user, i
                       </div>
                     )}
 
-                    {ticket.status === 'assigned' && (
+                    {['open', 'assigned'].includes(ticket.status) && ticket.assigned_to === user?.email && (
                       <Button
                         className="w-full"
                         onClick={() => updateStatusMutation.mutate({ status: 'in_progress' })}
