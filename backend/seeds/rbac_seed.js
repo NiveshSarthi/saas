@@ -3,6 +3,7 @@ import mongoose from 'mongoose';
 import bcrypt from 'bcryptjs';
 import { User, Role, Department, Project, Group, TaskGroup, Sprint, Tag } from '../models/index.js';
 import { seedAttendanceSettings } from './attendance_settings_seed.js';
+import { seedITSupportData } from './it_support_seed.js';
 import dotenv from 'dotenv';
 dotenv.config();
 
@@ -258,6 +259,14 @@ const DUMMY_USERS = [
         role_id: 'hr',
         job_title: 'HR Manager',
         department_id: 'dept_hr'
+    },
+    {
+        email: 'tech.support@sarthi.com',
+        full_name: 'IT Support Technician',
+        role: 'user',
+        role_id: 'team_member',
+        job_title: 'IT Support',
+        is_active: true
     }
 ];
 
@@ -379,6 +388,9 @@ export const seedData = async () => {
 
         // Seed Attendance Settings
         await seedAttendanceSettings();
+
+        // Seed IT Support Settings
+        await seedITSupportData();
 
     } catch (error) {
         console.error('Seeding failed:', error);

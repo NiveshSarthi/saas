@@ -25,6 +25,7 @@ const STATUS_COLORS = {
   resolved: 'bg-green-100 text-green-800',
   closed: 'bg-slate-100 text-slate-800',
   reopened: 'bg-red-100 text-red-800',
+  pending_approval: 'bg-orange-100 text-orange-800',
 };
 
 const PRIORITY_COLORS = {
@@ -34,7 +35,7 @@ const PRIORITY_COLORS = {
   critical: 'bg-red-100 text-red-700',
 };
 
-export default function TeamTickets({ user, isAdmin }) {
+export default function TeamTickets({ user, isAdmin, isITHead }) {
   const [searchQuery, setSearchQuery] = useState('');
   const [filterStatus, setFilterStatus] = useState('all');
   const [filterPriority, setFilterPriority] = useState('all');
@@ -114,6 +115,7 @@ export default function TeamTickets({ user, isAdmin }) {
           </SelectTrigger>
           <SelectContent>
             <SelectItem value="all">All Status</SelectItem>
+            <SelectItem value="pending_approval">Pending Approval</SelectItem>
             <SelectItem value="open">Open</SelectItem>
             <SelectItem value="assigned">Assigned</SelectItem>
             <SelectItem value="in_progress">In Progress</SelectItem>
@@ -137,7 +139,7 @@ export default function TeamTickets({ user, isAdmin }) {
       {/* Tickets List */}
       <div className="grid gap-4">
         {sortedTickets.map(ticket => (
-          <Card 
+          <Card
             key={ticket.id}
             className={cn(
               "cursor-pointer hover:shadow-md transition-shadow",
@@ -198,6 +200,7 @@ export default function TeamTickets({ user, isAdmin }) {
           onOpenChange={(open) => !open && setSelectedTicket(null)}
           user={user}
           isITMember={true}
+          isITHead={isITHead}
           itUsers={itUsers}
         />
       )}

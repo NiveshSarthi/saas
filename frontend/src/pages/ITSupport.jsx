@@ -26,16 +26,16 @@ export default function ITSupport() {
     queryFn: () => base44.entities.Department.list(),
   });
 
-  const itDeptIds = departments
-    .filter(d => {
-      const name = d.name?.toLowerCase() || '';
-      return name.includes('it') || name.includes('information technology') || name.includes('tech');
-    })
-    .map(d => d.id);
-  
+  const itDepts = departments.filter(d => {
+    const name = d.name?.toLowerCase() || '';
+    return name.includes('it') || name.includes('information technology') || name.includes('tech');
+  });
+  const itDeptIds = itDepts.map(d => d.id);
+
   const isITMember = user?.department_id && itDeptIds.includes(user.department_id);
   const isAdmin = user?.role === 'admin';
-  const isITOrAdmin = isITMember || isAdmin;
+  const isITHead = itDepts.some(d => d.manager_email === user?.email);
+  const isITOrAdmin = isITMember || isAdmin || isITHead;
 
   return (
     <div className="min-h-screen bg-slate-50 p-6">
@@ -67,7 +67,7 @@ export default function ITSupport() {
 
           {isITOrAdmin && (
             <TabsContent value="team-tickets">
-              <TeamTickets user={user} isAdmin={isAdmin} />
+              <TeamTickets user={user} isAdmin={isAdmin} isITHead={isITHead} />
             </TabsContent>
           )}
 

@@ -133,6 +133,112 @@ router.post('/invoke/calculateMonthlySalary', calculateMonthlySalary);
 // Invoke AI Task Assistant
 router.post('/invoke/aiTaskAssistant', aiController.aiTaskAssistant);
 
+// IT Support Auto Assignment
+router.post('/invoke/autoAssignITTicket', async (req, res) => {
+    try {
+        const { ticket_id } = req.body;
+        const { ITTicket, User, Department, ITTicketActivity } = models;
+
+        const ticket = await ITTicket.findById(ticket_id);
+        if (!ticket) {
+            return res.status(404).json({ error: 'Ticket not found' });
+        }
+
+        // 1. Assign to the preferred technician
+        const preferredTechnician = 'ratnakerkumar56@gmail.com';
+        ticket.assigned_to = preferredTechnician;
+        ticket.status = 'pending_approval';
+        ticket.head_approval_status = 'pending';
+        await ticket.save();
+
+        // 2. Identify IT Head (Manager of IT Department)
+        const itDept = await Department.findOne({ name: /IT|Information Technology|Tech/i });
+        const itHeadEmail = itDept?.manager_email || 'admin@sarthi.com'; // Fallback
+
+        // 3. Log Activity
+        await ITTicketActivity.create({
+            ticket_id: ticket.id,
+            action: 'assigned_pending_approval',
+            new_value: `Assigned to ${preferredTechnician} (Pending IT Head Approval)`,
+            performed_by: 'system_auto_assign'
+        });
+
+        // 4. Notifications (Mocked Email)
+        console.log(`[Notification] To ${preferredTechnician}: You have been assigned a new IT ticket ${ticket.ticket_id} (Pending Approval)`);
+        console.log(`[Notification] To ${itHeadEmail}: New IT ticket ${ticket.ticket_id} submitted for your approval.`);
+
+        res.json({ success: true, assignee: preferredTechnician, head_email: itHeadEmail });
+    } catch (err) {
+        console.error('IT Auto-assignment failed:', err);
+        res.status(500).json({ error: err.message });
+    }
+});
+
+// IT Support Ticket Review (Approve/Reject/Reassign)
+router.post('/invoke/reviewITTicket', async (req, res) => {
+    try {
+        const { ticket_id, action, reviewer_email, rejection_reason, new_assignee } = req.body;
+        const { ITTicket, ITTicketActivity, User } = models;
+
+        const ticket = await ITTicket.findById(ticket_id);
+        if (!ticket) return res.status(404).json({ error: 'Ticket not found' });
+
+        if (action === 'approve') {
+            ticket.head_approval_status = 'approved';
+            ticket.status = 'open';
+            if (new_assignee) {
+                ticket.assigned_to = new_assignee;
+            }
+            await ticket.save();
+
+            await ITTicketActivity.create({
+                ticket_id: ticket.id,
+                action: 'approved',
+                new_value: `Ticket approved by ${reviewer_email}${new_assignee ? ` and re-assigned to ${new_assignee}` : ''}`,
+                performed_by: reviewer_email
+            });
+
+            console.log(`[Notification] To ${ticket.assigned_to}: Your ticket ${ticket.ticket_id} has been approved and is ready for work.`);
+            console.log(`[Notification] To ${ticket.created_by_email}: Your ticket ${ticket.ticket_id} has been approved.`);
+
+        } else if (action === 'reject') {
+            ticket.head_approval_status = 'rejected';
+            ticket.status = 'rejected';
+            ticket.head_rejection_reason = rejection_reason;
+            await ticket.save();
+
+            await ITTicketActivity.create({
+                ticket_id: ticket.id,
+                action: 'rejected',
+                new_value: `Ticket rejected by ${reviewer_email}. Reason: ${rejection_reason}`,
+                performed_by: reviewer_email
+            });
+
+            console.log(`[Notification] To ${ticket.created_by_email}: Your ticket ${ticket.ticket_id} was rejected. Reason: ${rejection_reason}`);
+
+        } else if (action === 'reassign') {
+            const oldAssignee = ticket.assigned_to;
+            ticket.assigned_to = new_assignee;
+            await ticket.save();
+
+            await ITTicketActivity.create({
+                ticket_id: ticket.id,
+                action: 'reassigned',
+                old_value: oldAssignee,
+                new_value: new_assignee,
+                performed_by: reviewer_email
+            });
+
+            console.log(`[Notification] To ${new_assignee}: You have been assigned IT ticket ${ticket.ticket_id}`);
+        }
+
+        res.json({ success: true, ticket });
+    } catch (err) {
+        console.error('IT Ticket Review failed:', err);
+        res.status(500).json({ error: err.message });
+    }
+});
+
 // Parse Resume
 router.post('/invoke/parseResume', upload.single('resume'), recruitmentController.parseResume);
 

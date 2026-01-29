@@ -32,11 +32,15 @@ const STATUS_COLORS = {
   resolved: 'bg-green-100 text-green-800',
   closed: 'bg-slate-100 text-slate-800',
   reopened: 'bg-red-100 text-red-800',
+  pending_approval: 'bg-orange-100 text-orange-800',
+  rejected: 'bg-red-100 text-red-800',
 };
 
-export default function TicketDetailDialog({ ticket, open, onOpenChange, user, isITMember, itUsers = [] }) {
+export default function TicketDetailDialog({ ticket, open, onOpenChange, user, isITMember, isITHead, itUsers = [] }) {
   const [comment, setComment] = useState('');
   const [resolutionSummary, setResolutionSummary] = useState('');
+  const [rejectionReason, setRejectionReason] = useState('');
+  const [isReviewing, setIsReviewing] = useState(false);
   const queryClient = useQueryClient();
 
   const { data: comments = [] } = useQuery({
@@ -99,22 +103,18 @@ export default function TicketDetailDialog({ ticket, open, onOpenChange, user, i
     },
   });
 
-  const reassignMutation = useMutation({
-    mutationFn: async ({ assignToEmail, assignToName }) => {
-      await base44.entities.ITTicket.update(ticket.id, {
-        assigned_to_email: assignToEmail,
-        assigned_to_name: assignToName,
-      });
-      await base44.entities.ITTicketActivity.create({
-        ticket_id: ticket.id,
-        action: 'reassigned',
-        new_value: assignToName,
-        performed_by: user?.email,
-      });
-    },
+  const reviewMutation = useMutation({
+    mutationFn: (data) => base44.functions.invoke('reviewITTicket', {
+      ...data,
+      ticket_id: ticket.id,
+      reviewer_email: user?.email,
+    }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['it-tickets'] });
-      toast.success('Ticket reassigned');
+      queryClient.invalidateQueries({ queryKey: ['my-tickets'] });
+      toast.success('Ticket reviewed successfully');
+      setIsReviewing(false);
+      onOpenChange(false);
     },
   });
 
@@ -251,9 +251,12 @@ export default function TicketDetailDialog({ ticket, open, onOpenChange, user, i
                       <Select
                         onValueChange={(val) => {
                           const selectedUser = itUsers.find(u => u.email === val);
-                          reassignMutation.mutate({
-                            assignToEmail: val,
-                            assignToName: selectedUser?.full_name || val,
+                          // Using a generic update for simple reassignment when already open
+                          base44.entities.ITTicket.update(ticket.id, {
+                            assigned_to: val,
+                          }).then(() => {
+                            queryClient.invalidateQueries({ queryKey: ['it-tickets'] });
+                            toast.success('Ticket reassigned');
                           });
                         }}
                       >
@@ -270,9 +273,77 @@ export default function TicketDetailDialog({ ticket, open, onOpenChange, user, i
                       </Select>
                     )}
 
+                    {isITHead && ticket.status === 'pending_approval' && (
+                      <div className="space-y-3 p-3 bg-indigo-50 rounded-lg">
+                        <p className="text-xs font-semibold text-indigo-700">IT Head Review</p>
+                        <div className="flex gap-2">
+                          <Button
+                            variant="default"
+                            className="flex-1 h-8 text-xs"
+                            onClick={() => reviewMutation.mutate({ action: 'approve' })}
+                            disabled={reviewMutation.isPending}
+                          >
+                            Approve
+                          </Button>
+                          <Button
+                            variant="destructive"
+                            className="flex-1 h-8 text-xs"
+                            onClick={() => setIsReviewing('reject')}
+                          >
+                            Reject
+                          </Button>
+                        </div>
+                        <Select
+                          onValueChange={(val) => reviewMutation.mutate({ action: 'approve', new_assignee: val })}
+                        >
+                          <SelectTrigger className="h-8 text-xs">
+                            <SelectValue placeholder="Approve & Reassign..." />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {itUsers.map(u => (
+                              <SelectItem key={u.email} value={u.email}>
+                                {u.full_name || u.email}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+
+                        {isReviewing === 'reject' && (
+                          <div className="space-y-2 mt-2">
+                            <Label className="text-xs">Reason for Rejection</Label>
+                            <Textarea
+                              className="text-xs"
+                              rows={2}
+                              value={rejectionReason}
+                              onChange={(e) => setRejectionReason(e.target.value)}
+                            />
+                            <div className="flex gap-2">
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                className="flex-1 h-7 text-[10px]"
+                                onClick={() => setIsReviewing(false)}
+                              >
+                                Cancel
+                              </Button>
+                              <Button
+                                size="sm"
+                                variant="destructive"
+                                className="flex-1 h-7 text-[10px]"
+                                onClick={() => reviewMutation.mutate({ action: 'reject', rejection_reason: rejectionReason })}
+                                disabled={!rejectionReason || reviewMutation.isPending}
+                              >
+                                {reviewMutation.isPending ? 'Working...' : 'Confirm Reject'}
+                              </Button>
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    )}
+
                     {ticket.status === 'assigned' && (
-                      <Button 
-                        className="w-full" 
+                      <Button
+                        className="w-full"
                         onClick={() => updateStatusMutation.mutate({ status: 'in_progress' })}
                       >
                         Start Working
@@ -288,8 +359,8 @@ export default function TicketDetailDialog({ ticket, open, onOpenChange, user, i
                           onChange={(e) => setResolutionSummary(e.target.value)}
                           rows={3}
                         />
-                        <Button 
-                          className="w-full bg-green-600 hover:bg-green-700" 
+                        <Button
+                          className="w-full bg-green-600 hover:bg-green-700"
                           onClick={handleResolve}
                           disabled={updateStatusMutation.isPending}
                         >
@@ -306,8 +377,8 @@ export default function TicketDetailDialog({ ticket, open, onOpenChange, user, i
             {canClose && (
               <>
                 <Separator />
-                <Button 
-                  className="w-full" 
+                <Button
+                  className="w-full"
                   onClick={() => updateStatusMutation.mutate({ status: 'closed' })}
                 >
                   Close Ticket
@@ -318,9 +389,9 @@ export default function TicketDetailDialog({ ticket, open, onOpenChange, user, i
             {canReopen && (
               <>
                 <Separator />
-                <Button 
+                <Button
                   variant="outline"
-                  className="w-full" 
+                  className="w-full"
                   onClick={() => updateStatusMutation.mutate({ status: 'reopened' })}
                 >
                   <XCircle className="w-4 h-4 mr-2" />
