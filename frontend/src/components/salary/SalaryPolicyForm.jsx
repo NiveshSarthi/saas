@@ -15,6 +15,7 @@ export default function SalaryPolicyForm({ isOpen, onClose, policy, allUsers }) 
 
   // We use 'basic_salary' to store the combined "Basic + DA" value entered by user.
   // 'da' field is kept 0 or internal.
+  const [isManual, setIsManual] = useState(false);
   const [formData, setFormData] = useState({
     user_email: '',
     salary_type: 'per_day',
@@ -51,6 +52,8 @@ export default function SalaryPolicyForm({ isOpen, onClose, policy, allUsers }) 
 
   // Auto-calculation Effect
   useEffect(() => {
+    if (isManual) return; // Skip auto-calc in manual mode
+
     const basicCombined = Number(formData.basic_salary) || 0;
 
     // Formulas based on User Request:
@@ -127,7 +130,7 @@ export default function SalaryPolicyForm({ isOpen, onClose, policy, allUsers }) 
       };
     });
 
-  }, [formData.basic_salary]); // Only depend on basic_salary input
+  }, [formData.basic_salary, isManual]); // Only depend on basic_salary input and isManual
 
 
   // Calculation Helpers for Render
@@ -142,18 +145,44 @@ export default function SalaryPolicyForm({ isOpen, onClose, policy, allUsers }) 
 
     // PF: 12% of BasicCombined OR MAX 1800
     const pfBase = basicCombined;
-    let pfEmp = Math.round(pfBase * (Number(formData.employee_pf_percentage) / 100));
-    let pfEmplr = Math.round(pfBase * (Number(formData.employer_pf_percentage) / 100));
+    let pfEmp = 0;
+
+    if (Number(formData.employee_pf_percentage) > 0) {
+      pfEmp = Math.round(pfBase * (Number(formData.employee_pf_percentage) / 100));
+      // Apply 1800 Cap only if auto-calc/percentage is used (usually)
+      // But if manual, maybe we don't cap? User said "only entered value will calculated".
+      pfEmp = Math.min(pfEmp, 1800);
+    } else {
+      pfEmp = Number(formData.employee_pf_fixed) || 0;
+    }
+
+    let pfEmplr = 0;
+    if (Number(formData.employer_pf_percentage) > 0) {
+      pfEmplr = Math.round(pfBase * (Number(formData.employer_pf_percentage) / 100));
+      pfEmplr = Math.min(pfEmplr, 1800);
+    } else {
+      pfEmplr = Number(formData.employer_pf_fixed) || 0;
+    }
 
     // Apply 1800 Cap
-    pfEmp = Math.min(pfEmp, 1800);
-    pfEmplr = Math.min(pfEmplr, 1800);
+    // Apply 1800 Cap handled inside if block now
 
     const pfAdmin = Math.round(pfBase * 0.01); // 1% of Basic+DA (No Cap)
 
     // ESIC: Use Math.ceil (ROUNDUP)
-    const esiEmp = Math.ceil(gross * (Number(formData.employee_esi_percentage) / 100));
-    const esiEmplr = Math.ceil(gross * (Number(formData.employer_esi_percentage) / 100));
+    let esiEmp = 0;
+    if (Number(formData.employee_esi_percentage) > 0) {
+      esiEmp = Math.ceil(gross * (Number(formData.employee_esi_percentage) / 100));
+    } else {
+      esiEmp = Number(formData.employee_esi_fixed) || 0;
+    }
+
+    let esiEmplr = 0;
+    if (Number(formData.employer_esi_percentage) > 0) {
+      esiEmplr = Math.ceil(gross * (Number(formData.employer_esi_percentage) / 100));
+    } else {
+      esiEmplr = Number(formData.employer_esi_fixed) || 0;
+    }
 
     // Deductions
     const pt = Number(formData.professional_tax) || 0;
@@ -213,6 +242,13 @@ export default function SalaryPolicyForm({ isOpen, onClose, policy, allUsers }) 
         // Ensure ESIC percentages are sent correctly as calculated
         employee_esi_percentage: data.employee_esi_percentage,
         employer_esi_percentage: data.employer_esi_percentage,
+
+        // Manual/Fixed Values
+        employee_pf_fixed: Number(data.employee_pf_fixed) || 0,
+        employee_esi_fixed: Number(data.employee_esi_fixed) || 0,
+        employer_pf_fixed: Number(data.employer_pf_fixed) || 0,
+        employer_esi_fixed: Number(data.employer_esi_fixed) || 0,
+
         monthly_salary: calcs.gross, // Save calculated gross as monthly_salary
       };
 
@@ -229,6 +265,44 @@ export default function SalaryPolicyForm({ isOpen, onClose, policy, allUsers }) 
     },
     onError: (err) => toast.error(err.message)
   });
+
+  const handleManualToggle = (checked) => {
+    setIsManual(checked);
+    if (checked) {
+      // Reset all percentages and fixed values to 0 for manual entry
+      setFormData(prev => ({
+        ...prev,
+        employee_pf_percentage: 0,
+        employee_pf_fixed: 0,
+        employee_esi_percentage: 0,
+        employee_esi_fixed: 0,
+        employer_pf_percentage: 0,
+        employer_esi_percentage: 0,
+        labour_welfare_employee: 0,
+        labour_welfare_employer: 0,
+        bonus_amount: 0,
+        gratuity_amount: 0,
+        professional_tax: 0,
+        // Optional: clear allowances too so they can be typed fresh
+        hra: 0,
+        conveyance_allowance: 0,
+        special_allowance: 0,
+        other_allowance: 0
+      }));
+    } else {
+      // Reset to standard defaults when switching back to Auto
+      setFormData(prev => ({
+        ...prev,
+        employee_pf_percentage: 12,
+        employee_esi_percentage: 0.75,
+        employer_pf_percentage: 12,
+        employer_esi_percentage: 3.25,
+        labour_welfare_employee: 50,
+        labour_welfare_employer: 50,
+        // Auto-calc will refill allowances based on basic_salary
+      }));
+    }
+  };
 
   const handleSubmit = (e) => {
     e.preventDefault();
@@ -247,6 +321,11 @@ export default function SalaryPolicyForm({ isOpen, onClose, policy, allUsers }) 
         </DialogHeader>
 
         <form onSubmit={handleSubmit} className="space-y-6">
+          <div className="flex items-center space-x-2 bg-yellow-50 p-3 rounded border border-yellow-200 mb-4">
+            <Switch id="manual-mode" checked={isManual} onCheckedChange={handleManualToggle} />
+            <Label htmlFor="manual-mode" className="font-semibold text-yellow-800">Manual Override Mode (Disable Auto-Calculation)</Label>
+          </div>
+
           <div className="grid grid-cols-2 gap-4">
             <div>
               <Label>Employee *</Label>
@@ -289,22 +368,42 @@ export default function SalaryPolicyForm({ isOpen, onClose, policy, allUsers }) 
 
                 <div>
                   <Label>HRA (Auto 50%)</Label>
-                  <Input value={formData.hra} readOnly className="bg-slate-100" />
+                  <Input
+                    value={formData.hra}
+                    readOnly={!isManual}
+                    onChange={e => isManual && setFormData({ ...formData, hra: e.target.value })}
+                    className={!isManual ? "bg-slate-100" : ""}
+                  />
                 </div>
 
                 <div>
                   <Label>Conveyance (15%)</Label>
-                  <Input value={formData.conveyance_allowance} readOnly className="bg-slate-100" />
+                  <Input
+                    value={formData.conveyance_allowance}
+                    readOnly={!isManual}
+                    onChange={e => isManual && setFormData({ ...formData, conveyance_allowance: e.target.value })}
+                    className={!isManual ? "bg-slate-100" : ""}
+                  />
                 </div>
 
                 <div>
                   <Label className="text-red-500">Special Allowance (Fixed 1000)</Label>
-                  <Input value={formData.special_allowance} readOnly className="bg-slate-100" />
+                  <Input
+                    value={formData.special_allowance}
+                    readOnly={!isManual}
+                    onChange={e => isManual && setFormData({ ...formData, special_allowance: e.target.value })}
+                    className={!isManual ? "bg-slate-100" : ""}
+                  />
                 </div>
 
                 <div>
                   <Label>Other Allowance (35% - Special)</Label>
-                  <Input value={formData.other_allowance} readOnly className="bg-slate-100" />
+                  <Input
+                    value={formData.other_allowance}
+                    readOnly={!isManual}
+                    onChange={e => isManual && setFormData({ ...formData, other_allowance: e.target.value })}
+                    className={!isManual ? "bg-slate-100" : ""}
+                  />
                 </div>
 
                 <div className="bg-slate-200 p-2 rounded flex justify-between items-center font-bold text-lg">
@@ -320,14 +419,32 @@ export default function SalaryPolicyForm({ isOpen, onClose, policy, allUsers }) 
 
               <div className="space-y-3">
                 <div className="flex justify-between items-center text-sm">
-                  <Label>PF Contribution (12%)</Label>
-                  <span className="font-mono">₹{calcs.pfEmp}</span>
+                  <Label>PF Contribution {isManual ? "(Fixed)" : "(12%)"}</Label>
+                  {isManual ? (
+                    <Input
+                      className="h-8 w-24 text-right"
+                      type="number"
+                      value={formData.employee_pf_fixed}
+                      onChange={e => setFormData({ ...formData, employee_pf_fixed: e.target.value })}
+                    />
+                  ) : (
+                    <span className="font-mono">₹{calcs.pfEmp}</span>
+                  )}
                 </div>
 
                 <div className="flex justify-between items-center text-sm">
-                  <Label>ESIC (0.75% of Gross)</Label>
-                  {formData.employee_esi_percentage === 0 && <span className="text-xs text-slate-500">(Gross {'>'} 21000)</span>}
-                  <span className="font-mono">₹{calcs.esiEmp}</span>
+                  <Label>ESIC {isManual ? "(Fixed)" : "(0.75% of Gross)"}</Label>
+                  {!isManual && formData.employee_esi_percentage === 0 && <span className="text-xs text-slate-500">(Gross {'>'} 21000)</span>}
+                  {isManual ? (
+                    <Input
+                      className="h-8 w-24 text-right"
+                      type="number"
+                      value={formData.employee_esi_fixed}
+                      onChange={e => setFormData({ ...formData, employee_esi_fixed: e.target.value })}
+                    />
+                  ) : (
+                    <span className="font-mono">₹{calcs.esiEmp}</span>
+                  )}
                 </div>
 
                 <div className="flex justify-between items-center text-sm">
@@ -374,18 +491,45 @@ export default function SalaryPolicyForm({ isOpen, onClose, policy, allUsers }) 
 
               <div className="space-y-3">
                 <div className="flex justify-between items-center text-sm">
-                  <Label>PF 12% on Basic+DA</Label>
-                  <span className="font-mono">₹{calcs.pfEmplr}</span>
+                  <Label>PF {isManual ? "Fixed" : "12% on Basic+DA"}</Label>
+                  {isManual ? (
+                    <Input
+                      className="h-8 w-24 text-right"
+                      type="number"
+                      value={formData.employer_pf_fixed}
+                      onChange={e => setFormData({ ...formData, employer_pf_fixed: e.target.value })}
+                    />
+                  ) : (
+                    <span className="font-mono">₹{calcs.pfEmplr}</span>
+                  )}
                 </div>
 
                 <div className="flex justify-between items-center text-sm">
-                  <Label>PF Admin Charges (1%)</Label>
-                  <span className="font-mono">₹{calcs.pfAdmin}</span>
+                  <Label>PF Admin Charges {isManual ? "(Fixed)" : "(1%)"}</Label>
+                  {isManual ? (
+                    <Input
+                      className="h-8 w-24 text-right"
+                      type="number"
+                      value={formData.pf_admin_charges}
+                      onChange={e => setFormData({ ...formData, pf_admin_charges: e.target.value })}
+                    />
+                  ) : (
+                    <span className="font-mono">₹{calcs.pfAdmin}</span>
+                  )}
                 </div>
 
                 <div className="flex justify-between items-center text-sm">
-                  <Label>ESIC (3.25% of Gross)</Label>
-                  <span className="font-mono">₹{calcs.esiEmplr}</span>
+                  <Label>ESIC {isManual ? "(Fixed)" : "(3.25% of Gross)"}</Label>
+                  {isManual ? (
+                    <Input
+                      className="h-8 w-24 text-right"
+                      type="number"
+                      value={formData.employer_esi_fixed}
+                      onChange={e => setFormData({ ...formData, employer_esi_fixed: e.target.value })}
+                    />
+                  ) : (
+                    <span className="font-mono">₹{calcs.esiEmplr}</span>
+                  )}
                 </div>
 
                 <div className="flex justify-between items-center text-sm">
