@@ -9,7 +9,7 @@ const COLORS = ['#3b82f6', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#ec4899'
 export default function TicketAnalytics() {
   const { data: tickets = [] } = useQuery({
     queryKey: ['it-tickets'],
-    queryFn: () => base44.entities.ITTicket.list('-created_date', 1000),
+    queryFn: () => base44.entities.ITTicket.list('-created_at', 1000),
   });
 
   // Calculate stats
@@ -23,12 +23,12 @@ export default function TicketAnalytics() {
   };
 
   // Average resolution time
-  const resolvedTickets = tickets.filter(t => t.resolved_date && t.created_date);
+  const resolvedTickets = tickets.filter(t => t.resolved_at && t.created_at);
   const avgResolutionTime = resolvedTickets.length > 0
     ? resolvedTickets.reduce((sum, t) => {
-        const diff = new Date(t.resolved_date) - new Date(t.created_date);
-        return sum + diff;
-      }, 0) / resolvedTickets.length / (1000 * 60 * 60) // hours
+      const diff = new Date(t.resolved_at) - new Date(t.created_at);
+      return sum + diff;
+    }, 0) / resolvedTickets.length / (1000 * 60 * 60) // hours
     : 0;
 
   // Tickets by category

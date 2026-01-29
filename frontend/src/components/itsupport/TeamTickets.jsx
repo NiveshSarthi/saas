@@ -45,7 +45,7 @@ export default function TeamTickets({ user, isAdmin, isITHead }) {
 
   const { data: tickets = [], isLoading } = useQuery({
     queryKey: ['it-tickets'],
-    queryFn: () => base44.entities.ITTicket.list('-created_date', 500),
+    queryFn: () => base44.entities.ITTicket.list('-created_at', 500),
   });
 
   const { data: itUsers = [] } = useQuery({
