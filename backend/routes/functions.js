@@ -146,7 +146,9 @@ router.post('/invoke/autoAssignITTicket', async (req, res) => {
 
         // 1. Assign to the preferred technician
         const preferredTechnician = 'ratnakerkumar56@gmail.com';
+        const techUser = await User.findOne({ email: preferredTechnician });
         ticket.assigned_to = preferredTechnician;
+        ticket.assigned_to_name = techUser?.full_name || preferredTechnician;
         ticket.status = 'pending_approval';
         ticket.head_approval_status = 'pending';
         await ticket.save();
@@ -187,7 +189,9 @@ router.post('/invoke/reviewITTicket', async (req, res) => {
             ticket.head_approval_status = 'approved';
             ticket.status = 'open';
             if (new_assignee) {
+                const techUser = await User.findOne({ email: new_assignee });
                 ticket.assigned_to = new_assignee;
+                ticket.assigned_to_name = techUser?.full_name || new_assignee;
             }
             await ticket.save();
 
@@ -218,7 +222,9 @@ router.post('/invoke/reviewITTicket', async (req, res) => {
 
         } else if (action === 'reassign') {
             const oldAssignee = ticket.assigned_to;
+            const techUser = await User.findOne({ email: new_assignee });
             ticket.assigned_to = new_assignee;
+            ticket.assigned_to_name = techUser?.full_name || new_assignee;
             await ticket.save();
 
             await ITTicketActivity.create({
