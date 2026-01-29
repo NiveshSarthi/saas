@@ -2473,6 +2473,32 @@ export default function SalaryPage() {
           </div>
         </DialogContent>
       </Dialog>
+
+      <TicketDialog
+        open={ticketDialogOpen}
+        onOpenChange={setTicketDialogOpen}
+        selectedPenalty={selectedPenalty}
+        ticketReason={ticketReason}
+        setTicketReason={setTicketReason}
+        onDateChange={(val) => setSelectedPenalty(prev => ({ ...prev, selectedDate: val }))}
+        onSubmit={() => {
+          if (!selectedPenalty?.selectedDate || !ticketReason) return toast.error('Please select date and provide reason');
+          createTicketMutation.mutate({
+            date: selectedPenalty.selectedDate,
+            reason: ticketReason,
+            employee_email: selectedPenalty.employee.employee_email
+          });
+        }}
+        isPending={createTicketMutation.isPending}
+      />
+
+      <ReviewRequestsDialog
+        open={reviewDialogOpen}
+        onOpenChange={setReviewDialogOpen}
+        requests={allAdjustments.filter(a => a.status === 'pending')}
+        onApprove={(id) => approveRequestMutation.mutate(id)}
+        onReject={(id) => rejectRequestMutation.mutate(id)}
+      />
     </div >
   );
 }
@@ -2662,31 +2688,6 @@ function SalaryHistoryView({ employeeEmail }) {
           </CardContent>
         </Card>
       ))}
-      <TicketDialog
-        open={ticketDialogOpen}
-        onOpenChange={setTicketDialogOpen}
-        selectedPenalty={selectedPenalty}
-        ticketReason={ticketReason}
-        setTicketReason={setTicketReason}
-        onDateChange={(val) => setSelectedPenalty(prev => ({ ...prev, selectedDate: val }))}
-        onSubmit={() => {
-          if (!selectedPenalty?.selectedDate || !ticketReason) return toast.error('Please select date and provide reason');
-          createTicketMutation.mutate({
-            date: selectedPenalty.selectedDate,
-            reason: ticketReason,
-            employee_email: selectedPenalty.employee.employee_email
-          });
-        }}
-        isPending={createTicketMutation.isPending}
-      />
-
-      <ReviewRequestsDialog
-        open={reviewDialogOpen}
-        onOpenChange={setReviewDialogOpen}
-        requests={allAdjustments.filter(a => a.status === 'pending')}
-        onApprove={(id) => approveRequestMutation.mutate(id)}
-        onReject={(id) => rejectRequestMutation.mutate(id)}
-      />
     </div>
   );
 }
