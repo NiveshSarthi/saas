@@ -855,7 +855,7 @@ export default function AttendancePage() {
                 <AttendanceCalendar
                   records={attendanceRecords}
                   selectedMonth={selectedMonth}
-                  onDateClick={handleMarkAttendance}
+                  onMarkAttendance={handleMarkAttendance}
                   approvedLeaves={approvedLeaves}
                   isAdmin={isAdmin}
                   currentUserEmail={user?.email}
@@ -986,7 +986,7 @@ export default function AttendancePage() {
                   <AttendanceCalendar
                     records={attendanceRecords}
                     selectedMonth={selectedMonth}
-                    onDateClick={() => { }}
+                    onMarkAttendance={() => { }}
                     approvedLeaves={approvedLeaves}
                     isAdmin={false}
                     currentUserEmail={user?.email}

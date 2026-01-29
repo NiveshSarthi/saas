@@ -97,7 +97,10 @@ const salaryPolicySchema = new mongoose.Schema({
     salary_type: String, // monthly, daily
     basic_salary: Number,
     hra: Number,
-    travelling_allowance: Number,
+    conveyance_allowance: Number,
+    special_allowance: Number,
+    other_allowance: Number,
+    travelling_allowance: Number, // Deprecated but kept for backward compatibility
     children_education_allowance: Number,
     fixed_incentive: Number,
     employer_incentive: Number,
@@ -111,6 +114,10 @@ const salaryPolicySchema = new mongoose.Schema({
     employer_esi_fixed: Number,
     labour_welfare_employee: Number,
     labour_welfare_employer: Number,
+    professional_tax: Number,
+    pf_admin_charges: Number,
+    bonus_amount: Number,
+    gratuity_amount: Number,
     ex_gratia_percentage: Number,
     ex_gratia_fixed: Number,
     late_penalty_enabled: Boolean,
