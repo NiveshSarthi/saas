@@ -319,6 +319,7 @@ export default function AttendancePage() {
         const statusCode = {
           present: 'P',
           checked_out: 'P',
+          completed: 'P',
           absent: 'A',
           half_day: 'HD',
           leave: 'L',
@@ -330,8 +331,22 @@ export default function AttendancePage() {
           holiday: 'H'
         };
         const status = statusCode[record.status] || record.status;
-        const checkIn = record.check_in_time || '-';
-        const checkOut = record.check_out_time || '-';
+
+        // Format check-in and check-out times from Date objects
+        const checkIn = record.check_in ? (() => {
+          try {
+            return format(new Date(record.check_in), 'HH:mm');
+          } catch (e) {
+            return '-';
+          }
+        })() : '-';
+        const checkOut = record.check_out ? (() => {
+          try {
+            return format(new Date(record.check_out), 'HH:mm');
+          } catch (e) {
+            return '-';
+          }
+        })() : '-';
 
         return [status, checkIn, checkOut];
       });
@@ -609,7 +624,7 @@ export default function AttendancePage() {
 
           if (record) {
             // Color code based on status
-            if (record.status === 'present' || record.status === 'checked_out') {
+            if (record.status === 'present' || record.status === 'checked_out' || record.status === 'completed') {
               doc.setTextColor(34, 197, 94); // Green
             } else if (record.status === 'absent') {
               doc.setTextColor(239, 68, 68); // Red
@@ -630,6 +645,7 @@ export default function AttendancePage() {
             const statusCode = {
               present: 'P',
               checked_out: 'P',
+              completed: 'P',
               absent: 'A',
               half_day: 'HD',
               leave: 'L',
@@ -642,8 +658,20 @@ export default function AttendancePage() {
             };
 
             const statusText = statusCode[record.status] || '-';
-            const checkIn = record.check_in_time ? record.check_in_time.substring(0, 5) : '-';
-            const checkOut = record.check_out_time ? record.check_out_time.substring(0, 5) : '-';
+            const checkIn = record.check_in ? (() => {
+              try {
+                return format(new Date(record.check_in), 'HH:mm');
+              } catch (e) {
+                return '-';
+              }
+            })() : '-';
+            const checkOut = record.check_out ? (() => {
+              try {
+                return format(new Date(record.check_out), 'HH:mm');
+              } catch (e) {
+                return '-';
+              }
+            })() : '-';
 
             // Display status, check-in, check-out in compact format
             doc.setFontSize(4.5);
