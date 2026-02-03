@@ -330,8 +330,10 @@ export default function AttendancePage() {
           holiday: 'H'
         };
         const status = statusCode[record.status] || record.status;
-        const checkIn = record.check_in_time || '-';
-        const checkOut = record.check_out_time || '-';
+
+        // Format check-in and check-out times from Date objects
+        const checkIn = record.check_in ? format(new Date(record.check_in), 'HH:mm') : '-';
+        const checkOut = record.check_out ? format(new Date(record.check_out), 'HH:mm') : '-';
 
         return [status, checkIn, checkOut];
       });
@@ -642,8 +644,8 @@ export default function AttendancePage() {
             };
 
             const statusText = statusCode[record.status] || '-';
-            const checkIn = record.check_in_time ? record.check_in_time.substring(0, 5) : '-';
-            const checkOut = record.check_out_time ? record.check_out_time.substring(0, 5) : '-';
+            const checkIn = record.check_in ? format(new Date(record.check_in), 'HH:mm') : '-';
+            const checkOut = record.check_out ? format(new Date(record.check_out), 'HH:mm') : '-';
 
             // Display status, check-in, check-out in compact format
             doc.setFontSize(4.5);
