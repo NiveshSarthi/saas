@@ -137,22 +137,17 @@ export default function Sprints() {
     if (!user || (projects && projects.length === 0)) {
       return allSprints;
     }
-    // Get sprint IDs that have ANY tasks assigned
-    const sprintsWithTasks = new Set(
-      allTasks
-        .filter(t => t.sprint_id && (t.assignee_email || (t.assignees && t.assignees.length > 0)))
-        .map(t => String(t.sprint_id))
-    );
 
     let filtered;
     if (user?.role === 'admin') {
       filtered = allSprints;
     } else {
-      // Show sprints from visible projects OR that have tasks assigned to anyone
+      // Show sprints from visible projects only
       filtered = allSprints.filter(s =>
-        visibleProjectIds.includes(String(s.project_id)) || sprintsWithTasks.has(String(s.id))
+        visibleProjectIds.includes(String(s.project_id))
       );
     }
+
 
     // If projectId is specified in URL, filter to that project only
     if (projectId) {
