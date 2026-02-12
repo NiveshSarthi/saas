@@ -87,7 +87,8 @@ export default function TaskList() {
 
   const tasks = useMemo(() => {
     if (!currentUser) return [];
-    if (currentUser.role === 'admin') return rawTasks;
+    const isAdmin = currentUser.role === 'admin' || currentUser.role_id === 'super_admin' || currentUser.role_id === 'admin';
+    if (isAdmin) return rawTasks;
     return rawTasks.filter(t =>
       t.reporter_email === currentUser.email ||
       t.assignee_email === currentUser.email ||
