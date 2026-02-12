@@ -1,4 +1,5 @@
 import express from 'express';
+import mongoose from 'mongoose';
 import * as models from '../models/index.js';
 
 const router = express.Router();
@@ -67,11 +68,24 @@ router.patch('/:entity/:id', async (req, res) => {
         const Model = getModel(req.params.entity);
         if (!Model) return res.status(404).json({ error: 'Entity not found' });
 
-        if (!req.params.id || req.params.id === 'undefined') {
+        const id = req.params.id;
+        if (!id || id === 'undefined') {
             return res.status(400).json({ error: 'Invalid ID' });
         }
 
-        const updated = await Model.findByIdAndUpdate(req.params.id, req.body, { new: true });
+        let updated;
+        const isObjectId = mongoose.Types.ObjectId.isValid(id);
+
+        if (isObjectId) {
+            updated = await Model.findByIdAndUpdate(id, req.body, { new: true });
+        }
+
+        // Fallback for custom 'id' field if not found by _id or if id is not a valid ObjectId
+        if (!updated && Model.schema.paths.id) {
+            updated = await Model.findOneAndUpdate({ id }, req.body, { new: true });
+        }
+
+        if (!updated) return res.status(404).json({ error: 'Item not found' });
         res.json(updated);
     } catch (error) {
         res.status(500).json({ error: error.message });
@@ -84,11 +98,23 @@ router.get('/:entity/:id', async (req, res) => {
         const Model = getModel(req.params.entity);
         if (!Model) return res.status(404).json({ error: 'Entity not found' });
 
-        if (!req.params.id || req.params.id === 'undefined') {
+        const id = req.params.id;
+        if (!id || id === 'undefined') {
             return res.status(400).json({ error: 'Invalid ID' });
         }
 
-        const item = await Model.findById(req.params.id);
+        let item;
+        const isObjectId = mongoose.Types.ObjectId.isValid(id);
+
+        if (isObjectId) {
+            item = await Model.findById(id);
+        }
+
+        // Fallback for custom 'id' field
+        if (!item && Model.schema.paths.id) {
+            item = await Model.findOne({ id });
+        }
+
         if (!item) return res.status(404).json({ error: 'Item not found' });
         res.json(item);
     } catch (error) {
@@ -102,11 +128,24 @@ router.delete('/:entity/:id', async (req, res) => {
         const Model = getModel(req.params.entity);
         if (!Model) return res.status(404).json({ error: 'Entity not found' });
 
-        if (!req.params.id || req.params.id === 'undefined') {
+        const id = req.params.id;
+        if (!id || id === 'undefined') {
             return res.status(400).json({ error: 'Invalid ID' });
         }
 
-        await Model.findByIdAndDelete(req.params.id);
+        let deleted;
+        const isObjectId = mongoose.Types.ObjectId.isValid(id);
+
+        if (isObjectId) {
+            deleted = await Model.findByIdAndDelete(id);
+        }
+
+        // Fallback for custom 'id' field
+        if (!deleted && Model.schema.paths.id) {
+            deleted = await Model.findOneAndDelete({ id });
+        }
+
+        if (!deleted) return res.status(404).json({ error: 'Item not found' });
         res.json({ success: true });
     } catch (error) {
         res.status(500).json({ error: error.message });
