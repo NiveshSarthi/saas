@@ -238,6 +238,10 @@ export default function MyTasks() {
   };
 
   const myTasks = tasks.filter(t => {
+    // Check if user is admin (role or role_id)
+    const isAdmin = user && (user.role === 'admin' || user.role_id === 'super_admin' || user.role_id === 'admin');
+    if (isAdmin) return true; // Admins see all tasks
+
     const userEmail = (user?.email || '').toLowerCase();
     // Show if directly assigned
     if ((t.assignee_email || '').toLowerCase() === userEmail) return true;
