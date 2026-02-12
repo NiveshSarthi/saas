@@ -137,22 +137,17 @@ export default function Sprints() {
     if (!user || (projects && projects.length === 0)) {
       return allSprints;
     }
-    // Get sprint IDs that have ANY tasks assigned
-    const sprintsWithTasks = new Set(
-      allTasks
-        .filter(t => t.sprint_id && (t.assignee_email || (t.assignees && t.assignees.length > 0)))
-        .map(t => String(t.sprint_id))
-    );
 
     let filtered;
     if (user?.role === 'admin') {
       filtered = allSprints;
     } else {
-      // Show sprints from visible projects OR that have tasks assigned to anyone
+      // Show sprints from visible projects only
       filtered = allSprints.filter(s =>
-        visibleProjectIds.includes(String(s.project_id)) || sprintsWithTasks.has(String(s.id))
+        visibleProjectIds.includes(String(s.project_id))
       );
     }
+
 
     // If projectId is specified in URL, filter to that project only
     if (projectId) {
@@ -706,7 +701,6 @@ export default function Sprints() {
                   setShowCreateDialog(true);
                 }}
                 className="bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-700 hover:to-purple-700 shadow-lg hover:shadow-xl transition-all"
-                disabled={visibleProjects.length === 0}
               >
                 <Plus className="w-4 h-4 mr-2" />
                 Create Sprint
@@ -933,15 +927,14 @@ export default function Sprints() {
                   }
                   setShowCreateDialog(true);
                 }}
-                disabled={visibleProjects.length === 0}
                 className="bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-700 hover:to-purple-700 shadow-lg hover:shadow-xl transition-all px-6 py-6 text-base"
               >
                 <Plus className="w-5 h-5 mr-2" />
                 Create Your First Sprint
               </Button>
               {visibleProjects.length === 0 && (
-                <p className="text-sm text-slate-500 mt-4 font-medium">
-                  {user?.role === 'admin' ? 'Create a project first' : 'No accessible projects'}
+                <p className="text-sm text-amber-600 mt-4 font-medium">
+                  ⚠️ You have no accessible projects. Please select a project when creating the sprint.
                 </p>
               )}
             </div>
