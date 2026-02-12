@@ -339,7 +339,8 @@ export default function TeamTasksView() {
       if (!applyAdvancedFilters(task)) return false;
 
       // Role-based filtering: Non-admins only see their own tasks
-      if (user && user.role !== 'admin') {
+      const isAdmin = user && (user.role === 'admin' || user.role_id === 'super_admin' || user.role_id === 'admin');
+      if (user && !isAdmin) {
         const userEmailLower = user.email.toLowerCase();
         const taskAssigneeEmailLower = task.assignee_email?.toLowerCase();
         const taskAssigneesLower = task.assignees?.map(e => e.toLowerCase()) || [];
@@ -474,7 +475,8 @@ export default function TeamTasksView() {
   // Calculate statistics based on view and role
   const viewTasks = useMemo(() => {
     // Non-admins always see only their tasks
-    if (user && user.role !== 'admin') {
+    const isAdmin = user && (user.role === 'admin' || user.role_id === 'super_admin' || user.role_id === 'admin');
+    if (user && !isAdmin) {
       return tasks.filter(t => {
         const isMyTask = t.assignee_email === user.email ||
           (t.assignees && t.assignees.includes(user.email)) ||
