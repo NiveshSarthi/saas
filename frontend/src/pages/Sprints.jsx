@@ -255,8 +255,8 @@ export default function Sprints() {
         // Debugging: log cache and notify user
         try {
           const cache = queryClient.getQueryData(['sprints']) || [];
-          console.debug('Sprints.cache after append', cache.length, cache.slice(0,3));
-          toast.success(`Sprint created (${normalized.name || normalized.id || 'unknown'})`);
+          console.debug('Sprints.cache after append', cache.length, cache.slice(0, 3));
+          toast.success(`Sprint created (${normalizedSprint.name || normalizedSprint.id || 'unknown'})`);
         } catch (e) {
           console.debug('Failed to read sprints cache', e);
         }
@@ -281,6 +281,10 @@ export default function Sprints() {
       setShowCreateDialog(false);
       setSelectedProjectId(null);
     },
+    onError: (err) => {
+      console.error('Failed to create sprint', err);
+      toast.error(err?.message || 'Failed to create sprint');
+    }
   });
 
   const updateSprintMutation = useMutation({
@@ -695,7 +699,12 @@ export default function Sprints() {
               </div>
 
               <Button
-                onClick={() => setShowCreateDialog(true)}
+                onClick={() => {
+                  if (filterProject !== 'all') {
+                    setSelectedProjectId(filterProject);
+                  }
+                  setShowCreateDialog(true);
+                }}
                 className="bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-700 hover:to-purple-700 shadow-lg hover:shadow-xl transition-all"
                 disabled={visibleProjects.length === 0}
               >
@@ -918,7 +927,12 @@ export default function Sprints() {
               <h3 className="text-2xl font-bold text-slate-900 mb-3">No sprints yet</h3>
               <p className="text-slate-600 mb-8 text-lg">Create your first sprint to start planning</p>
               <Button
-                onClick={() => setShowCreateDialog(true)}
+                onClick={() => {
+                  if (filterProject !== 'all') {
+                    setSelectedProjectId(filterProject);
+                  }
+                  setShowCreateDialog(true);
+                }}
                 disabled={visibleProjects.length === 0}
                 className="bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-700 hover:to-purple-700 shadow-lg hover:shadow-xl transition-all px-6 py-6 text-base"
               >

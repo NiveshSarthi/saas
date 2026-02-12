@@ -37,7 +37,7 @@ export default function CreateSprintDialog({ open, onClose, sprint, projectId, p
   const [startDateOpen, setStartDateOpen] = useState(false);
   const [endDateOpen, setEndDateOpen] = useState(false);
 
-  const showProjectSelect = !projectId && projects.length > 0;
+  const showProjectSelect = !sprint && projects.length > 0;
 
   useEffect(() => {
     if (sprint) {
@@ -124,7 +124,7 @@ export default function CreateSprintDialog({ open, onClose, sprint, projectId, p
                     )}
                   >
                     <CalendarIcon className="mr-2 h-4 w-4" />
-                    {formData.start_date 
+                    {formData.start_date
                       ? format(new Date(formData.start_date), 'MMM d, yyyy')
                       : 'Pick date'
                     }
@@ -135,9 +135,9 @@ export default function CreateSprintDialog({ open, onClose, sprint, projectId, p
                     mode="single"
                     selected={formData.start_date ? new Date(formData.start_date) : undefined}
                     onSelect={(date) => {
-                      setFormData(prev => ({ 
-                        ...prev, 
-                        start_date: date ? format(date, 'yyyy-MM-dd') : '' 
+                      setFormData(prev => ({
+                        ...prev,
+                        start_date: date ? format(date, 'yyyy-MM-dd') : ''
                       }));
                       setStartDateOpen(false);
                     }}
@@ -158,7 +158,7 @@ export default function CreateSprintDialog({ open, onClose, sprint, projectId, p
                     )}
                   >
                     <CalendarIcon className="mr-2 h-4 w-4" />
-                    {formData.end_date 
+                    {formData.end_date
                       ? format(new Date(formData.end_date), 'MMM d, yyyy')
                       : 'Pick date'
                     }
@@ -169,9 +169,9 @@ export default function CreateSprintDialog({ open, onClose, sprint, projectId, p
                     mode="single"
                     selected={formData.end_date ? new Date(formData.end_date) : undefined}
                     onSelect={(date) => {
-                      setFormData(prev => ({ 
-                        ...prev, 
-                        end_date: date ? format(date, 'yyyy-MM-dd') : '' 
+                      setFormData(prev => ({
+                        ...prev,
+                        end_date: date ? format(date, 'yyyy-MM-dd') : ''
                       }));
                       setEndDateOpen(false);
                     }}
@@ -185,8 +185,8 @@ export default function CreateSprintDialog({ open, onClose, sprint, projectId, p
             <Button type="button" variant="outline" onClick={onClose}>
               Cancel
             </Button>
-            <Button 
-              type="submit" 
+            <Button
+              type="submit"
               className="bg-indigo-600 hover:bg-indigo-700"
               disabled={showProjectSelect && !projectId}
             >
