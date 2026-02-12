@@ -89,6 +89,14 @@ export default function CreateSprintDialog({ open, onClose, sprint, projectId, p
             </div>
           )}
 
+          {showProjectSelect && projects.length === 0 && (
+            <div className="bg-amber-50 border border-amber-200 rounded-lg p-3">
+              <p className="text-sm text-amber-800">
+                ⚠️ No projects available. Please create a project first or contact an admin to be added to a project.
+              </p>
+            </div>
+          )}
+
           <div className="space-y-2">
             <Label htmlFor="name">Sprint Name *</Label>
             <Input
@@ -188,7 +196,7 @@ export default function CreateSprintDialog({ open, onClose, sprint, projectId, p
             <Button
               type="submit"
               className="bg-indigo-600 hover:bg-indigo-700"
-              disabled={showProjectSelect && !projectId}
+              disabled={(showProjectSelect && !projectId) || (showProjectSelect && projects.length === 0)}
             >
               {sprint ? 'Save Changes' : 'Create Sprint'}
             </Button>
