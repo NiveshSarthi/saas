@@ -92,7 +92,9 @@ export default function Sprints() {
   // Filter projects based on user permissions
   const visibleProjects = React.useMemo(() => {
     if (!user) return [];
-    if (user.role === 'admin') return projects;
+    // Check both role and role_id for admin access
+    const isAdmin = user.role === 'admin' || user.role_id === 'super_admin' || user.role_id === 'admin';
+    if (isAdmin) return projects;
 
     // Show projects where user is owner or member, OR if it's the Syndicate project (visible to all)
     return projects.filter(p =>
@@ -139,7 +141,9 @@ export default function Sprints() {
     }
 
     let filtered;
-    if (user?.role === 'admin') {
+    // Check both role and role_id for admin access
+    const isAdmin = user?.role === 'admin' || user?.role_id === 'super_admin' || user?.role_id === 'admin';
+    if (isAdmin) {
       filtered = allSprints;
     } else {
       // Show sprints from visible projects only
