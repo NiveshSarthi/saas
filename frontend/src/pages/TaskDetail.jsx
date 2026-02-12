@@ -118,8 +118,9 @@ export default function TaskDetail() {
   });
 
   // Check task visibility
+  const isAdmin = user && (user.role === 'admin' || user.role_id === 'super_admin' || user.role_id === 'admin');
   const canViewTask = user && task && (
-    user.role === 'admin' ||
+    isAdmin ||
     task.reporter_email === user.email ||
     task.created_by === user.email ||
     task.assignee_email === user.email ||
@@ -190,7 +191,8 @@ export default function TaskDetail() {
 
   const subtasks = React.useMemo(() => {
     if (!user || !task) return [];
-    if (user.role === 'admin') return rawSubtasks;
+    const isAdmin = user.role === 'admin' || user.role_id === 'super_admin' || user.role_id === 'admin';
+    if (isAdmin) return rawSubtasks;
 
     // If the user can view the parent task, they can view all its subtasks
     if (canViewTask) {
@@ -322,7 +324,8 @@ export default function TaskDetail() {
 
   const canManageMarketing = React.useMemo(() => {
     if (!user) return false;
-    if (user.role === 'admin') return true;
+    const isAdmin = user.role === 'admin' || user.role_id === 'super_admin' || user.role_id === 'admin';
+    if (isAdmin) return true;
 
     // Check if user is in marketing department
     if (user.department_id && departments.length > 0) {
