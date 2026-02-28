@@ -17,6 +17,7 @@ export default function VideoCard({
     category,
     users,
     onClick,
+    onDelete,
     isAdmin,
     isSelected,
     onToggleSelection,
@@ -154,7 +155,7 @@ export default function VideoCard({
                                 title="Permanently delete (Admin only)"
                                 onClick={e => {
                                     e.stopPropagation();
-                                    // Delete will be handled by parent
+                                    if (onDelete) onDelete(video);
                                 }}
                             >
                                 <Trash2 className="w-3.5 h-3.5" />

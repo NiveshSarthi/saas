@@ -19,7 +19,10 @@ import {
   TrendingUp,
   Target,
   Info,
-  HelpCircle
+  HelpCircle,
+  CalendarDays,
+  X,
+  GitBranch
 } from 'lucide-react';
 import { toast } from 'sonner';
 import VideoKanban from '@/components/marketing/VideoKanban';
@@ -29,6 +32,7 @@ import VideoDetailModal from '@/components/marketing/VideoDetailModal';
 import MarketingKPIManager from '@/components/marketing/MarketingKPIManager';
 import MarketingDailyLogger from '@/components/marketing/MarketingDailyLogger';
 import MarketingKPIDashboard from '@/components/marketing/MarketingKPIDashboard';
+import VideoTimeline from '@/components/marketing/VideoTimeline';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 
 export default function MarketingPage() {
@@ -46,6 +50,42 @@ export default function MarketingPage() {
   const [categoryFilter, setCategoryFilter] = useState('all');
   const [statusFilter, setStatusFilter] = useState('all');
   const [selectedVideoIds, setSelectedVideoIds] = useState([]);
+  const [monthFilter, setMonthFilter] = useState('all'); // 'all' or 'YYYY-MM'
+  const [dateFrom, setDateFrom] = useState('');
+  const [dateTo, setDateTo] = useState('');
+  const [showCustomRange, setShowCustomRange] = useState(false);
+
+  // Generate last 12 months options
+  const monthOptions = useMemo(() => {
+    const opts = [];
+    const now = new Date();
+    for (let i = 0; i < 12; i++) {
+      const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
+      const value = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+      const label = d.toLocaleString('default', { month: 'long', year: 'numeric' });
+      opts.push({ value, label });
+    }
+    return opts;
+  }, []);
+
+  const handleMonthChange = (val) => {
+    setMonthFilter(val);
+    setDateFrom('');
+    setDateTo('');
+    setShowCustomRange(false);
+  };
+
+  const handleCustomRangeToggle = () => {
+    setShowCustomRange(prev => !prev);
+    setMonthFilter('all');
+  };
+
+  const clearDateFilters = () => {
+    setMonthFilter('all');
+    setDateFrom('');
+    setDateTo('');
+    setShowCustomRange(false);
+  };
 
   // Auth Check
   useEffect(() => {
@@ -104,6 +144,13 @@ export default function MarketingPage() {
     enabled: isAuthorized
   });
 
+  // Fetch video activity logs for timeline
+  const { data: videoLogs = [] } = useQuery({
+    queryKey: ['video-logs'],
+    queryFn: () => base44.entities.VideoLog.list('-created_at', 5000),
+    enabled: isAuthorized
+  });
+
   // Create video mutation
   const createVideoMutation = useMutation({
     mutationFn: async (data) => {
@@ -152,6 +199,19 @@ export default function MarketingPage() {
     }
   });
 
+  // Helper: extract best available date for a video
+  // Falls back to ObjectId-embedded timestamp if created_at is missing
+  const getVideoDate = (video) => {
+    if (video.created_at) return new Date(video.created_at);
+    const rawId = video._id || video.id || '';
+    const hexSeconds = rawId.substring(0, 8);
+    if (hexSeconds.length === 8) {
+      const secs = parseInt(hexSeconds, 16);
+      if (!isNaN(secs)) return new Date(secs * 1000);
+    }
+    return null;
+  };
+
   // Filter videos
   const filteredVideos = useMemo(() => {
     return videos.filter(video => {
@@ -164,6 +224,42 @@ export default function MarketingPage() {
       // Status filter
       if (statusFilter !== 'all' && video.status !== statusFilter) return false;
 
+      // Gather all relevant dates for this video (creation + any stage changes)
+      const allDates = [getVideoDate(video)].filter(Boolean);
+      const vLogs = (videoLogs || []).filter(log => String(log.video_id) === String(video.id || video._id));
+      vLogs.forEach(log => {
+        if (log.created_at) allDates.push(new Date(log.created_at));
+      });
+
+      // Month filter
+      if (monthFilter !== 'all') {
+        const hasMatch = allDates.some(d => {
+          const ym = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+          return ym === monthFilter;
+        });
+        if (!hasMatch) return false;
+      }
+
+      // Custom date range filter
+      if (dateFrom || dateTo) {
+        let fromLocal = null, toLocal = null;
+        if (dateFrom) {
+          const [fy, fm, fd] = dateFrom.split('-').map(Number);
+          fromLocal = new Date(fy, fm - 1, fd, 0, 0, 0, 0);
+        }
+        if (dateTo) {
+          const [ty, tm, td] = dateTo.split('-').map(Number);
+          toLocal = new Date(ty, tm - 1, td, 23, 59, 59, 999);
+        }
+
+        const hasMatch = allDates.some(d => {
+          if (fromLocal && d < fromLocal) return false;
+          if (toLocal && d > toLocal) return false;
+          return true;
+        });
+        if (!hasMatch) return false;
+      }
+
       // Search filter
       if (searchQuery) {
         const search = searchQuery.toLowerCase();
@@ -175,19 +271,19 @@ export default function MarketingPage() {
 
       return true;
     });
-  }, [videos, categoryFilter, statusFilter, searchQuery]);
+  }, [videos, videoLogs, categoryFilter, statusFilter, searchQuery, monthFilter, dateFrom, dateTo]);
 
-  // Stats
+
+  // Stats — derived from filteredVideos so counts reflect active filters
   const stats = useMemo(() => {
-    const activeVideos = videos.filter(v => !v.is_deleted);
     return {
-      total: activeVideos.length,
-      shoot: activeVideos.filter(v => v.status === 'shoot').length,
-      editing: activeVideos.filter(v => v.status === 'editing').length,
-      review: activeVideos.filter(v => v.status === 'review').length,
-      posted: activeVideos.filter(v => v.status === 'posted').length
+      total: filteredVideos.length,
+      shoot: filteredVideos.filter(v => v.status === 'shoot').length,
+      editing: filteredVideos.filter(v => v.status === 'editing').length,
+      review: filteredVideos.filter(v => v.status === 'review').length,
+      posted: filteredVideos.filter(v => v.status === 'posted').length
     };
-  }, [videos]);
+  }, [filteredVideos]);
 
   const handleEditVideo = (video) => {
     setSelectedVideo(video);
@@ -403,6 +499,14 @@ export default function MarketingPage() {
               <span className="sm:hidden">Settings</span>
             </TabsTrigger>
           )}
+          <TabsTrigger
+            value="timeline"
+            className="data-[state=active]:bg-gradient-to-r data-[state=active]:from-indigo-600 data-[state=active]:to-purple-600 data-[state=active]:text-white data-[state=active]:shadow-lg data-[state=active]:shadow-indigo-500/30 rounded-md sm:rounded-lg px-3 sm:px-6 py-2 sm:py-2.5 font-medium transition-all text-xs sm:text-sm whitespace-nowrap flex-1 sm:flex-none"
+          >
+            <GitBranch className="w-3 h-3 sm:w-4 sm:h-4 sm:mr-2" />
+            <span className="hidden sm:inline">Video Timeline</span>
+            <span className="sm:hidden">Timeline</span>
+          </TabsTrigger>
         </TabsList>
 
         <TabsContent value="workflow" className="flex-1 flex flex-col data-[state=active]:flex mt-0 space-y-3 sm:space-y-4 md:space-y-6">
@@ -431,6 +535,36 @@ export default function MarketingPage() {
 
             {/* Filters */}
             <div className="flex-1" />
+
+            {/* Month Filter */}
+            <Select value={monthFilter} onValueChange={handleMonthChange}>
+              <SelectTrigger className="w-[160px] bg-white text-sm">
+                <CalendarDays className="w-4 h-4 mr-1.5 text-slate-400" />
+                <SelectValue placeholder="All Time" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All Time</SelectItem>
+                {monthOptions.map(opt => (
+                  <SelectItem key={opt.value} value={opt.value}>{opt.label}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+
+            {/* Custom Date Range Toggle */}
+            <Button
+              variant={showCustomRange ? 'default' : 'outline'}
+              size="sm"
+              onClick={handleCustomRangeToggle}
+              className={`h-9 px-3 text-sm gap-1.5 rounded-lg ${showCustomRange
+                ? 'bg-indigo-600 text-white hover:bg-indigo-700'
+                : 'bg-white border-slate-200 text-slate-600 hover:bg-slate-50'
+                }`}
+            >
+              <Filter className="w-3.5 h-3.5" />
+              Custom Range
+            </Button>
+
+            {/* Category Filter */}
             <Select value={categoryFilter} onValueChange={setCategoryFilter}>
               <SelectTrigger className="w-[150px] bg-white text-sm">
                 <SelectValue placeholder="Category" />
@@ -450,7 +584,82 @@ export default function MarketingPage() {
                 ))}
               </SelectContent>
             </Select>
+
+            {/* Stage Filter */}
+            <Select value={statusFilter} onValueChange={setStatusFilter}>
+              <SelectTrigger className="w-[140px] bg-white text-sm">
+                <SelectValue placeholder="All Stages" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">
+                  <div className="flex items-center gap-2">
+                    <div className="w-2 h-2 rounded-full bg-slate-400" />
+                    All Stages
+                  </div>
+                </SelectItem>
+                {[
+                  { value: 'shoot', label: 'Shoot', color: '#F59E0B' },
+                  { value: 'editing', label: 'Editing', color: '#3B82F6' },
+                  { value: 'review', label: 'Review', color: '#A855F7' },
+                  { value: 'revision', label: 'Revision', color: '#F97316' },
+                  { value: 'approval', label: 'Approval', color: '#EAB308' },
+                  { value: 'posting', label: 'Posting', color: '#06B6D4' },
+                  { value: 'posted', label: 'Posted', color: '#10B981' },
+                  { value: 'trash', label: 'Trash', color: '#94A3B8' },
+                ].map(stage => (
+                  <SelectItem key={stage.value} value={stage.value}>
+                    <div className="flex items-center gap-2">
+                      <div className="w-2 h-2 rounded-full" style={{ backgroundColor: stage.color }} />
+                      {stage.label}
+                    </div>
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+
+            {/* Clear date filters button */}
+            {(monthFilter !== 'all' || dateFrom || dateTo) && (
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={clearDateFilters}
+                className="h-9 px-2 text-slate-500 hover:text-red-500 hover:bg-red-50 rounded-lg"
+              >
+                <X className="w-4 h-4" />
+              </Button>
+            )}
           </div>
+
+          {/* Custom Date Range Row */}
+          {showCustomRange && (
+            <div className="flex flex-wrap items-center gap-2 bg-indigo-50 border border-indigo-100 rounded-lg px-3 py-2">
+              <span className="text-xs font-medium text-indigo-700">Date Range:</span>
+              <div className="flex items-center gap-1.5">
+                <span className="text-xs text-slate-500">From</span>
+                <input
+                  type="date"
+                  value={dateFrom}
+                  onChange={e => setDateFrom(e.target.value)}
+                  className="h-8 px-2 text-sm border border-slate-200 rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-indigo-300 focus:border-indigo-400"
+                />
+              </div>
+              <div className="flex items-center gap-1.5">
+                <span className="text-xs text-slate-500">To</span>
+                <input
+                  type="date"
+                  value={dateTo}
+                  min={dateFrom}
+                  onChange={e => setDateTo(e.target.value)}
+                  className="h-8 px-2 text-sm border border-slate-200 rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-indigo-300 focus:border-indigo-400"
+                />
+              </div>
+              {(dateFrom || dateTo) && (
+                <span className="text-xs text-indigo-600 font-medium">
+                  {filteredVideos.length} result{filteredVideos.length !== 1 ? 's' : ''}
+                </span>
+              )}
+            </div>
+          )}
 
           {/* Onboarding tip for new users */}
           {videos.length === 0 && (
@@ -506,6 +715,29 @@ export default function MarketingPage() {
             <MarketingKPIManager />
           </TabsContent>
         )}
+
+        <TabsContent value="timeline" className="mt-0 data-[state=active]:block pb-6">
+          <div className="bg-white/80 backdrop-blur-xl rounded-xl sm:rounded-2xl border border-white/20 shadow-lg p-4 sm:p-6">
+            {/* Timeline Header */}
+            <div className="flex items-center gap-3 mb-6">
+              <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-violet-500 to-indigo-600 flex items-center justify-center shadow-lg shadow-violet-500/30">
+                <GitBranch className="w-5 h-5 text-white" />
+              </div>
+              <div>
+                <h2 className="text-lg font-bold text-slate-800">Video Stage Timeline</h2>
+                <p className="text-xs text-slate-500">
+                  Track when each video moved through production stages · Respects active filters
+                </p>
+              </div>
+            </div>
+            <VideoTimeline
+              videos={filteredVideos}
+              logs={videoLogs}
+              categories={categories}
+              users={usersFromEntity}
+            />
+          </div>
+        </TabsContent>
       </Tabs>
 
       {/* Add Video Modal */}
