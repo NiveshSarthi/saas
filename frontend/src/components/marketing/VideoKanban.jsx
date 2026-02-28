@@ -94,6 +94,23 @@ export default function VideoKanban({
         }
     };
 
+    const handleDeleteVideo = async (video) => {
+        const confirmed = window.confirm(
+            `Permanently delete "${video.title}"? This cannot be undone.`
+        );
+        if (!confirmed) return;
+        try {
+            const vid = video.id || video._id;
+            await base44.entities.Video.delete(vid);
+            await logActivity(vid, 'deleted', { title: video.title });
+            toast.success('Video permanently deleted');
+            refetch();
+        } catch (error) {
+            toast.error('Failed to delete video');
+            console.error(error);
+        }
+    };
+
     const checkTransition = (video, fromStatus, toStatus) => {
         const transitionKey = `${fromStatus}->${toStatus}`;
 
@@ -299,6 +316,7 @@ export default function VideoKanban({
                                                                         category={categories.find(c => (c.id || c._id) === video.category_id)}
                                                                         users={users}
                                                                         onClick={() => onEditVideo(video)}
+                                                                        onDelete={handleDeleteVideo}
                                                                         isAdmin={isAdmin}
                                                                         isSelected={selectedVideoIds.includes(video.id || video._id)}
                                                                         onToggleSelection={() => onToggleVideo(video.id || video._id)}
