@@ -685,9 +685,9 @@ export default function VideoTimeline({ videos, logs = [], categories = [], user
 
                         {/* Current Stage */}
                         <div className="flex flex-col gap-1">
-                            <label className="text-xs font-semibold text-slate-500 uppercase tracking-wide">Current Stage</label>
+                            <label className="text-xs font-semibold text-slate-500 uppercase tracking-wide whitespace-nowrap">Current Stage</label>
                             <Select value={filterCurrentStage} onValueChange={setFilterCurrentStage}>
-                                <SelectTrigger className="w-[140px] bg-white text-sm h-9 rounded-lg border-slate-200">
+                                <SelectTrigger className="w-[140px] bg-white text-sm h-9 rounded-lg border border-slate-200 text-slate-700">
                                     <SelectValue placeholder="All Stages" />
                                 </SelectTrigger>
                                 <SelectContent>
@@ -704,11 +704,11 @@ export default function VideoTimeline({ videos, logs = [], categories = [], user
                             </Select>
                         </div>
 
-                        {/* Has Reached Stage */}
+                        {/* Reached Stage */}
                         <div className="flex flex-col gap-1">
-                            <label className="text-xs font-semibold text-slate-500 uppercase tracking-wide">Has Reached Stage</label>
+                            <label className="text-xs font-semibold text-slate-500 uppercase tracking-wide whitespace-nowrap">Reached Stage</label>
                             <Select value={filterReachedStage} onValueChange={setFilterReachedStage}>
-                                <SelectTrigger className="w-[160px] bg-white text-sm h-9 rounded-lg border-slate-200">
+                                <SelectTrigger className="w-[160px] bg-white text-sm h-9 rounded-lg border border-slate-200 text-slate-700">
                                     <SelectValue placeholder="Any Stage" />
                                 </SelectTrigger>
                                 <SelectContent>
@@ -727,9 +727,9 @@ export default function VideoTimeline({ videos, logs = [], categories = [], user
 
                         {/* Editing Level */}
                         <div className="flex flex-col gap-1">
-                            <label className="text-xs font-semibold text-slate-500 uppercase tracking-wide">Editing Level</label>
+                            <label className="text-xs font-semibold text-slate-500 uppercase tracking-wide whitespace-nowrap">Editing Level</label>
                             <Select value={filterEditingLevel} onValueChange={setFilterEditingLevel}>
-                                <SelectTrigger className="w-[130px] bg-white text-sm h-9 rounded-lg border-slate-200">
+                                <SelectTrigger className="w-[130px] bg-white text-sm h-9 rounded-lg border border-slate-200 text-slate-700">
                                     <SelectValue placeholder="All Levels" />
                                 </SelectTrigger>
                                 <SelectContent>
@@ -750,9 +750,9 @@ export default function VideoTimeline({ videos, logs = [], categories = [], user
                         {/* Category */}
                         {categories.length > 0 && (
                             <div className="flex flex-col gap-1">
-                                <label className="text-xs font-semibold text-slate-500 uppercase tracking-wide">Category</label>
+                                <label className="text-xs font-semibold text-slate-500 uppercase tracking-wide whitespace-nowrap">Category</label>
                                 <Select value={filterCategory} onValueChange={setFilterCategory}>
-                                    <SelectTrigger className="w-[150px] bg-white text-sm h-9 rounded-lg border-slate-200">
+                                    <SelectTrigger className="w-[150px] bg-white text-sm h-9 rounded-lg border border-slate-200 text-slate-700">
                                         <SelectValue placeholder="All Categories" />
                                     </SelectTrigger>
                                     <SelectContent>
@@ -773,9 +773,9 @@ export default function VideoTimeline({ videos, logs = [], categories = [], user
                         {/* Assigned Person */}
                         {assignableUsers.length > 0 && (
                             <div className="flex flex-col gap-1">
-                                <label className="text-xs font-semibold text-slate-500 uppercase tracking-wide">Assigned To</label>
+                                <label className="text-xs font-semibold text-slate-500 uppercase tracking-wide whitespace-nowrap">Assigned To</label>
                                 <Select value={filterAssignedTo} onValueChange={setFilterAssignedTo}>
-                                    <SelectTrigger className="w-[200px] bg-white text-sm h-9 rounded-lg border-slate-200">
+                                    <SelectTrigger className="w-[200px] bg-white text-sm h-9 rounded-lg border border-slate-200 text-slate-700">
                                         <SelectValue placeholder="Anyone" />
                                     </SelectTrigger>
                                     <SelectContent>
@@ -790,10 +790,10 @@ export default function VideoTimeline({ videos, logs = [], categories = [], user
 
                         {/* Date Filter */}
                         <div className="flex flex-col gap-1">
-                            <label className="text-xs font-semibold text-slate-500 uppercase tracking-wide">Activity Date</label>
+                            <label className="text-xs font-semibold text-slate-500 uppercase tracking-wide whitespace-nowrap">Activity Date</label>
                             <div className="flex flex-wrap gap-2 items-start">
                                 <Select value={filterDateMode} onValueChange={v => { setFilterDateMode(v); setFilterMonth(''); setFilterYear(''); setFilterDateFrom(''); setFilterDateTo(''); }}>
-                                    <SelectTrigger className="w-[140px] bg-white text-sm h-9 rounded-lg border-slate-200">
+                                    <SelectTrigger className="w-[140px] bg-white text-sm h-9 rounded-lg border border-slate-200 text-slate-700">
                                         <CalendarDays className="w-3.5 h-3.5 mr-1 text-slate-400" />
                                         <SelectValue placeholder="All Time" />
                                     </SelectTrigger>
@@ -807,7 +807,7 @@ export default function VideoTimeline({ videos, logs = [], categories = [], user
 
                                 {filterDateMode === 'month' && (
                                     <Select value={filterMonth} onValueChange={setFilterMonth}>
-                                        <SelectTrigger className="w-[170px] bg-white text-sm h-9 rounded-lg border-slate-200">
+                                        <SelectTrigger className="w-[170px] bg-white text-sm h-9 rounded-lg border border-slate-200 text-slate-700">
                                             <SelectValue placeholder="Select Month" />
                                         </SelectTrigger>
                                         <SelectContent>
@@ -820,7 +820,7 @@ export default function VideoTimeline({ videos, logs = [], categories = [], user
 
                                 {filterDateMode === 'year' && (
                                     <Select value={filterYear} onValueChange={setFilterYear}>
-                                        <SelectTrigger className="w-[110px] bg-white text-sm h-9 rounded-lg border-slate-200">
+                                        <SelectTrigger className="w-[110px] bg-white text-sm h-9 rounded-lg border border-slate-200 text-slate-700">
                                             <SelectValue placeholder="Select Year" />
                                         </SelectTrigger>
                                         <SelectContent>

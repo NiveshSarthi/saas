@@ -538,7 +538,7 @@ export default function MarketingPage() {
 
             {/* Month Filter */}
             <Select value={monthFilter} onValueChange={handleMonthChange}>
-              <SelectTrigger className="w-[160px] bg-white text-sm">
+              <SelectTrigger className="w-[160px] bg-white text-sm text-slate-700 border border-slate-200">
                 <CalendarDays className="w-4 h-4 mr-1.5 text-slate-400" />
                 <SelectValue placeholder="All Time" />
               </SelectTrigger>
@@ -557,7 +557,7 @@ export default function MarketingPage() {
               onClick={handleCustomRangeToggle}
               className={`h-9 px-3 text-sm gap-1.5 rounded-lg ${showCustomRange
                 ? 'bg-indigo-600 text-white hover:bg-indigo-700'
-                : 'bg-white border-slate-200 text-slate-600 hover:bg-slate-50'
+                : 'bg-white border border-slate-200 text-slate-700 hover:bg-slate-50'
                 }`}
             >
               <Filter className="w-3.5 h-3.5" />
@@ -566,7 +566,7 @@ export default function MarketingPage() {
 
             {/* Category Filter */}
             <Select value={categoryFilter} onValueChange={setCategoryFilter}>
-              <SelectTrigger className="w-[150px] bg-white text-sm">
+              <SelectTrigger className="w-[150px] bg-white text-sm text-slate-700 border border-slate-200">
                 <SelectValue placeholder="Category" />
               </SelectTrigger>
               <SelectContent>
@@ -587,7 +587,7 @@ export default function MarketingPage() {
 
             {/* Stage Filter */}
             <Select value={statusFilter} onValueChange={setStatusFilter}>
-              <SelectTrigger className="w-[140px] bg-white text-sm">
+              <SelectTrigger className="w-[140px] bg-white text-sm text-slate-700 border border-slate-200">
                 <SelectValue placeholder="All Stages" />
               </SelectTrigger>
               <SelectContent>
