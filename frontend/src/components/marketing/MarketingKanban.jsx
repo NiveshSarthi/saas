@@ -1,7 +1,6 @@
 import React from 'react';
 import { DragDropContext, Droppable, Draggable } from '@hello-pangea/dnd';
 import MarketingTaskCard from './MarketingTaskCard';
-import { toast } from 'sonner';
 import { base44 } from '@/api/base44Client';
 import { MarketingLogger } from '@/components/utils/marketingLogger';
 import { Checkbox } from '@/components/ui/checkbox';
@@ -82,52 +81,54 @@ export default function MarketingKanban({ tasks, onEditTask, user, refetch, sele
               </div>
 
               {/* Droppable Area */}
-              <div className={`flex-1 bg-slate-50/80 border-x border-b rounded-b-xl p-3 overflow-y-auto scrollbar-thin scrollbar-thumb-slate-200 ${column.id === 'closed' ? 'bg-slate-100/80' : ''}`}>
-                <Droppable droppableId={column.id}>
-                  {(provided, snapshot) => (
-                    <div
-                      ref={provided.innerRef}
-                      {...provided.droppableProps}
-                      className={`min-h-[150px] space-y-3 transition-colors rounded-lg ${snapshot.isDraggingOver ? 'bg-indigo-50/50 ring-2 ring-indigo-100 ring-inset' : ''}`}
-                    >
-                      {columnTasks.map((task, index) => (
-                        <Draggable key={task.id || task._id} draggableId={task.id || task._id} index={index}>
-                          {(provided, snapshot) => (
-                            <div
-                              ref={provided.innerRef}
-                              {...provided.draggableProps}
-                              {...provided.dragHandleProps}
-                              style={{
-                                ...provided.draggableProps.style,
-                                opacity: snapshot.isDragging ? 0.9 : 1,
-                                rotate: snapshot.isDragging ? '2deg' : '0deg',
-                              }}
-                            >
-                              <div className="relative">
-                                {onSelectTask && (
-                                  <div className="absolute top-2 left-2 z-10">
-                                    <Checkbox
-                                      checked={selectedTasks.includes(task.id)}
-                                      onCheckedChange={() => onSelectTask(task.id)}
-                                      onClick={(e) => e.stopPropagation()}
-                                      className="bg-white border-2 shadow-sm"
-                                    />
-                                  </div>
-                                )}
-                                <MarketingTaskCard
-                                  task={task}
-                                  onClick={() => onEditTask(task)}
-                                  onDelete={handleDeleteTask}
-                                />
+              <div className="flex-1 bg-slate-50/80 border-x border-b rounded-b-xl overflow-y-auto custom-scrollbar">
+                <div className={`p-3 ${column.id === 'closed' ? 'bg-slate-100/80' : ''}`}>
+                  <Droppable droppableId={column.id}>
+                    {(provided, snapshot) => (
+                      <div
+                        ref={provided.innerRef}
+                        {...provided.droppableProps}
+                        className={`min-h-[150px] space-y-3 transition-colors rounded-lg ${snapshot.isDraggingOver ? 'bg-indigo-50/50 ring-2 ring-indigo-100 ring-inset' : ''}`}
+                      >
+                        {columnTasks.map((task, index) => (
+                          <Draggable key={task.id || task._id} draggableId={task.id || task._id} index={index}>
+                            {(provided, snapshot) => (
+                              <div
+                                ref={provided.innerRef}
+                                {...provided.draggableProps}
+                                {...provided.dragHandleProps}
+                                style={{
+                                  ...provided.draggableProps.style,
+                                  opacity: snapshot.isDragging ? 0.9 : 1,
+                                  rotate: snapshot.isDragging ? '2deg' : '0deg',
+                                }}
+                              >
+                                <div className="relative">
+                                  {onSelectTask && (
+                                    <div className="absolute top-2 left-2 z-10">
+                                      <Checkbox
+                                        checked={selectedTasks.includes(task.id)}
+                                        onCheckedChange={() => onSelectTask(task.id)}
+                                        onClick={(e) => e.stopPropagation()}
+                                        className="bg-white border-2 shadow-sm"
+                                      />
+                                    </div>
+                                  )}
+                                  <MarketingTaskCard
+                                    task={task}
+                                    onClick={() => onEditTask(task)}
+                                    onDelete={handleDeleteTask}
+                                  />
+                                </div>
                               </div>
-                            </div>
-                          )}
-                        </Draggable>
-                      ))}
-                      {provided.placeholder}
-                    </div>
-                  )}
-                </Droppable>
+                            )}
+                          </Draggable>
+                        ))}
+                        {provided.placeholder}
+                      </div>
+                    )}
+                  </Droppable>
+                </div>
               </div>
             </div>
           );

@@ -13,6 +13,7 @@ import {
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { ExternalLink, ArrowUpDown, Eye, Trash2, CheckSquare, Square } from 'lucide-react';
 import { Checkbox } from '@/components/ui/checkbox';
+import { format } from 'date-fns';
 
 // Status labels with colors
 const STATUS_CONFIG = {
@@ -130,7 +131,7 @@ export default function VideoListView({
             </div>
 
             {/* Table */}
-            <div className="border rounded-lg overflow-hidden">
+            <div className="border rounded-lg max-h-[650px] overflow-y-auto custom-scrollbar">
                 <Table>
                     <TableHeader>
                         <TableRow className="bg-slate-50">
@@ -254,7 +255,7 @@ export default function VideoListView({
 
                                         {/* Created */}
                                         <TableCell className="text-sm text-slate-500">
-                                            {new Date(video.created_at).toLocaleDateString()}
+                                            {format(new Date(video.created_at), 'MMM d, h:mm a')}
                                         </TableCell>
 
                                         {/* Actions */}

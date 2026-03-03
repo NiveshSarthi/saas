@@ -110,6 +110,7 @@ button:focus-visible {
     --sidebar-border: 220 13% 91%;
     --sidebar-ring: 217.2 91.2% 59.8%;
   }
+
   .dark {
     --background: 0 0% 3.9%;
     --foreground: 0 0% 98%;
@@ -152,7 +153,42 @@ button:focus-visible {
   * {
     @apply border-border outline-ring/50;
   }
+
   body {
     @apply bg-background text-foreground;
+  }
+}
+
+@layer utilities {
+  .custom-scrollbar::-webkit-scrollbar {
+    width: 6px;
+    height: 6px;
+  }
+
+  .custom-scrollbar::-webkit-scrollbar-track {
+    @apply bg-transparent;
+  }
+
+  .custom-scrollbar::-webkit-scrollbar-thumb {
+    @apply bg-slate-400/80 dark:bg-slate-500 rounded-full border-2 border-transparent bg-clip-padding;
+  }
+
+  .custom-scrollbar::-webkit-scrollbar-thumb:hover {
+    @apply bg-slate-500 dark:bg-slate-400;
+  }
+
+  .custom-scrollbar {
+    scrollbar-width: thin;
+    scrollbar-color: theme('colors.slate.300') transparent;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  .dark .custom-scrollbar {
+    scrollbar-color: theme('colors.slate.700') transparent;
+  }
+
+  /* Force visible scrollbar classes */
+  .scrollbar-visible::-webkit-scrollbar-thumb {
+    @apply bg-slate-400/50;
   }
 }

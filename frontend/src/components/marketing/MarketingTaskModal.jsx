@@ -11,7 +11,6 @@ import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Badge } from '@/components/ui/badge';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { ScrollArea } from '@/components/ui/scroll-area';
 import { Separator } from '@/components/ui/separator';
 import {
   Upload, FileText, Film, Image as ImageIcon, Music,
@@ -692,7 +691,7 @@ export default function MarketingTaskModal({ isOpen, onClose, task, user }) {
 
           <div className="flex-1 overflow-hidden flex flex-col md:flex-row" style={{ minHeight: 0 }}>
             {/* LEFT PANEL: FORM */}
-            <ScrollArea className="flex-1 p-6 pt-4 bg-slate-50/50" style={{ height: '100%' }}>
+            <div className="flex-1 p-6 pt-4 bg-slate-50/50 overflow-y-auto custom-scrollbar min-h-0" style={{ height: '100%' }}>
               <div className="space-y-6">
                 {/* Campaign Info Card */}
                 <div className="bg-white rounded-2xl p-5 shadow-sm border border-slate-200">
@@ -1205,7 +1204,7 @@ export default function MarketingTaskModal({ isOpen, onClose, task, user }) {
                 )}
 
               </div>
-            </ScrollArea>
+            </div>
 
             {/* RIGHT PANEL: COMMENTS & HISTORY */}
             <div className="w-full md:w-[350px] border-l flex flex-col bg-slate-50/50">
@@ -1271,7 +1270,7 @@ export default function MarketingTaskModal({ isOpen, onClose, task, user }) {
                 </TabsContent>
 
                 <TabsContent value="comments" className="flex-1 flex flex-col !mt-0 p-0 h-full overflow-hidden data-[state=active]:flex bg-gradient-to-b from-slate-50 to-white">
-                  <ScrollArea className="flex-1 p-5">
+                  <div className="flex-1 p-5 overflow-y-auto custom-scrollbar min-h-0">
                     <div className="space-y-6 max-w-2xl">
                       {comments.length === 0 ? (
                         <div className="flex flex-col items-center justify-center py-16 text-center">
@@ -1427,7 +1426,7 @@ export default function MarketingTaskModal({ isOpen, onClose, task, user }) {
                         })
                       )}
                     </div>
-                  </ScrollArea>
+                  </div>
 
                   <div
                     className="p-4 border-t bg-white shadow-lg"

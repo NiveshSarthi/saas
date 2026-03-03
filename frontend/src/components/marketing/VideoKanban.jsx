@@ -282,54 +282,56 @@ export default function VideoKanban({
 
                                 {/* Droppable Area */}
                                 {!isCollapsed && (
-                                    <div className="flex-1 bg-slate-50/80 border-x border-b rounded-b-xl p-2 overflow-y-auto scrollbar-thin">
-                                        <Droppable droppableId={column.id}>
-                                            {(provided, snapshot) => (
-                                                <div
-                                                    ref={provided.innerRef}
-                                                    {...provided.droppableProps}
-                                                    className={`min-h-[120px] space-y-2 transition-all duration-200 rounded-lg p-1 ${snapshot.isDraggingOver
-                                                        ? 'bg-indigo-50/70 ring-2 ring-indigo-200 ring-inset'
-                                                        : ''
-                                                        }`}
-                                                >
-                                                    {columnVideos.map((video, index) => (
-                                                        <Draggable
-                                                            key={video.id || video._id}
-                                                            draggableId={video.id || video._id}
-                                                            index={index}
-                                                        >
-                                                            {(provided, snapshot) => (
-                                                                <div
-                                                                    ref={provided.innerRef}
-                                                                    {...provided.draggableProps}
-                                                                    {...provided.dragHandleProps}
-                                                                    style={getDragStyle(provided.draggableProps.style, snapshot)}
-                                                                    className={`transition-transform duration-150 ${snapshot.isDragging
-                                                                        ? 'rotate-[1deg] scale-[1.02] cursor-grabbing opacity-95'
-                                                                        : 'cursor-grab hover:scale-[1.01]'
-                                                                        }`}
-                                                                >
-                                                                    <VideoCard
-                                                                        video={video}
-                                                                        categoryColor={getCategoryColor(video.category_id)}
-                                                                        category={categories.find(c => (c.id || c._id) === video.category_id)}
-                                                                        users={users}
-                                                                        onClick={() => onEditVideo(video)}
-                                                                        onDelete={handleDeleteVideo}
-                                                                        isAdmin={isAdmin}
-                                                                        isSelected={selectedVideoIds.includes(video.id || video._id)}
-                                                                        onToggleSelection={() => onToggleVideo(video.id || video._id)}
-                                                                        selectionModeActive={selectedVideoIds.length > 0}
-                                                                    />
-                                                                </div>
-                                                            )}
-                                                        </Draggable>
-                                                    ))}
-                                                    {provided.placeholder}
-                                                </div>
-                                            )}
-                                        </Droppable>
+                                    <div className="flex-1 bg-slate-50/80 border-x border-b rounded-b-xl overflow-y-auto custom-scrollbar">
+                                        <div className="p-2">
+                                            <Droppable droppableId={column.id}>
+                                                {(provided, snapshot) => (
+                                                    <div
+                                                        ref={provided.innerRef}
+                                                        {...provided.droppableProps}
+                                                        className={`min-h-[120px] space-y-2 transition-all duration-200 rounded-lg p-1 ${snapshot.isDraggingOver
+                                                            ? 'bg-indigo-50/70 ring-2 ring-indigo-200 ring-inset'
+                                                            : ''
+                                                            }`}
+                                                    >
+                                                        {columnVideos.map((video, index) => (
+                                                            <Draggable
+                                                                key={video.id || video._id}
+                                                                draggableId={video.id || video._id}
+                                                                index={index}
+                                                            >
+                                                                {(provided, snapshot) => (
+                                                                    <div
+                                                                        ref={provided.innerRef}
+                                                                        {...provided.draggableProps}
+                                                                        {...provided.dragHandleProps}
+                                                                        style={getDragStyle(provided.draggableProps.style, snapshot)}
+                                                                        className={`transition-transform duration-150 ${snapshot.isDragging
+                                                                            ? 'rotate-[1deg] scale-[1.02] cursor-grabbing opacity-95'
+                                                                            : 'cursor-grab hover:scale-[1.01]'
+                                                                            }`}
+                                                                    >
+                                                                        <VideoCard
+                                                                            video={video}
+                                                                            categoryColor={getCategoryColor(video.category_id)}
+                                                                            category={categories.find(c => (c.id || c._id) === video.category_id)}
+                                                                            users={users}
+                                                                            onClick={() => onEditVideo(video)}
+                                                                            onDelete={handleDeleteVideo}
+                                                                            isAdmin={isAdmin}
+                                                                            isSelected={selectedVideoIds.includes(video.id || video._id)}
+                                                                            onToggleSelection={() => onToggleVideo(video.id || video._id)}
+                                                                            selectionModeActive={selectedVideoIds.length > 0}
+                                                                        />
+                                                                    </div>
+                                                                )}
+                                                            </Draggable>
+                                                        ))}
+                                                        {provided.placeholder}
+                                                    </div>
+                                                )}
+                                            </Droppable>
+                                        </div>
                                     </div>
                                 )}
 

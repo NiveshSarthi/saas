@@ -164,7 +164,7 @@ function VideoTimelineRow({ video, logs, categories, emailToName = {} }) {
 
             {/* Expanded: stage history with exact times */}
             {expanded && (
-                <div className="border-t border-slate-100 px-5 py-4 space-y-2 bg-slate-50/60">
+                <div className="border-t border-slate-100 px-5 py-4 space-y-2 bg-slate-50/60 max-h-[350px] overflow-y-auto custom-scrollbar">
                     <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-3">Stage History</p>
                     <div className="relative">
                         <div className="absolute left-3 top-2 bottom-2 w-px bg-slate-200" />

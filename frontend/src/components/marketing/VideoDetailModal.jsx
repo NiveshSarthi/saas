@@ -10,7 +10,6 @@ import { Badge } from '@/components/ui/badge';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
-import { ScrollArea } from '@/components/ui/scroll-area';
 import {
     Dialog,
     DialogContent,
@@ -389,228 +388,232 @@ export default function VideoDetailModal({
                         </TabsTrigger>
                     </TabsList>
 
-                    <ScrollArea className="flex-1 p-4">
+                    <div className="flex-1 overflow-hidden flex flex-col min-h-0">
                         {/* Details Tab */}
-                        <TabsContent value="details" className="mt-0 space-y-4">
-                            <div className="grid grid-cols-2 gap-4">
-                                <div className="space-y-2">
-                                    <Label>Title</Label>
-                                    <Input
-                                        value={formData.title}
-                                        onChange={(e) => setFormData({ ...formData, title: e.target.value })}
-                                    />
-                                </div>
-                                <div className="space-y-2">
-                                    <Label>Category</Label>
-                                    <Select
-                                        value={formData.category_id}
-                                        onValueChange={(v) => setFormData({ ...formData, category_id: v })}
-                                    >
-                                        <SelectTrigger>
-                                            <SelectValue />
-                                        </SelectTrigger>
-                                        <SelectContent>
-                                            {categories.map(cat => (
-                                                <SelectItem key={cat.id || cat._id} value={cat.id || cat._id}>
-                                                    {cat.name}
-                                                </SelectItem>
-                                            ))}
-                                        </SelectContent>
-                                    </Select>
-                                </div>
-                            </div>
-
-                            <div className="space-y-2">
-                                <Label>Description</Label>
-                                <Textarea
-                                    rows={3}
-                                    value={formData.description}
-                                    onChange={(e) => setFormData({ ...formData, description: e.target.value })}
-                                />
-                            </div>
-
-                            <div className="grid grid-cols-2 gap-4">
-                                <div className="space-y-2">
-                                    <Label>Editing Level</Label>
-                                    <Select
-                                        value={formData.editing_level}
-                                        onValueChange={(v) => setFormData({ ...formData, editing_level: v })}
-                                    >
-                                        <SelectTrigger>
-                                            <SelectValue />
-                                        </SelectTrigger>
-                                        <SelectContent>
-                                            <SelectItem value="B">B - Basic</SelectItem>
-                                            <SelectItem value="A">A - Medium</SelectItem>
-                                            <SelectItem value="A+">A+ - Highest</SelectItem>
-                                        </SelectContent>
-                                    </Select>
-                                </div>
-                            </div>
-
-                            {/* URLs Section */}
-                            <div className="space-y-3 pt-4 border-t">
-                                <h4 className="font-medium text-sm">Video URLs</h4>
-
-                                <div className="space-y-2">
-                                    <Label>Raw File URL</Label>
-                                    <div className="flex gap-2">
-                                        <Input
-                                            type="url"
-                                            placeholder="https://..."
-                                            value={formData.raw_file_url}
-                                            onChange={(e) => setFormData({ ...formData, raw_file_url: e.target.value })}
-                                            className="flex-1"
-                                        />
-                                        {formData.raw_file_url && (
-                                            <Button variant="outline" size="icon" asChild>
-                                                <a href={formData.raw_file_url} target="_blank" rel="noopener noreferrer">
-                                                    <ExternalLink className="w-4 h-4" />
-                                                </a>
-                                            </Button>
-                                        )}
-                                    </div>
-                                </div>
-
-                                <div className="space-y-2">
-                                    <Label>Editing URL</Label>
-                                    <div className="flex gap-2">
-                                        <Input
-                                            type="url"
-                                            placeholder="https://..."
-                                            value={formData.editing_url}
-                                            onChange={(e) => setFormData({ ...formData, editing_url: e.target.value })}
-                                            className="flex-1"
-                                        />
-                                        {formData.editing_url && (
-                                            <Button variant="outline" size="icon" asChild>
-                                                <a href={formData.editing_url} target="_blank" rel="noopener noreferrer">
-                                                    <ExternalLink className="w-4 h-4" />
-                                                </a>
-                                            </Button>
-                                        )}
-                                    </div>
-                                </div>
-
-                                {/* Revision URLs */}
-                                <div className="space-y-2">
-                                    <Label>Revision URLs</Label>
-                                    {video.revision_urls?.length > 0 && (
-                                        <div className="space-y-1 mb-2">
-                                            {video.revision_urls.map((rev, idx) => (
-                                                <div key={idx} className="flex items-center gap-2 text-sm bg-slate-50 p-2 rounded">
-                                                    <Badge variant="outline" className="text-xs">Rev {rev.revision_number}</Badge>
-                                                    <a
-                                                        href={rev.url}
-                                                        target="_blank"
-                                                        rel="noopener noreferrer"
-                                                        className="text-blue-600 hover:underline truncate flex-1"
-                                                    >
-                                                        {rev.url}
-                                                    </a>
-                                                    <span className="text-xs text-slate-400">
-                                                        by {getUserName(rev.added_by)}
-                                                    </span>
-                                                </div>
-                                            ))}
+                        <TabsContent value="details" className="mt-0 h-full flex-1 flex flex-col min-h-0 data-[state=active]:flex">
+                            <div className="flex-1 overflow-y-auto custom-scrollbar p-4 min-h-0">
+                                <div className="space-y-4">
+                                    <div className="grid grid-cols-2 gap-4">
+                                        <div className="space-y-2">
+                                            <Label>Title</Label>
+                                            <Input
+                                                value={formData.title}
+                                                onChange={(e) => setFormData({ ...formData, title: e.target.value })}
+                                            />
                                         </div>
-                                    )}
-                                    <form onSubmit={handleAddRevision} className="flex gap-2">
-                                        <Input
-                                            type="url"
-                                            placeholder="Add new revision URL..."
-                                            value={newRevisionUrl}
-                                            onChange={(e) => setNewRevisionUrl(e.target.value)}
-                                            className="flex-1"
-                                        />
-                                        <Button type="submit" size="icon" disabled={addRevisionMutation.isPending}>
-                                            <Plus className="w-4 h-4" />
-                                        </Button>
-                                    </form>
-                                </div>
-
-                                <div className="space-y-2">
-                                    <Label>Final Video URL</Label>
-                                    <div className="flex gap-2">
-                                        <Input
-                                            type="url"
-                                            placeholder="https://..."
-                                            value={formData.final_video_url}
-                                            onChange={(e) => setFormData({ ...formData, final_video_url: e.target.value })}
-                                            className="flex-1"
-                                        />
-                                        {formData.final_video_url && (
-                                            <Button variant="outline" size="icon" asChild>
-                                                <a href={formData.final_video_url} target="_blank" rel="noopener noreferrer">
-                                                    <ExternalLink className="w-4 h-4" />
-                                                </a>
-                                            </Button>
-                                        )}
-                                    </div>
-                                </div>
-                            </div>
-
-                            {/* Team Assignment */}
-                            <div className="space-y-3 pt-4 border-t">
-                                <h4 className="font-medium text-sm">Team Assignment</h4>
-                                <div className="grid grid-cols-2 gap-4">
-                                    {[
-                                        { key: 'assigned_director', label: 'Director' },
-                                        { key: 'assigned_cameraman', label: 'Cameraman' },
-                                        { key: 'assigned_editor', label: 'Editor' },
-                                        { key: 'assigned_manager', label: 'Manager' }
-                                    ].map(({ key, label }) => (
-                                        <div key={key} className="space-y-2">
-                                            <Label>{label}</Label>
+                                        <div className="space-y-2">
+                                            <Label>Category</Label>
                                             <Select
-                                                value={formData[key]}
-                                                onValueChange={(v) => setFormData({ ...formData, [key]: v })}
+                                                value={formData.category_id}
+                                                onValueChange={(v) => setFormData({ ...formData, category_id: v })}
                                             >
                                                 <SelectTrigger>
-                                                    <SelectValue placeholder={`Select ${label.toLowerCase()}`} />
+                                                    <SelectValue />
                                                 </SelectTrigger>
                                                 <SelectContent>
-                                                    {(roleFilteredUsers[key] || users).map(user => (
-                                                        <SelectItem key={user.email} value={user.email}>
-                                                            {user.full_name || user.email}
+                                                    {categories.map(cat => (
+                                                        <SelectItem key={cat.id || cat._id} value={cat.id || cat._id}>
+                                                            {cat.name}
                                                         </SelectItem>
                                                     ))}
                                                 </SelectContent>
                                             </Select>
                                         </div>
-                                    ))}
-                                </div>
-                            </div>
+                                    </div>
 
-                            {/* Actions */}
-                            <div className="flex items-center justify-between pt-4 border-t">
-                                <div>
-                                    {isAdmin && video.status === 'trash' && (
+                                    <div className="space-y-2">
+                                        <Label>Description</Label>
+                                        <Textarea
+                                            rows={3}
+                                            value={formData.description}
+                                            onChange={(e) => setFormData({ ...formData, description: e.target.value })}
+                                        />
+                                    </div>
+
+                                    <div className="grid grid-cols-2 gap-4">
+                                        <div className="space-y-2">
+                                            <Label>Editing Level</Label>
+                                            <Select
+                                                value={formData.editing_level}
+                                                onValueChange={(v) => setFormData({ ...formData, editing_level: v })}
+                                            >
+                                                <SelectTrigger>
+                                                    <SelectValue />
+                                                </SelectTrigger>
+                                                <SelectContent>
+                                                    <SelectItem value="B">B - Basic</SelectItem>
+                                                    <SelectItem value="A">A - Medium</SelectItem>
+                                                    <SelectItem value="A+">A+ - Highest</SelectItem>
+                                                </SelectContent>
+                                            </Select>
+                                        </div>
+                                    </div>
+
+                                    {/* URLs Section */}
+                                    <div className="space-y-3 pt-4 border-t">
+                                        <h4 className="font-medium text-sm">Video URLs</h4>
+
+                                        <div className="space-y-2">
+                                            <Label>Raw File URL</Label>
+                                            <div className="flex gap-2">
+                                                <Input
+                                                    type="url"
+                                                    placeholder="https://..."
+                                                    value={formData.raw_file_url}
+                                                    onChange={(e) => setFormData({ ...formData, raw_file_url: e.target.value })}
+                                                    className="flex-1"
+                                                />
+                                                {formData.raw_file_url && (
+                                                    <Button variant="outline" size="icon" asChild>
+                                                        <a href={formData.raw_file_url} target="_blank" rel="noopener noreferrer">
+                                                            <ExternalLink className="w-4 h-4" />
+                                                        </a>
+                                                    </Button>
+                                                )}
+                                            </div>
+                                        </div>
+
+                                        <div className="space-y-2">
+                                            <Label>Editing URL</Label>
+                                            <div className="flex gap-2">
+                                                <Input
+                                                    type="url"
+                                                    placeholder="https://..."
+                                                    value={formData.editing_url}
+                                                    onChange={(e) => setFormData({ ...formData, editing_url: e.target.value })}
+                                                    className="flex-1"
+                                                />
+                                                {formData.editing_url && (
+                                                    <Button variant="outline" size="icon" asChild>
+                                                        <a href={formData.editing_url} target="_blank" rel="noopener noreferrer">
+                                                            <ExternalLink className="w-4 h-4" />
+                                                        </a>
+                                                    </Button>
+                                                )}
+                                            </div>
+                                        </div>
+
+                                        {/* Revision URLs */}
+                                        <div className="space-y-2">
+                                            <Label>Revision URLs</Label>
+                                            {video.revision_urls?.length > 0 && (
+                                                <div className="space-y-1 mb-2">
+                                                    {video.revision_urls.map((rev, idx) => (
+                                                        <div key={idx} className="flex items-center gap-2 text-sm bg-slate-50 p-2 rounded">
+                                                            <Badge variant="outline" className="text-xs">Rev {rev.revision_number}</Badge>
+                                                            <a
+                                                                href={rev.url}
+                                                                target="_blank"
+                                                                rel="noopener noreferrer"
+                                                                className="text-blue-600 hover:underline truncate flex-1"
+                                                            >
+                                                                {rev.url}
+                                                            </a>
+                                                            <span className="text-xs text-slate-400">
+                                                                by {getUserName(rev.added_by)}
+                                                            </span>
+                                                        </div>
+                                                    ))}
+                                                </div>
+                                            )}
+                                            <form onSubmit={handleAddRevision} className="flex gap-2">
+                                                <Input
+                                                    type="url"
+                                                    placeholder="Add new revision URL..."
+                                                    value={newRevisionUrl}
+                                                    onChange={(e) => setNewRevisionUrl(e.target.value)}
+                                                    className="flex-1"
+                                                />
+                                                <Button type="submit" size="icon" disabled={addRevisionMutation.isPending}>
+                                                    <Plus className="w-4 h-4" />
+                                                </Button>
+                                            </form>
+                                        </div>
+
+                                        <div className="space-y-2">
+                                            <Label>Final Video URL</Label>
+                                            <div className="flex gap-2">
+                                                <Input
+                                                    type="url"
+                                                    placeholder="https://..."
+                                                    value={formData.final_video_url}
+                                                    onChange={(e) => setFormData({ ...formData, final_video_url: e.target.value })}
+                                                    className="flex-1"
+                                                />
+                                                {formData.final_video_url && (
+                                                    <Button variant="outline" size="icon" asChild>
+                                                        <a href={formData.final_video_url} target="_blank" rel="noopener noreferrer">
+                                                            <ExternalLink className="w-4 h-4" />
+                                                        </a>
+                                                    </Button>
+                                                )}
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    {/* Team Assignment */}
+                                    <div className="space-y-3 pt-4 border-t">
+                                        <h4 className="font-medium text-sm">Team Assignment</h4>
+                                        <div className="grid grid-cols-2 gap-4">
+                                            {[
+                                                { key: 'assigned_director', label: 'Director' },
+                                                { key: 'assigned_cameraman', label: 'Cameraman' },
+                                                { key: 'assigned_editor', label: 'Editor' },
+                                                { key: 'assigned_manager', label: 'Manager' }
+                                            ].map(({ key, label }) => (
+                                                <div key={key} className="space-y-2">
+                                                    <Label>{label}</Label>
+                                                    <Select
+                                                        value={formData[key]}
+                                                        onValueChange={(v) => setFormData({ ...formData, [key]: v })}
+                                                    >
+                                                        <SelectTrigger>
+                                                            <SelectValue placeholder={`Select ${label.toLowerCase()}`} />
+                                                        </SelectTrigger>
+                                                        <SelectContent>
+                                                            {(roleFilteredUsers[key] || users).map(user => (
+                                                                <SelectItem key={user.email} value={user.email}>
+                                                                    {user.full_name || user.email}
+                                                                </SelectItem>
+                                                            ))}
+                                                        </SelectContent>
+                                                    </Select>
+                                                </div>
+                                            ))}
+                                        </div>
+                                    </div>
+
+                                    {/* Actions */}
+                                    <div className="flex items-center justify-between pt-4 border-t">
+                                        <div>
+                                            {isAdmin && video.status === 'trash' && (
+                                                <Button
+                                                    variant="destructive"
+                                                    size="sm"
+                                                    onClick={() => deleteMutation.mutate()}
+                                                    disabled={deleteMutation.isPending}
+                                                >
+                                                    <Trash2 className="w-4 h-4 mr-1" />
+                                                    {deleteMutation.isPending ? 'Deleting...' : 'Permanently Delete'}
+                                                </Button>
+                                            )}
+                                        </div>
                                         <Button
-                                            variant="destructive"
-                                            size="sm"
-                                            onClick={() => deleteMutation.mutate()}
-                                            disabled={deleteMutation.isPending}
+                                            onClick={handleSave}
+                                            disabled={saveMutation.isPending}
+                                            className="bg-gradient-to-r from-indigo-600 to-purple-600"
                                         >
-                                            <Trash2 className="w-4 h-4 mr-1" />
-                                            {deleteMutation.isPending ? 'Deleting...' : 'Permanently Delete'}
+                                            <Save className="w-4 h-4 mr-1" />
+                                            {saveMutation.isPending ? 'Saving...' : 'Save Changes'}
                                         </Button>
-                                    )}
+                                    </div>
                                 </div>
-                                <Button
-                                    onClick={handleSave}
-                                    disabled={saveMutation.isPending}
-                                    className="bg-gradient-to-r from-indigo-600 to-purple-600"
-                                >
-                                    <Save className="w-4 h-4 mr-1" />
-                                    {saveMutation.isPending ? 'Saving...' : 'Save Changes'}
-                                </Button>
                             </div>
                         </TabsContent>
 
                         {/* Comments Tab */}
-                        <TabsContent value="comments" className="mt-0">
-                            <div className="space-y-4">
+                        <TabsContent value="comments" className="mt-0 h-full flex-1 flex flex-col min-h-0 data-[state=active]:flex">
+                            <div className="flex flex-col flex-1 space-y-4 p-4 min-h-0 overflow-hidden">
                                 {/* Comment Input */}
                                 <div className="relative">
                                     <form onSubmit={handleAddComment} className="flex gap-2">
@@ -647,8 +650,8 @@ export default function VideoDetailModal({
                                 </div>
 
                                 {/* Comments List */}
-                                <ScrollArea className="h-[400px] -mx-4 px-4 pr-6">
-                                    <div className="space-y-3 pb-4">
+                                <div className="flex-1 overflow-y-auto custom-scrollbar -mx-4 px-4 pb-4">
+                                    <div className="space-y-3">
                                         {comments.length === 0 ? (
                                             <div className="text-center py-8 text-slate-400">
                                                 <MessageSquare className="w-8 h-8 mx-auto mb-2 opacity-50" />
@@ -677,13 +680,12 @@ export default function VideoDetailModal({
                                             ))
                                         )}
                                     </div>
-                                </ScrollArea>
+                                </div>
                             </div>
                         </TabsContent>
 
-                        {/* Activity Tab */}
-                        <TabsContent value="activity" className="mt-0">
-                            <ScrollArea className="h-[500px] -mx-4 px-4 pr-6">
+                        <TabsContent value="activity" className="h-full flex-1 overflow-hidden m-0 flex flex-col min-h-0 data-[state=active]:flex">
+                            <div className="flex-1 overflow-y-auto custom-scrollbar p-4 min-h-0">
                                 <div className="space-y-3 pb-6">
                                     {activityLogs.length === 0 ? (
                                         <div className="text-center py-8 text-slate-400">
@@ -708,11 +710,11 @@ export default function VideoDetailModal({
                                         ))
                                     )}
                                 </div>
-                            </ScrollArea>
+                            </div>
                         </TabsContent>
-                    </ScrollArea>
-                </Tabs>
-            </DialogContent>
-        </Dialog>
+                    </div >
+                </Tabs >
+            </DialogContent >
+        </Dialog >
     );
 }

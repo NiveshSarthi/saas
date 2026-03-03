@@ -23,7 +23,6 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table';
-import { ScrollArea } from '@/components/ui/scroll-area';
 import {
   Download, Trophy, TrendingUp, TrendingDown, FileSpreadsheet, FileText,
   Video, FileImage, BookOpen, FileText as FlyerIcon, Instagram, Facebook, Linkedin
@@ -474,7 +473,7 @@ export default function MarketingKPIDashboard({ users = [], departments = [] }) 
           <CardTitle>Team Performance ({sortedMetrics.length} members)</CardTitle>
         </CardHeader>
         <CardContent className="p-0">
-          <ScrollArea className="h-[500px]">
+          <div className="h-[500px] overflow-y-auto custom-scrollbar">
             <Table>
               <TableHeader className="sticky top-0 bg-white z-10">
                 <TableRow>
@@ -550,7 +549,7 @@ export default function MarketingKPIDashboard({ users = [], departments = [] }) 
                 )}
               </TableBody>
             </Table>
-          </ScrollArea>
+          </div>
         </CardContent>
       </Card>
     </div >
