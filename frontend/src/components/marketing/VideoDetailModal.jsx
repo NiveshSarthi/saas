@@ -30,7 +30,7 @@ import {
     Clock
 } from 'lucide-react';
 import { toast } from 'sonner';
-import { formatDistanceToNow } from 'date-fns';
+import { format } from 'date-fns';
 
 export default function VideoDetailModal({
     isOpen,
@@ -666,7 +666,7 @@ export default function VideoDetailModal({
                                                         <div className="flex items-center gap-2 mb-1">
                                                             <span className="font-medium text-sm">{comment.user_name}</span>
                                                             <span className="text-xs text-slate-400">
-                                                                {formatDistanceToNow(new Date(comment.created_at), { addSuffix: true })}
+                                                                {format(new Date(comment.created_at), 'MMM d, h:mm a')}
                                                             </span>
                                                         </div>
                                                         <p className="text-sm text-slate-700 whitespace-pre-wrap">
@@ -701,7 +701,7 @@ export default function VideoDetailModal({
                                                     </p>
                                                     <div className="flex items-center gap-1 mt-1 text-xs text-slate-400">
                                                         <Clock className="w-3 h-3" />
-                                                        {formatDistanceToNow(new Date(log.created_at), { addSuffix: true })}
+                                                        {format(new Date(log.created_at), 'MMM d, h:mm a')}
                                                     </div>
                                                 </div>
                                             </div>
