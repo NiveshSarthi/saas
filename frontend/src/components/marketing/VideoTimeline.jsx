@@ -124,7 +124,7 @@ function VideoTimelineRow({ video, logs, categories, emailToName = {} }) {
 
             {/* Horizontal stage progress */}
             <div className="px-5 pb-4">
-                <div className="flex items-start gap-0 overflow-x-auto pb-1">
+                <div className="flex items-start gap-0 overflow-x-auto pb-1 touch-pan-x custom-scrollbar">
                     {STAGES.map((stage, idx) => {
                         const reached = stageMap[stage.id];
 

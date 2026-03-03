@@ -106,7 +106,7 @@ export default function MarketingKPIManager() {
           </CardTitle>
         </CardHeader>
         <CardContent className="pt-6">
-          <div className="overflow-x-auto">
+          <div className="overflow-x-auto touch-pan-x custom-scrollbar">
             <table className="w-full text-sm">
               <thead>
                 <tr className="border-b border-slate-100">

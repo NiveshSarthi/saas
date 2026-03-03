@@ -131,7 +131,7 @@ export default function VideoListView({
             </div>
 
             {/* Table */}
-            <div className="border rounded-lg max-h-[650px] overflow-y-auto custom-scrollbar">
+            <div className="border rounded-lg max-h-[650px] overflow-auto custom-scrollbar flex-1 touch-pan-x touch-pan-y">
                 <Table>
                     <TableHeader>
                         <TableRow className="bg-slate-50">

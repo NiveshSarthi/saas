@@ -238,7 +238,7 @@ export default function VideoKanban({
             )}
 
             <DragDropContext onDragEnd={onDragEnd}>
-                <div className="flex h-full overflow-x-auto gap-3 pb-4">
+                <div className="flex h-full overflow-x-auto gap-3 pb-4 touch-pan-x">
                     {visibleColumns.map((column) => {
                         const columnVideos = videos.filter(v => v.status === column.id && !v.is_deleted);
                         const isCollapsed = collapsedColumns[column.id];
@@ -282,7 +282,7 @@ export default function VideoKanban({
 
                                 {/* Droppable Area */}
                                 {!isCollapsed && (
-                                    <div className="flex-1 bg-slate-50/80 border-x border-b rounded-b-xl overflow-y-auto custom-scrollbar">
+                                    <div className="flex-1 bg-slate-50/80 border-x border-b rounded-b-xl overflow-y-auto custom-scrollbar touch-pan-y">
                                         <div className="p-2">
                                             <Droppable droppableId={column.id}>
                                                 {(provided, snapshot) => (
