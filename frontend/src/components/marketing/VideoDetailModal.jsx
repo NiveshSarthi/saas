@@ -609,100 +609,106 @@ export default function VideoDetailModal({
                         </TabsContent>
 
                         {/* Comments Tab */}
-                        <TabsContent value="comments" className="mt-0 space-y-4">
-                            {/* Comment Input */}
-                            <div className="relative">
-                                <form onSubmit={handleAddComment} className="flex gap-2">
-                                    <div className="flex-1 relative">
-                                        <Textarea
-                                            placeholder="Add a comment... Use @ to mention team members"
-                                            rows={2}
-                                            value={newComment}
-                                            onChange={handleCommentChange}
-                                        />
-                                        {/* Mention dropdown */}
-                                        {showMentions && filteredMentionUsers.length > 0 && (
-                                            <div className="absolute bottom-full mb-1 left-0 w-full bg-white border rounded-lg shadow-lg z-10 max-h-40 overflow-y-auto">
-                                                {filteredMentionUsers.map(user => (
-                                                    <button
-                                                        key={user.email}
-                                                        type="button"
-                                                        onClick={() => handleMentionSelect(user)}
-                                                        className="w-full px-3 py-2 text-left hover:bg-slate-50 flex items-center gap-2"
-                                                    >
-                                                        <Avatar className="w-6 h-6">
-                                                            <AvatarFallback className="text-xs">{getInitials(user.full_name)}</AvatarFallback>
-                                                        </Avatar>
-                                                        <span className="text-sm">{user.full_name || user.email}</span>
-                                                    </button>
-                                                ))}
+                        <TabsContent value="comments" className="mt-0">
+                            <div className="space-y-4">
+                                {/* Comment Input */}
+                                <div className="relative">
+                                    <form onSubmit={handleAddComment} className="flex gap-2">
+                                        <div className="flex-1 relative">
+                                            <Textarea
+                                                placeholder="Add a comment... Use @ to mention team members"
+                                                rows={2}
+                                                value={newComment}
+                                                onChange={handleCommentChange}
+                                            />
+                                            {/* Mention dropdown */}
+                                            {showMentions && filteredMentionUsers.length > 0 && (
+                                                <div className="absolute bottom-full mb-1 left-0 w-full bg-white border rounded-lg shadow-lg z-10 max-h-40 overflow-y-auto font-sans">
+                                                    {filteredMentionUsers.map(user => (
+                                                        <button
+                                                            key={user.email}
+                                                            type="button"
+                                                            onClick={() => handleMentionSelect(user)}
+                                                            className="w-full px-3 py-2 text-left hover:bg-slate-50 flex items-center gap-2"
+                                                        >
+                                                            <Avatar className="w-6 h-6">
+                                                                <AvatarFallback className="text-xs">{getInitials(user.full_name)}</AvatarFallback>
+                                                            </Avatar>
+                                                            <span className="text-sm">{user.full_name || user.email}</span>
+                                                        </button>
+                                                    ))}
+                                                </div>
+                                            )}
+                                        </div>
+                                        <Button type="submit" disabled={addCommentMutation.isPending}>
+                                            <Send className="w-4 h-4" />
+                                        </Button>
+                                    </form>
+                                </div>
+
+                                {/* Comments List */}
+                                <ScrollArea className="h-[400px] -mx-4 px-4 pr-6">
+                                    <div className="space-y-3 pb-4">
+                                        {comments.length === 0 ? (
+                                            <div className="text-center py-8 text-slate-400">
+                                                <MessageSquare className="w-8 h-8 mx-auto mb-2 opacity-50" />
+                                                <p>No comments yet</p>
                                             </div>
+                                        ) : (
+                                            comments.map(comment => (
+                                                <div key={comment.id || comment._id} className="flex gap-3 p-3 bg-slate-50 rounded-lg">
+                                                    <Avatar className="w-8 h-8">
+                                                        <AvatarFallback className="text-xs bg-indigo-100 text-indigo-600">
+                                                            {getInitials(comment.user_name)}
+                                                        </AvatarFallback>
+                                                    </Avatar>
+                                                    <div className="flex-1">
+                                                        <div className="flex items-center gap-2 mb-1">
+                                                            <span className="font-medium text-sm">{comment.user_name}</span>
+                                                            <span className="text-xs text-slate-400">
+                                                                {formatDistanceToNow(new Date(comment.created_at), { addSuffix: true })}
+                                                            </span>
+                                                        </div>
+                                                        <p className="text-sm text-slate-700 whitespace-pre-wrap">
+                                                            {comment.content}
+                                                        </p>
+                                                    </div>
+                                                </div>
+                                            ))
                                         )}
                                     </div>
-                                    <Button type="submit" disabled={addCommentMutation.isPending}>
-                                        <Send className="w-4 h-4" />
-                                    </Button>
-                                </form>
-                            </div>
-
-                            {/* Comments List */}
-                            <div className="space-y-3">
-                                {comments.length === 0 ? (
-                                    <div className="text-center py-8 text-slate-400">
-                                        <MessageSquare className="w-8 h-8 mx-auto mb-2 opacity-50" />
-                                        <p>No comments yet</p>
-                                    </div>
-                                ) : (
-                                    comments.map(comment => (
-                                        <div key={comment.id || comment._id} className="flex gap-3 p-3 bg-slate-50 rounded-lg">
-                                            <Avatar className="w-8 h-8">
-                                                <AvatarFallback className="text-xs bg-indigo-100 text-indigo-600">
-                                                    {getInitials(comment.user_name)}
-                                                </AvatarFallback>
-                                            </Avatar>
-                                            <div className="flex-1">
-                                                <div className="flex items-center gap-2 mb-1">
-                                                    <span className="font-medium text-sm">{comment.user_name}</span>
-                                                    <span className="text-xs text-slate-400">
-                                                        {formatDistanceToNow(new Date(comment.created_at), { addSuffix: true })}
-                                                    </span>
-                                                </div>
-                                                <p className="text-sm text-slate-700 whitespace-pre-wrap">
-                                                    {comment.content}
-                                                </p>
-                                            </div>
-                                        </div>
-                                    ))
-                                )}
+                                </ScrollArea>
                             </div>
                         </TabsContent>
 
                         {/* Activity Tab */}
                         <TabsContent value="activity" className="mt-0">
-                            <div className="space-y-3">
-                                {activityLogs.length === 0 ? (
-                                    <div className="text-center py-8 text-slate-400">
-                                        <History className="w-8 h-8 mx-auto mb-2 opacity-50" />
-                                        <p>No activity logged yet</p>
-                                    </div>
-                                ) : (
-                                    activityLogs.map(log => (
-                                        <div key={log.id || log._id} className="flex gap-3 p-3 border-l-2 border-indigo-200 bg-slate-50/50">
-                                            <div className="text-lg">{getActivityIcon(log.action)}</div>
-                                            <div className="flex-1">
-                                                <p className="text-sm">
-                                                    <span className="font-medium">{log.user_name || log.user_email}</span>
-                                                    {' '}{getActivityDescription(log)}
-                                                </p>
-                                                <div className="flex items-center gap-1 mt-1 text-xs text-slate-400">
-                                                    <Clock className="w-3 h-3" />
-                                                    {formatDistanceToNow(new Date(log.created_at), { addSuffix: true })}
+                            <ScrollArea className="h-[500px] -mx-4 px-4 pr-6">
+                                <div className="space-y-3 pb-6">
+                                    {activityLogs.length === 0 ? (
+                                        <div className="text-center py-8 text-slate-400">
+                                            <History className="w-8 h-8 mx-auto mb-2 opacity-50" />
+                                            <p>No activity logged yet</p>
+                                        </div>
+                                    ) : (
+                                        activityLogs.map(log => (
+                                            <div key={log.id || log._id} className="flex gap-3 p-3 border-l-2 border-indigo-200 bg-slate-50/50">
+                                                <div className="text-lg">{getActivityIcon(log.action)}</div>
+                                                <div className="flex-1">
+                                                    <p className="text-sm">
+                                                        <span className="font-medium">{log.user_name || log.user_email}</span>
+                                                        {' '}{getActivityDescription(log)}
+                                                    </p>
+                                                    <div className="flex items-center gap-1 mt-1 text-xs text-slate-400">
+                                                        <Clock className="w-3 h-3" />
+                                                        {formatDistanceToNow(new Date(log.created_at), { addSuffix: true })}
+                                                    </div>
                                                 </div>
                                             </div>
-                                        </div>
-                                    ))
-                                )}
-                            </div>
+                                        ))
+                                    )}
+                                </div>
+                            </ScrollArea>
                         </TabsContent>
                     </ScrollArea>
                 </Tabs>
