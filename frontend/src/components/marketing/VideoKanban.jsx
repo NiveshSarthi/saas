@@ -69,7 +69,7 @@ export default function VideoKanban({
     onToggleVideo
 }) {
     const [collapsedColumns, setCollapsedColumns] = useState({});
-    const [hiddenColumns, setHiddenColumns] = useState({ posted: true });
+    const [hiddenColumns, setHiddenColumns] = useState({});
     const [urlPrompt, setUrlPrompt] = useState(null);
 
     const toggleCollapse = (columnId) => {
