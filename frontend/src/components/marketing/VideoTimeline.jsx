@@ -54,11 +54,11 @@ function getObjectIdDate(video) {
     return null;
 }
 
-// Build the stage map: for each stage, what date was it first entered?
+// Build the stage map: for each stage, what date was it last entered?
 function buildStageMap(video, logs) {
     const map = {};
     const createdAt = video.created_at || getObjectIdDate(video);
-    if (createdAt) map['shoot'] = map['shoot'] || createdAt;
+    if (createdAt) map['shoot'] = createdAt;
 
     const sorted = [...logs]
         .filter(l => l.action === 'status_changed' && l.details?.to)
@@ -66,7 +66,8 @@ function buildStageMap(video, logs) {
 
     sorted.forEach(log => {
         const to = log.details.to;
-        if (!map[to]) map[to] = log.created_at;
+        // Overwrite to keep the LAST time it entered this stage
+        map[to] = log.created_at;
     });
     return map;
 }
@@ -233,6 +234,7 @@ export default function VideoTimeline({ videos, logs = [], categories = [], user
     const [filterEditingLevel, setFilterEditingLevel] = useState('all');
     const [filterCategory, setFilterCategory] = useState('all');
     const [filterAssignedTo, setFilterAssignedTo] = useState('all');
+    const [filterDateStage, setFilterDateStage] = useState('all'); // all | specific stage
     const [filterDateMode, setFilterDateMode] = useState('all'); // all | month | year | custom
     const [filterMonth, setFilterMonth] = useState(''); // 'YYYY-MM'
     const [filterYear, setFilterYear] = useState(''); // 'YYYY'
@@ -305,6 +307,7 @@ export default function VideoTimeline({ videos, logs = [], categories = [], user
         setFilterEditingLevel('all');
         setFilterCategory('all');
         setFilterAssignedTo('all');
+        setFilterDateStage('all');
         setFilterDateMode('all');
         setFilterMonth('');
         setFilterYear('');
@@ -355,20 +358,28 @@ export default function VideoTimeline({ videos, logs = [], categories = [], user
             });
         }
 
-        // Date filters — show video if ANY stage date falls within the selected period
+        // Date filters
         if (filterDateMode !== 'all') {
             result = result.filter(v => {
                 const vLogs = getLogsForVideo(v);
                 const stageMap = buildStageMap(v, vLogs);
 
-                // Collect all stage dates for this video
-                const stageDates = Object.values(stageMap)
-                    .filter(Boolean)
-                    .map(raw => new Date(raw));
+                // Collect the relevant date(s) based on filterDateStage
+                let stageDates = [];
+                if (filterDateStage === 'all') {
+                    stageDates = Object.values(stageMap)
+                        .filter(Boolean)
+                        .map(raw => new Date(raw));
+                } else {
+                    const specificDate = stageMap[filterDateStage];
+                    if (specificDate) {
+                        stageDates = [new Date(specificDate)];
+                    }
+                }
 
                 if (stageDates.length === 0) return false;
 
-                // Return true if ANY stage date matches the selected period
+                // Return true if ANY relevant stage date matches the selected period
                 return stageDates.some(d => {
                     if (filterDateMode === 'month' && filterMonth) {
                         const ym = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
@@ -401,7 +412,7 @@ export default function VideoTimeline({ videos, logs = [], categories = [], user
             const bLast = bLogs.length ? Math.max(...bLogs.map(l => new Date(l.created_at).getTime())) : (b.created_at ? new Date(b.created_at).getTime() : 0);
             return bLast - aLast;
         });
-    }, [videos, search, filterCurrentStage, filterReachedStage, filterEditingLevel, filterCategory, filterAssignedTo, filterDateMode, filterMonth, filterYear, filterDateFrom, filterDateTo, logsByVideoId]);
+    }, [videos, search, filterCurrentStage, filterReachedStage, filterEditingLevel, filterCategory, filterAssignedTo, filterDateMode, filterDateStage, filterMonth, filterYear, filterDateFrom, filterDateTo, logsByVideoId]);
 
     if (videos.length === 0) {
         return (
@@ -447,7 +458,14 @@ export default function VideoTimeline({ videos, logs = [], categories = [], user
                     const t = filterDateTo ? new Date(filterDateTo).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' }) : 'End';
                     dateStr = `${f} - ${t}`;
                 }
-                if (dateStr) metaText += `  ·  Activity Date: ${dateStr}`;
+
+                let stageStr = 'Any Stage';
+                if (filterDateStage !== 'all') {
+                    const stageObj = STAGES.find(s => s.id === filterDateStage);
+                    if (stageObj) stageStr = stageObj.label;
+                }
+
+                if (dateStr) metaText += `  ·  Activity Date (${stageStr}): ${dateStr}`;
             }
 
             doc.text(metaText, 14, 21);
@@ -518,13 +536,38 @@ export default function VideoTimeline({ videos, logs = [], categories = [], user
                 const stageMap = buildStageMap(video, vLogs);
 
                 const stageCells = STAGES.map(s => {
-                    if (!stageMap[s.id]) return { content: '—', styles: { textColor: '#CBD5E1' } };
+                    let d = stageMap[s.id];
+                    if (!d) return { content: '—', styles: { textColor: '#CBD5E1' } };
+
+                    // Filter purely for display: if a date filter is active, check if 'd' belongs in it
+                    let showDate = true;
+                    if (filterDateMode !== 'all') {
+                        const dateObj = new Date(d);
+                        if (filterDateMode === 'month' && filterMonth) {
+                            const ym = `${dateObj.getFullYear()}-${String(dateObj.getMonth() + 1).padStart(2, '0')}`;
+                            if (ym !== filterMonth) showDate = false;
+                        } else if (filterDateMode === 'year' && filterYear) {
+                            if (String(dateObj.getFullYear()) !== filterYear) showDate = false;
+                        } else if (filterDateMode === 'custom') {
+                            if (filterDateFrom) {
+                                const [fy, fm, fd] = filterDateFrom.split('-').map(Number);
+                                if (dateObj < new Date(fy, fm - 1, fd, 0, 0, 0)) showDate = false;
+                            }
+                            if (filterDateTo) {
+                                const [ty, tm, td] = filterDateTo.split('-').map(Number);
+                                if (dateObj > new Date(ty, tm - 1, td, 23, 59, 59)) showDate = false;
+                            }
+                        }
+                    }
+
+                    if (!showDate) return { content: '—', styles: { textColor: '#CBD5E1' } };
+
                     try {
                         return {
-                            content: new Date(stageMap[s.id]).toLocaleDateString('en-IN', { day: '2-digit', month: 'short' }),
+                            content: new Date(d).toLocaleDateString('en-IN', { day: '2-digit', month: 'short' }),
                             styles: { textColor: s.color, fontStyle: 'bold' }
                         };
-                    } catch { return ''; }
+                    } catch { return { content: '—', styles: { textColor: '#CBD5E1' } }; }
                 });
 
                 const createdStr = (() => { try { const d = video.created_at || getObjectIdDate(video); return d ? new Date(d).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' }) : ''; } catch { return ''; } })();
@@ -605,9 +648,33 @@ export default function VideoTimeline({ videos, logs = [], categories = [], user
             const stageMap = buildStageMap(video, vLogs);
 
             const stageDates = STAGES.map(s => {
-                if (!stageMap[s.id]) return '';
+                let d = stageMap[s.id];
+                if (!d) return '';
+
+                let showDate = true;
+                if (filterDateMode !== 'all') {
+                    const dateObj = new Date(d);
+                    if (filterDateMode === 'month' && filterMonth) {
+                        const ym = `${dateObj.getFullYear()}-${String(dateObj.getMonth() + 1).padStart(2, '0')}`;
+                        if (ym !== filterMonth) showDate = false;
+                    } else if (filterDateMode === 'year' && filterYear) {
+                        if (String(dateObj.getFullYear()) !== filterYear) showDate = false;
+                    } else if (filterDateMode === 'custom') {
+                        if (filterDateFrom) {
+                            const [fy, fm, fd] = filterDateFrom.split('-').map(Number);
+                            if (dateObj < new Date(fy, fm - 1, fd, 0, 0, 0)) showDate = false;
+                        }
+                        if (filterDateTo) {
+                            const [ty, tm, td] = filterDateTo.split('-').map(Number);
+                            if (dateObj > new Date(ty, tm - 1, td, 23, 59, 59)) showDate = false;
+                        }
+                    }
+                }
+
+                if (!showDate) return '';
+
                 try {
-                    return new Date(stageMap[s.id]).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' });
+                    return new Date(d).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' });
                 } catch { return ''; }
             });
 
@@ -718,6 +785,27 @@ export default function VideoTimeline({ videos, logs = [], categories = [], user
                                             <div className="flex items-center gap-2">
                                                 <div className="w-2 h-2 rounded-full" style={{ backgroundColor: s.color }} />
                                                 Reached {s.label}
+                                            </div>
+                                        </SelectItem>
+                                    ))}
+                                </SelectContent>
+                            </Select>
+                        </div>
+
+                        {/* Activity Stage */}
+                        <div className="flex flex-col gap-1">
+                            <label className="text-xs font-semibold text-slate-500 uppercase tracking-wide whitespace-nowrap">Activity Stage</label>
+                            <Select value={filterDateStage} onValueChange={setFilterDateStage}>
+                                <SelectTrigger className="w-[160px] bg-white text-sm h-9 rounded-lg border border-slate-200 text-slate-700">
+                                    <SelectValue placeholder="Any Stage" />
+                                </SelectTrigger>
+                                <SelectContent>
+                                    <SelectItem value="all">Any Stage</SelectItem>
+                                    {STAGES.map(s => (
+                                        <SelectItem key={s.id} value={s.id}>
+                                            <div className="flex items-center gap-2">
+                                                <div className="w-2 h-2 rounded-full" style={{ backgroundColor: s.color }} />
+                                                {s.label} Activity
                                             </div>
                                         </SelectItem>
                                     ))}
