@@ -36,7 +36,7 @@ export default function ActivityLog({ taskId, user }) {
 
   const { data: activities = [] } = useQuery({
     queryKey: ['task-activities', taskId],
-    queryFn: () => base44.entities.Activity.filter({ task_id: taskId }, '-created_date', 100),
+    queryFn: () => base44.entities.Activity.filter({ task_id: taskId }, '-created_at', 100),
     enabled: !!taskId,
     refetchInterval: 5000 // Poll for updates
   });
@@ -63,7 +63,7 @@ export default function ActivityLog({ taskId, user }) {
         doc.addPage();
         y = 20;
       }
-      const time = format(new Date(act.created_date), 'PPpp');
+      const time = format(new Date(act.created_at), 'PPpp');
       const actor = act.metadata?.actorName || act.actor_email;
       const action = ACTION_LABELS[act.action] || act.action;
       const details = act.field_changed
@@ -106,7 +106,7 @@ export default function ActivityLog({ taskId, user }) {
         )}
       </div>
 
-      <div className="flex-1 p-6 overflow-y-auto custom-scrollbar min-h-0">
+      <div className="flex-1 p-6 overflow-y-auto custom-scrollbar min-h-0 touch-pan-y">
         <div className="relative border-l-2 border-slate-200 ml-3 space-y-8 pb-10">
           {filteredActivities.length === 0 && (
             <div className="text-center text-slate-400 text-sm py-8 italic pl-4">
@@ -133,7 +133,7 @@ export default function ActivityLog({ taskId, user }) {
                   <span>•</span>
                   <span className="flex items-center gap-1">
                     <History className="w-3 h-3" />
-                    {format(new Date(activity.created_date), 'MMM d, h:mm a')}
+                    {format(new Date(activity.created_at), 'MMM d, h:mm a')}
                   </span>
                 </div>
 

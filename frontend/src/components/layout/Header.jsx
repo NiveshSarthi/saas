@@ -73,7 +73,7 @@ export default function Header({ user, onToggleSidebar }) {
     queryKey: ['user-notifications', user?.email],
     queryFn: () => base44.entities.Notification.filter(
       { user_email: user?.email },
-      '-created_date',
+      '-created_at',
       20
     ),
     enabled: !!user?.email,
@@ -294,7 +294,7 @@ export default function Header({ user, onToggleSidebar }) {
                           <div className="flex-1 min-w-0">
                             <p className="text-sm font-medium text-slate-900">{notif.title}</p>
                             <p className="text-xs text-slate-600 mt-0.5 line-clamp-2">{notif.message}</p>
-                            <p className="text-xs text-slate-400 mt-1">{moment(notif.created_date).fromNow()}</p>
+                            <p className="text-xs text-slate-400 mt-1">{moment(notif.created_at || notif.created_date).fromNow()}</p>
                           </div>
                           {!notif.read && (
                             <div className="w-2 h-2 rounded-full bg-blue-500 flex-shrink-0 mt-2" />

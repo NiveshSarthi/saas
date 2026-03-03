@@ -34,7 +34,7 @@ export default function Layout({ children, currentPageName }) {
     queryKey: ['user-notifications', user?.email],
     queryFn: () => base44.entities.Notification.filter(
       { user_email: user?.email },
-      '-created_date',
+      '-created_at',
       20
     ),
     enabled: !!user?.email,
@@ -60,31 +60,31 @@ export default function Layout({ children, currentPageName }) {
         <PermissionsProvider>
           <KeyboardShortcuts>
             <div className="h-screen bg-slate-50 flex dark:bg-slate-900 overflow-hidden relative">
-              <Sidebar 
-              projects={projects} 
-              currentPage={currentPageName} 
-              user={user}
-              collapsed={sidebarCollapsed}
-              onToggle={toggleSidebar}
-              departments={departments}
-            />
-            
-            <div className="flex-1 flex flex-col min-h-0 w-full overflow-x-hidden">
-              <Header 
-                user={user} 
-                onToggleSidebar={toggleSidebar}
+              <Sidebar
+                projects={projects}
+                currentPage={currentPageName}
+                user={user}
+                collapsed={sidebarCollapsed}
+                onToggle={toggleSidebar}
+                departments={departments}
               />
-              
-              <main className="flex-1 overflow-y-auto overflow-x-hidden min-h-0 w-full">
-                <div className="h-fit w-full">
-                  {children}
-                </div>
-              </main>
+
+              <div className="flex-1 flex flex-col min-h-0 w-full overflow-x-hidden">
+                <Header
+                  user={user}
+                  onToggleSidebar={toggleSidebar}
+                />
+
+                <main className="flex-1 overflow-y-auto overflow-x-hidden min-h-0 w-full">
+                  <div className="h-fit w-full">
+                    {children}
+                  </div>
+                </main>
+              </div>
             </div>
-          </div>
-        </KeyboardShortcuts>
-      </PermissionsProvider>
-    </FontSizeProvider>
-  </AuthGuard>
-);
+          </KeyboardShortcuts>
+        </PermissionsProvider>
+      </FontSizeProvider>
+    </AuthGuard>
+  );
 }

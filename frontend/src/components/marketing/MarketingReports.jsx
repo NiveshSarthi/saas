@@ -55,7 +55,8 @@ export default function MarketingReports({ tasks = [], videos = [], categories =
     const processedTasks = tasks.map(t => ({
       ...t,
       id: t.id || t._id,
-      source_type: 'marketing_task'
+      source_type: 'marketing_task',
+      created_date: t.created_at || t.created_date
     }));
 
     // 2. Process new Video entities

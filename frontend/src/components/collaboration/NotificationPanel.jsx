@@ -41,7 +41,7 @@ export default function NotificationPanel({ isOpen, onClose, user }) {
     queryKey: ['notifications', user?.email],
     queryFn: () => base44.entities.Notification.filter(
       { user_email: user?.email },
-      '-created_date',
+      '-created_at',
       100
     ),
     enabled: !!user?.email && isOpen,
@@ -214,8 +214,8 @@ export default function NotificationPanel({ isOpen, onClose, user }) {
                               {notification.message}
                             </p>
                             <p className="text-xs text-slate-400">
-                              {notification.created_date && !isNaN(new Date(notification.created_date).getTime())
-                                ? formatDistanceToNow(new Date(notification.created_date), { addSuffix: true })
+                              {notification.created_at && !isNaN(new Date(notification.created_at).getTime())
+                                ? formatDistanceToNow(new Date(notification.created_at), { addSuffix: true })
                                 : 'Just now'}
                             </p>
                           </Link>

@@ -53,7 +53,7 @@ export default function Notifications() {
       try {
         const userData = await base44.auth.me();
         setUser(userData);
-      } catch (e) {}
+      } catch (e) { }
     };
     fetchUser();
   }, []);
@@ -61,8 +61,8 @@ export default function Notifications() {
   const { data: notifications = [], isLoading } = useQuery({
     queryKey: ['notifications', user?.email],
     queryFn: () => base44.entities.Notification.filter(
-      { user_email: user?.email }, 
-      '-created_date',
+      { user_email: user?.email },
+      '-created_at',
       100
     ),
     enabled: !!user?.email,
@@ -158,8 +158,8 @@ export default function Notifications() {
               key={notification.id}
               className={cn(
                 "bg-white rounded-xl border p-4 transition-colors",
-                notification.read 
-                  ? "border-slate-100" 
+                notification.read
+                  ? "border-slate-100"
                   : "border-indigo-200 bg-indigo-50/30"
               )}
             >
@@ -184,14 +184,14 @@ export default function Notifications() {
 
                   <div className="flex items-center justify-between mt-3">
                     <span className="text-xs text-slate-400">
-                      {formatDistanceToNow(new Date(notification.created_date), { addSuffix: true })}
+                      {formatDistanceToNow(new Date(notification.created_at), { addSuffix: true })}
                     </span>
-                    
+
                     <div className="flex items-center gap-2">
                       {notification.link && (
                         <Link to={createPageUrl(notification.link)}>
-                          <Button 
-                            size="sm" 
+                          <Button
+                            size="sm"
                             variant="outline"
                             onClick={() => markAsRead(notification)}
                           >

@@ -175,14 +175,12 @@ export default function MarketingTaskModal({ isOpen, onClose, task, user }) {
     formData.analytics_email
   ].filter(Boolean);
 
-  const mentionableUsers = filteredUsers.filter(u =>
-    taskRelatedUsers.includes(u.email) || u.role === 'admin'
-  );
+  const mentionableUsers = filteredUsers;
 
   // Fetch Comments
   const { data: comments = [] } = useQuery({
     queryKey: ['comments', task?.id],
-    queryFn: () => task ? base44.entities.Comment.filter({ task_id: task.id }, '-created_date') : [],
+    queryFn: () => task ? base44.entities.Comment.filter({ task_id: task.id }, '-created_at') : [],
     enabled: !!task
   });
 
@@ -200,7 +198,7 @@ export default function MarketingTaskModal({ isOpen, onClose, task, user }) {
   // Fetch existing tags from all marketing tasks
   const { data: allTasks = [] } = useQuery({
     queryKey: ['all-marketing-tasks-tags'],
-    queryFn: () => base44.entities.MarketingTask.list('-created_date', 1000),
+    queryFn: () => base44.entities.MarketingTask.list('-created_at', 1000),
   });
 
   // Fetch Tag entity to check/create tags
@@ -321,26 +319,24 @@ export default function MarketingTaskModal({ isOpen, onClose, task, user }) {
       attachments: attachments || []
     }),
     onSuccess: async (newComment, variables) => {
-      queryClient.invalidateQueries(['comments', task.id]);
+      queryClient.invalidateQueries({ queryKey: ['comments', task.id] });
 
-      // Send notifications to mentioned users
-      const mentionedUsers = newComment.mentions || [];
-      for (const mentionedEmail of mentionedUsers) {
-        await base44.entities.Notification.create({
-          user_email: mentionedEmail,
-          type: 'mentioned',
-          title: 'You were mentioned',
-          message: `${user.full_name || user.email} mentioned you in Marketing Task: ${task.campaign_name}`,
-          task_id: task.id,
-          actor_email: user.email,
-          link: `/marketing?taskId=${task.id}`
-        });
-      }
+      // Send notifications to mentioned users using the standardized helper
+      await processMentionsAndNotify({
+        text: variables.content,
+        mentionedBy: user?.email,
+        mentionedByName: user?.full_name || user?.email,
+        module: MODULES.MARKETING_TASK,
+        itemName: task.campaign_name,
+        itemId: task.id,
+        link: `/marketing?taskId=${task.id}`,
+        allUsers: users
+      });
 
       // Log comment activity
       await MarketingLogger.log(task.id, 'commented', user, {
         newValue: variables.content,
-        mentions: mentionedUsers
+        mentions: newComment.mentions || []
       });
 
       // Log attachment uploads
@@ -691,7 +687,7 @@ export default function MarketingTaskModal({ isOpen, onClose, task, user }) {
 
           <div className="flex-1 overflow-hidden flex flex-col md:flex-row" style={{ minHeight: 0 }}>
             {/* LEFT PANEL: FORM */}
-            <div className="flex-1 p-6 pt-4 bg-slate-50/50 overflow-y-auto custom-scrollbar min-h-0" style={{ height: '100%' }}>
+            <div className="flex-1 p-6 pt-4 bg-slate-50/50 overflow-y-auto custom-scrollbar min-h-0 touch-pan-y" style={{ height: '100%' }}>
               <div className="space-y-6">
                 {/* Campaign Info Card */}
                 <div className="bg-white rounded-2xl p-5 shadow-sm border border-slate-200">
@@ -1237,6 +1233,7 @@ export default function MarketingTaskModal({ isOpen, onClose, task, user }) {
                         font-size: 14px;
                         border: none;
                         background: white;
+                        touch-action: pan-y;
                       }
                       .marketing-details-tab .ql-editor {
                         padding: 16px;
@@ -1270,7 +1267,7 @@ export default function MarketingTaskModal({ isOpen, onClose, task, user }) {
                 </TabsContent>
 
                 <TabsContent value="comments" className="flex-1 flex flex-col !mt-0 p-0 h-full overflow-hidden data-[state=active]:flex bg-gradient-to-b from-slate-50 to-white">
-                  <div className="flex-1 p-5 overflow-y-auto custom-scrollbar min-h-0">
+                  <div className="flex-1 p-5 overflow-y-auto custom-scrollbar min-h-0 touch-pan-y">
                     <div className="space-y-6 max-w-2xl">
                       {comments.length === 0 ? (
                         <div className="flex flex-col items-center justify-center py-16 text-center">
@@ -1413,7 +1410,7 @@ export default function MarketingTaskModal({ isOpen, onClose, task, user }) {
                                   "text-[11px] text-slate-400 px-2 flex items-center gap-1.5",
                                   isCurrentUser && "justify-end"
                                 )}>
-                                  <span>{format(new Date(c.created_date), 'MMM d, h:mm a')}</span>
+                                  <span>{format(new Date(c.created_at || c.created_date), 'MMM d, h:mm a')}</span>
                                   {isCurrentUser && (
                                     <span className="inline-flex items-center">
                                       <CheckCircle className="w-3 h-3 text-indigo-400" />

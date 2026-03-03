@@ -172,7 +172,7 @@ export async function cleanupOldNotifications() {
     });
 
     const toDelete = oldNotifications.filter(n => {
-      const createdDate = new Date(n.created_date);
+      const createdDate = new Date(n.created_at);
       return createdDate < thirtyDaysAgo;
     });
 
