@@ -35,9 +35,13 @@ function fmtDate(dateStr) {
         const d = new Date(dateStr);
         if (isToday(d)) return 'Today';
         if (isYesterday(d)) return 'Yesterday';
-        return d.toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' });
+        const day = String(d.getDate()).padStart(2, '0');
+        const month = String(d.getMonth() + 1).padStart(2, '0');
+        const year = String(d.getFullYear()).slice(-2);
+        return `${day}/${month}/${year}`;
     } catch { return null; }
 }
+
 function fmtTime(dateStr) {
     if (!dateStr) return null;
     try {
@@ -563,14 +567,28 @@ export default function VideoTimeline({ videos, logs = [], categories = [], user
                     if (!showDate) return { content: '—', styles: { textColor: '#CBD5E1' } };
 
                     try {
+                        const dateObj = new Date(d);
+                        const day = String(dateObj.getDate()).padStart(2, '0');
+                        const month = String(dateObj.getMonth() + 1).padStart(2, '0');
+                        const year = String(dateObj.getFullYear()).slice(-2);
                         return {
-                            content: new Date(d).toLocaleDateString('en-IN', { day: '2-digit', month: 'short' }),
+                            content: `${day}/${month}/${year}`,
                             styles: { textColor: s.color, fontStyle: 'bold' }
                         };
                     } catch { return { content: '—', styles: { textColor: '#CBD5E1' } }; }
                 });
 
-                const createdStr = (() => { try { const d = video.created_at || getObjectIdDate(video); return d ? new Date(d).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' }) : ''; } catch { return ''; } })();
+                const createdStr = (() => {
+                    try {
+                        const d = video.created_at || getObjectIdDate(video);
+                        if (!d) return '';
+                        const dateObj = new Date(d);
+                        const day = String(dateObj.getDate()).padStart(2, '0');
+                        const month = String(dateObj.getMonth() + 1).padStart(2, '0');
+                        const year = String(dateObj.getFullYear()).slice(-2);
+                        return `${day}/${month}/${year}`;
+                    } catch { return ''; }
+                })();
 
                 return [
                     index + 1,
@@ -674,14 +692,24 @@ export default function VideoTimeline({ videos, logs = [], categories = [], user
                 if (!showDate) return '';
 
                 try {
-                    return new Date(d).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' });
+                    const dateObj = new Date(d);
+                    const day = String(dateObj.getDate()).padStart(2, '0');
+                    const month = String(dateObj.getMonth() + 1).padStart(2, '0');
+                    const year = String(dateObj.getFullYear()).slice(-2);
+                    return `${day}/${month}/${year}`;
                 } catch { return ''; }
             });
 
             const createdStr = (() => {
                 const d = video.created_at || getObjectIdDate(video);
                 if (!d) return '';
-                try { return new Date(d).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' }); }
+                try {
+                    const dateObj = new Date(d);
+                    const day = String(dateObj.getDate()).padStart(2, '0');
+                    const month = String(dateObj.getMonth() + 1).padStart(2, '0');
+                    const year = String(dateObj.getFullYear()).slice(-2);
+                    return `${day}/${month}/${year}`;
+                }
                 catch { return ''; }
             })();
 
